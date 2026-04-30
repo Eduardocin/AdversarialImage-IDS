@@ -1,0 +1,12 @@
+.git
+.codex
+.venv
+__pycache__
+*.pyc
+
+data
+material
+models
+outputs
+results
+src/original/DeepDetector/.git
