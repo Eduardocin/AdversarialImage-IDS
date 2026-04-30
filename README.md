@@ -61,7 +61,7 @@ Se os imports de `caffe`, `tensorflow`, `cleverhans`, `keras`, `scipy`, `skimage
 
 ## 🚀 Roadmap de Execução
 ### Fase 1: Replicação (Até 15/05)
-- [✅] Configurar ambiente (Docker com Caffe e Organizar datasets utilizados).
+- [x] Configurar ambiente (Docker com Caffe e Organizar datasets utilizados).
 - [ ] Gerar exemplos adversários (FGSM, CW, DeepFool) conforme o artigo.
 - [ ] Executar o pipeline de detecção adaptativa e validar resultados.
 
