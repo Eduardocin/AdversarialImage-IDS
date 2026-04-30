@@ -10,6 +10,38 @@ Este projeto implementa uma defesa para Redes Neurais Profundas (DNNs) contra at
 * **Processamento de Imagem:** OpenCV, NumPy, Scipy.
 * **Ataques Suportados:** FGSM, C&W (L2 e L_inf), DeepFool.
 
+## ⚙️ Configuração do Ambiente
+O código original do DeepDetector usa uma pilha antiga: **Python 2**, **Caffe**, **TensorFlow 1.x**, **Keras 2.x** e **CleverHans 2.x**. Para evitar conflitos com o sistema local, a replicação deve ser executada via Docker.
+
+### 1. Construir a imagem
+```bash
+./docker/build_docker.sh
+```
+Esse script executa:
+```bash
+docker compose build legacy
+```
+
+### 2. Abrir um shell no ambiente
+Para abrir um container descartável:
+```bash
+./docker/run_docker.sh
+```
+Também é possível passar um comando diretamente:
+```bash
+./docker/run_docker.sh python scripts/check_legacy_environment.py
+```
+Para iniciar ou reentrar em um container persistente chamado `adversarialimage-ids-legacy`:
+```bash
+./docker/start_docker.sh
+```
+### 3. Verificar dependências
+Dentro do container:
+```bash
+python scripts/check_legacy_environment.py
+```
+Se os imports de `caffe`, `tensorflow`, `cleverhans`, `keras`, `scipy`, `skimage`, `pandas` e `matplotlib` passarem, o ambiente está pronto para a etapa de replicação.
+
 ## 📂 Estrutura do Repositório
 ```text
 .
@@ -20,6 +52,7 @@ Este projeto implementa uma defesa para Redes Neurais Profundas (DNNs) contra at
 │   ├── new_dataset/      # Implementação do sistema em um novo dataset (ex: GTSRB)
 │   └── improvement/      # Implementação da proposta de melhoria da equipe
 ├── data/                 # Datasets e exemplos gerados (não versionados)
+├── docker/               # Ambiente legado com Caffe/TensorFlow/CleverHans
 ├── models/               # Arquivos .prototxt e .caffemodel
 ├── analysis/             # Scripts para geração de gráficos e métricas (Pandas/Matplotlib)
 ├── docs/                 # Documentação
@@ -27,9 +60,8 @@ Este projeto implementa uma defesa para Redes Neurais Profundas (DNNs) contra at
 ```
 
 ## 🚀 Roadmap de Execução
-
 ### Fase 1: Replicação (Até 15/05)
-- [ ] Configurar ambiente (Docker com Caffe e Organizar datasets utilizados).
+- [✅] Configurar ambiente (Docker com Caffe e Organizar datasets utilizados).
 - [ ] Gerar exemplos adversários (FGSM, CW, DeepFool) conforme o artigo.
 - [ ] Executar o pipeline de detecção adaptativa e validar resultados.
 

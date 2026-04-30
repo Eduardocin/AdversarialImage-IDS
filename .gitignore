@@ -179,3 +179,17 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Project artifacts
+/models
+/outputs
+/results
+*.caffemodel
+*.solverstate
+*.h5
+*.hdf5
+
+### Custom ignore rules <fmn>
+/data
+/material
+/src/original
