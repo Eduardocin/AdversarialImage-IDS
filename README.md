@@ -42,6 +42,18 @@ python scripts/check_legacy_environment.py
 ```
 Se os imports de `caffe`, `tensorflow`, `cleverhans`, `keras`, `scipy`, `skimage`, `pandas` e `matplotlib` passarem, o ambiente está pronto para a etapa de replicação.
 
+### Ambiente moderno para MNIST de teste
+Para baixar apenas o conjunto de teste do MNIST com TensorFlow em um ambiente Conda separado do Docker legado:
+
+```bash
+conda create -n adv-imagens python=3.11 -y
+conda activate adv-imagens
+pip install -r requirements.txt
+python scripts/download_mnist_test.py
+```
+
+O script divide o conjunto de teste do MNIST por índice original: `0-4499` para treino, `4500-5499` para validação e `5500-9999` para teste. As imagens são salvas em `data/mnist/images/{train,validation,test}`, o arquivo compactado fica em `data/mnist/mnist_splits.npz` e a visualização com 3 amostras do treino fica em `outputs/mnist_train_samples.png`.
+
 ## 📂 Estrutura do Repositório
 ```text
 .
