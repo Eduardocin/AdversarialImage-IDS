@@ -1,96 +1,193 @@
-# Detecção de Exemplos Adversários com Redução Adaptativa de Ruído
-> **Referência:** *B. Liang, H. Li, M. Su, X. Li, W. Shi and X. Wang, "Detecting Adversarial Image Examples in Deep Neural Networks with Adaptive Noise Reduction"*
+# Detector de Exemplos Adversarios com Reducao de Ruido
 
-## 📝 Visão Geral
-Este projeto implementa uma defesa para Redes Neurais Profundas (DNNs) contra ataques adversários. A técnica proposta utiliza **entropia de imagem** para aplicar, de forma adaptativa, **quantização escalar** e **filtros de suavização espacial**. O sistema detecta ataques comparando a predição da imagem original com sua versão processada, sem necessidade de re-treinar o modelo.
+Este projeto implementa um pipeline moderno para detectar exemplos adversarios em redes neurais. O detector nao treina a rede-alvo: ele recebe um modelo ja treinado, gera ataques contra esse modelo e verifica se a predicao muda depois de aplicar transformacoes de reducao de ruido.
 
-## 🛠️ Tecnologias e Frameworks
-* **Linguagens:** Python (Scripts de teste/treino) e Matlab (DeepFool).
-* **Framework de Deep Learning:** Caffe (Modelos originais: CaffeNet, GoogLeNet).
-* **Processamento de Imagem:** OpenCV, NumPy, Scipy.
-* **Ataques Suportados:** FGSM, C&W (L2 e L_inf), DeepFool.
+O foco inicial e MNIST. A estrutura ja deixa espaco para evoluir depois para ImageNet e redes pre-treinadas modernas.
 
-## ⚙️ Configuração do Ambiente
-O código original do DeepDetector usa uma pilha antiga: **Python 2**, **Caffe**, **TensorFlow 1.x**, **Keras 2.x** e **CleverHans 2.x**. Para evitar conflitos com o sistema local, a replicação deve ser executada via Docker.
+## Artigo de Referencia
 
-### 1. Construir a imagem
-```bash
-./docker/build_docker.sh
+B. Liang, H. Li, M. Su, X. Li, W. Shi and X. Wang, "Detecting Adversarial Image Examples in Deep Networks with Adaptive Noise Reduction", 2017.
+
+Este repositorio e uma replicacao modernizada do metodo, priorizando uma implementacao em Python/PyTorch, separacao clara entre rede-alvo, ataque e detector, e validacao incremental.
+
+## Como Funciona
+
+```text
+Dataset MNIST
+     |
+     v
+Rede-alvo ja treinada
+     |
+     +--> predicao da imagem limpa
+     |
+     +--> ataque FGSM gera imagem adversarial
+                 |
+                 v
+        transformacoes do detector
+        - quantizacao uniforme
+        - quantizacao nao uniforme
+        - filtros box / diamond / cross
+                 |
+                 v
+        comparar predicoes antes/depois
+                 |
+                 v
+        metricas: TP, FN, FP, TTP, precision, recall
 ```
-Esse script executa:
-```bash
-docker compose build legacy
+
+## Fluxo MNIST
+
+O MNIST usa a seguinte divisao por indice do conjunto de teste:
+
+```text
+train:      0-4499
+validation: 4500-5499
+test:       5500-9999
 ```
 
-### 2. Abrir um shell no ambiente
-Para abrir um container descartável:
-```bash
-./docker/run_docker.sh
-```
-Também é possível passar um comando diretamente:
-```bash
-./docker/run_docker.sh python scripts/check_legacy_environment.py
-```
-Para iniciar ou reentrar em um container persistente chamado `adversarialimage-ids-legacy`:
-```bash
-./docker/start_docker.sh
-```
-### 3. Verificar dependências
-Dentro do container:
-```bash
-python scripts/check_legacy_environment.py
-```
-Se os imports de `caffe`, `tensorflow`, `cleverhans`, `keras`, `scipy`, `skimage`, `pandas` e `matplotlib` passarem, o ambiente está pronto para a etapa de replicação.
+A fase `train_detector` seleciona parametros do detector usando FGSM. Ela nao treina a rede-alvo.
 
-### Ambiente moderno para MNIST de teste
-Para baixar apenas o conjunto de teste do MNIST com TensorFlow em um ambiente Conda separado do Docker legado:
+```text
+train_detector_mnist.py
+    escolhe a melhor configuracao do detector no split train
+
+validate_detector_mnist.py
+    mede a configuracao escolhida no split validation
+
+test_detector_mnist.py
+    mede a configuracao escolhida no split test
+```
+
+## Instalar
 
 ```bash
-conda create -n adv-imagens python=3.11 -y
-conda activate adv-imagens
+conda create -n adversarialimage-ids python=3.11 -y
+conda activate adversarialimage-ids
 pip install -r requirements.txt
+```
+
+## Preparar o MNIST
+
+```bash
 python scripts/download_mnist_test.py
 ```
 
-O script divide o conjunto de teste do MNIST por índice original: `0-4499` para treino, `4500-5499` para validação e `5500-9999` para teste. As imagens são salvas em `data/mnist/images/{train,validation,test}`, o arquivo compactado fica em `data/mnist/mnist_splits.npz` e a visualização com 3 amostras do treino fica em `outputs/mnist_train_samples.png`.
+Saidas principais:
 
-## 📂 Estrutura do Repositório
 ```text
-.
-├── src/
-│   ├── replication/      # Código para reproduzir os resultados do artigo original
-│   │   ├── mnist/        # Testes com dataset MNIST
-│   │   └── imagenet/     # Testes com dataset ImageNet
-│   ├── new_dataset/      # Implementação do sistema em um novo dataset (ex: GTSRB)
-│   └── improvement/      # Implementação da proposta de melhoria da equipe
-├── data/                 # Datasets e exemplos gerados (não versionados)
-├── docker/               # Ambiente legado com Caffe/TensorFlow/CleverHans
-├── models/               # Arquivos .prototxt e .caffemodel
-├── analysis/             # Scripts para geração de gráficos e métricas (Pandas/Matplotlib)
-├── docs/                 # Documentação
-└── requirements.txt      # Lista de dependências
+data/mnist/mnist_splits.npz
+data/mnist/images/train
+data/mnist/images/validation
+data/mnist/images/test
 ```
 
-## 🚀 Roadmap de Execução
-### Fase 1: Replicação (Até 15/05)
-- [x] Configurar ambiente (Docker com Caffe e Organizar datasets utilizados).
-- [ ] Gerar exemplos adversários (FGSM, CW, DeepFool) conforme o artigo.
-- [ ] Executar o pipeline de detecção adaptativa e validar resultados.
+## Executar
 
-### Fase 2: Novo Dataset (Até 25/05)
-- [ ] Escolha e justificativa do dataset.
-- [ ] Adaptação dos scripts de extração de entropia e filtros.
+Os scripts esperam uma rede-alvo ja treinada/exportada em TorchScript:
 
-### Fase 3: Proposta de Melhoria (Até 05/06)
-- [ ] Implementação de filtros alternativos (ex: Non-Local Means).
-- [ ] Comparação de performance (Acurácia vs. Taxa de Detecção).
+```text
+checkpoints/mnist/target.pt
+```
 
-### Fase 4: Finalização (Até 10/06)
-- [ ] Redação do relatório no formato IEEE.
-- [ ] Preparação dos slides de apresentação.
+Selecionar parametros do detector:
 
-## 📋 Requisitos da Disciplina
-* **Resultados:** Obter valores próximos aos do artigo original.
-* **Relatório:** Deve responder às perguntas de motivação, modelo de ameaça e metodologia.
-* **Apresentação:** 15 minutos (obrigatória para quem realizar melhorias).
-* **Prazo Final:** 10 de Junho de 2026.
+```bash
+python scripts/train_detector_mnist.py \
+  --target-model-path checkpoints/mnist/target.pt
+```
+
+Validar:
+
+```bash
+python scripts/validate_detector_mnist.py \
+  --target-model-path checkpoints/mnist/target.pt
+```
+
+Testar:
+
+```bash
+python scripts/test_detector_mnist.py \
+  --target-model-path checkpoints/mnist/target.pt
+```
+
+Para uma execucao curta:
+
+```bash
+python scripts/train_detector_mnist.py \
+  --target-model-path checkpoints/mnist/target.pt \
+  --debug
+```
+
+A configuracao escolhida e salva em:
+
+```text
+outputs/detectors/mnist_fgsm_detector.json
+```
+
+## Estrutura
+
+```text
+.
+|-- scripts/
+|   |-- download_mnist_test.py
+|   |-- train_detector_mnist.py
+|   |-- validate_detector_mnist.py
+|   `-- test_detector_mnist.py
+|
+|-- src/
+|   |-- attacks/        # FGSM e futuros ataques
+|   |-- datasets/       # loaders e splits
+|   |-- detector/       # transformacoes, detector e selecao de parametros
+|   |-- models/         # carregamento de redes-alvo
+|   `-- utils/          # seed, metricas e utilitarios
+|
+|-- tests/
+|-- data/
+|-- checkpoints/
+|-- outputs/
+|-- environment.yml
+`-- requirements.txt
+```
+
+## Testes
+
+```bash
+python -m unittest discover -s tests
+```
+
+Alguns testes sao pulados automaticamente quando PyTorch nao esta instalado no ambiente ativo.
+
+## Status
+
+- MNIST split por indice implementado.
+- FGSM implementado em PyTorch.
+- Detector por mudanca de predicao implementado.
+- Varredura de parametros do detector implementada para MNIST.
+- Validacao e teste MNIST disponiveis por scripts.
+- ImageNet e ataques DeepFool/CW ainda nao foram migrados.
+
+## Roadmap
+
+### Fase 1: Replicacao MNIST
+
+- [x] Preparar o dataset MNIST com split por indice.
+- [x] Implementar FGSM em PyTorch.
+- [x] Implementar transformacoes do detector.
+- [x] Implementar selecao de parametros do detector.
+- [x] Implementar validacao e teste do detector.
+- [ ] Definir ou importar uma rede-alvo MNIST ja treinada e exportada em TorchScript.
+- [ ] Executar o fluxo completo em modo debug.
+- [ ] Executar o fluxo completo no split final de teste.
+
+### Fase 2: Ataques Adicionais
+
+- [ ] Implementar ou integrar DeepFool em PyTorch.
+- [ ] Implementar ou integrar C&W.
+- [ ] Comparar FGSM, DeepFool e C&W no mesmo protocolo.
+
+### Fase 3: ImageNet
+
+- [ ] Preparar subset ImageNet.
+- [ ] Integrar redes modernas pre-treinadas.
+- [ ] Adaptar transformacoes para imagens RGB maiores.
+- [ ] Avaliar custo computacional por ataque.
