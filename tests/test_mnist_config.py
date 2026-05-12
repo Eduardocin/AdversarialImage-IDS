@@ -1,4 +1,6 @@
-from src.mnist.config import MnistExperimentConfig
+from pathlib import Path
+
+from src.mnist.config import MnistExperimentConfig, MnistPaths
 
 
 def test_mnist_defaults_match_reference_values() -> None:
@@ -18,3 +20,16 @@ def test_mnist_defaults_match_reference_values() -> None:
     assert config.detection.mid_entropy_interval == 64
     assert config.detection.high_entropy_interval == 43
 
+
+def test_mnist_paths_use_current_project_layout() -> None:
+    project_root = Path(__file__).resolve().parents[1]
+
+    paths = MnistPaths.from_project_root(project_root)
+
+    assert paths.project_root == project_root
+    assert paths.data_root == project_root / "data" / "mnist"
+    assert paths.outputs_root == project_root / "outputs" / "mnist"
+    assert paths.m1_checkpoint_dir == project_root / "outputs" / "mnist" / "m1"
+    assert paths.nn_robust_attacks_root == project_root / "third_party" / "nn_robust_attacks"
+    assert paths.m2_weights_path == project_root / "third_party" / "nn_robust_attacks" / "models" / "mnist"
+    assert paths.carlini_data_dir == project_root / "third_party" / "nn_robust_attacks" / "data"

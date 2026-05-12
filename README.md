@@ -88,6 +88,32 @@ Carregar checkpoint existente e avaliar:
 python scripts/mnist/run_m1.py --load-model
 ```
 
+Gerar exemplos adversariais FGSM com M1:
+
+```bash
+python scripts/mnist/generate_adversarial.py fgsm --samples 10
+```
+
+Validar o filtro adaptativo no fluxo M1/FGSM:
+
+```bash
+python scripts/mnist/validate_fgsm_filter.py
+```
+
+Esse passo carrega `outputs/mnist/adversarial/fgsm/examples.npz`, aplica a
+reducao adaptativa de ruido, classifica novamente as imagens filtradas e salva:
+
+```text
+outputs/mnist/validation/fgsm_m1_filter/filtered_examples.npz
+outputs/mnist/validation/fgsm_m1_filter/metrics.json
+```
+
+Gerar o conjunto completo FGSM da faixa de teste do detector:
+
+```bash
+python scripts/mnist/generate_adversarial.py fgsm --full
+```
+
 Ultimo resultado local obtido:
 
 ```text
@@ -125,6 +151,25 @@ Smoke de treino curto:
 python scripts/mnist/train_m2.py --epochs 1
 ```
 
+Gerar exemplos C&W L2 com M2:
+
+```bash
+python scripts/mnist/generate_adversarial.py cw-l2 --samples 10
+```
+
+Gerar exemplos C&W Linf com M2:
+
+```bash
+python scripts/mnist/generate_adversarial.py cw-linf --samples 10
+```
+
+Para smoke tests mais rapidos de C&W, reduza as iteracoes:
+
+```bash
+python scripts/mnist/generate_adversarial.py cw-l2 --samples 1 --max-iterations 50 --binary-search-steps 1
+python scripts/mnist/generate_adversarial.py cw-linf --samples 1 --max-iterations 50
+```
+
 O treino completo usa por default:
 
 ```text
@@ -143,6 +188,8 @@ src/mnist/
   models.py           # modelos M1/M2 em Keras/CleverHans/Carlini
   m1.py               # treino/carregamento/avaliacao do M1
   m2.py               # checagem/carregamento do M2
+  adversarial_examples.py # geracao e persistencia de exemplos adversariais
+  fgsm_filter_validation.py # validacao M1/FGSM apos filtro adaptativo
   attacks.py          # FGSM e C&W usando as bibliotecas originais
   noise_reduction.py  # quantizacao, entropia e filtro adaptativo
   detection.py        # regra de deteccao por mudanca de predicao
