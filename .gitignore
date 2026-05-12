@@ -188,6 +188,8 @@ cython_debug/
 *.solverstate
 *.h5
 *.hdf5
+/third_party/nn_robust_attacks/data/
+/third_party/nn_robust_attacks/models/
 
 ### Custom ignore rules <fmn>
 /data
