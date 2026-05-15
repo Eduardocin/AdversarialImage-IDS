@@ -188,6 +188,9 @@ cython_debug/
 !/results/mnist/
 /results/mnist/*
 !/results/mnist/.gitkeep
+!/results/mnist/quantization/
+/results/mnist/quantization/*
+!/results/mnist/quantization/filter_notes.md
 !/results/imagenet/
 /results/imagenet/*
 !/results/imagenet/.gitkeep
