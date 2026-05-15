@@ -1,212 +1,81 @@
-# AdversarialImage-IDS
+# DeepDetector Reimplementation
 
-Replicacao MNIST do fluxo do DeepDetector / Liang et al.,
-"Detecting Adversarial Image Examples in Deep Neural Networks with Adaptive
-Noise Reduction".
+Base organizada para reproduzir o metodo de Liang et al.,
+"Detecting Adversarial Image Examples in Deep Networks with Adaptive Noise
+Reduction", usando o repositorio `OwenSec/DeepDetector` como referencia
+metodologica.
 
-O foco atual e MNIST. O codigo principal em `src/mnist` reescreve o fluxo no
-estilo do projeto, preservando a pilha e os parametros da base original.
+O Marco 0 cria apenas a estrutura modular e documenta o ambiente legado. A
+implementacao experimental deve preservar primeiro o comportamento original
+antes de qualquer extensao.
 
-## Fluxo MNIST
+## Ambiente Legado
 
-```text
-MNIST
- -> modelo classificador M1/M2
- -> exemplos adversariais
-      M1: FGSM via CleverHans FastGradientMethod
-      M2: C&W L2/Linf via Carlini nn_robust_attacks
- -> reducao adaptativa de ruido
-      entropia < 4: quantizacao 128
-      entropia < 5: quantizacao 64
-      caso contrario: quantizacao 43 + cross mean filter
- -> comparacao da predicao antes/depois da reducao
- -> contadores TP, FN, FP, TTP
- -> precision e recall
-```
+Este projeto usa bibliotecas antigas de proposito:
 
-DeepFool esta adiado porque ainda nao ha uma implementacao MNIST propria nesta
-etapa.
-
-## Ambiente
-
-O ambiente principal e legado de proposito, para preservar a reproducao:
-
-- Caffe
 - TensorFlow 1.x
-- Keras 2.x
+- Keras 2.2.x
 - CleverHans 2.x
-- Carlini `nn_robust_attacks` em `third_party/`
+- Caffe para a trilha ImageNet, se a reproducao fiel for mantida
 
-Criar o ambiente:
-
-```bash
-conda env create -f environment.yml
-```
-
-Ativar:
+Ambiente conda usado localmente:
 
 ```bash
 conda activate adversarialimage-ids-legacy
-```
-
-Validar imports da pilha MNIST:
-
-```bash
-python scripts/mnist/check_environment.py
+pip install -r requirements.txt
+python scripts/smoke_test.py
 ```
 
 Em automacao sem ativar o shell:
 
 ```bash
-conda run -n adversarialimage-ids-legacy python scripts/mnist/check_environment.py
+conda run -n adversarialimage-ids-legacy python scripts/smoke_test.py
 ```
 
-## Como Rodar o M1
-
-M1 e o classificador MNIST usado no fluxo FGSM/CleverHans. Ele salva checkpoint
-em:
-
-```text
-outputs/mnist/m1/mnist.ckpt
-```
-
-Smoke test de 1 epoca:
-
-```bash
-python scripts/mnist/run_m1.py --smoke --no-load-model
-```
-
-Treino completo com os defaults da base:
-
-```bash
-python scripts/mnist/run_m1.py --no-load-model
-```
-
-Carregar checkpoint existente e avaliar:
-
-```bash
-python scripts/mnist/run_m1.py --load-model
-```
-
-Gerar exemplos adversariais FGSM com M1:
-
-```bash
-python scripts/mnist/generate_adversarial.py fgsm --samples 10
-```
-
-Validar o filtro adaptativo no fluxo M1/FGSM:
-
-```bash
-python scripts/mnist/validate_fgsm_filter.py
-```
-
-Esse passo carrega `outputs/mnist/adversarial/fgsm/examples.npz`, aplica a
-reducao adaptativa de ruido, classifica novamente as imagens filtradas e salva:
-
-```text
-outputs/mnist/validation/fgsm_m1_filter/filtered_examples.npz
-outputs/mnist/validation/fgsm_m1_filter/metrics.json
-```
-
-Gerar o conjunto completo FGSM da faixa de teste do detector:
-
-```bash
-python scripts/mnist/generate_adversarial.py fgsm --full
-```
-
-Ultimo resultado local obtido:
-
-```text
-epochs=6
-batch_size=128
-learning_rate=0.001
-clean_accuracy=0.9899
-checkpoint=outputs/mnist/m1/mnist.ckpt
-```
-
-## Como Rodar o M2
-
-M2 e o classificador MNIST usado no fluxo C&W/Carlini. Os pesos esperados ficam
-em:
-
-```text
-third_party/nn_robust_attacks/models/mnist
-```
-
-Verificar se o M2 ja existe e carrega:
-
-```bash
-python scripts/mnist/check_m2.py
-```
-
-Treinar/recriar o M2 com a arquitetura e hiperparametros Carlini:
-
-```bash
-python scripts/mnist/train_m2.py
-```
-
-Smoke de treino curto:
-
-```bash
-python scripts/mnist/train_m2.py --epochs 1
-```
-
-Gerar exemplos C&W L2 com M2:
-
-```bash
-python scripts/mnist/generate_adversarial.py cw-l2 --samples 10
-```
-
-Gerar exemplos C&W Linf com M2:
-
-```bash
-python scripts/mnist/generate_adversarial.py cw-linf --samples 10
-```
-
-Para smoke tests mais rapidos de C&W, reduza as iteracoes:
-
-```bash
-python scripts/mnist/generate_adversarial.py cw-l2 --samples 1 --max-iterations 50 --binary-search-steps 1
-python scripts/mnist/generate_adversarial.py cw-linf --samples 1 --max-iterations 50
-```
-
-O treino completo usa por default:
-
-```text
-epochs=50
-batch_size=128
-optimizer=SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-output=third_party/nn_robust_attacks/models/mnist
-```
+Detalhes de versao e decisoes estao em
+`reproduction_notes/environment_setup.md`.
 
 ## Estrutura
 
 ```text
-src/mnist/
-  config.py           # defaults e caminhos do fluxo MNIST
-  data.py             # MNIST IDX, normalizacao M1/M2 e splits
-  models.py           # modelos M1/M2 em Keras/CleverHans/Carlini
-  m1.py               # treino/carregamento/avaliacao do M1
-  m2.py               # checagem/carregamento do M2
-  adversarial_examples.py # geracao e persistencia de exemplos adversariais
-  fgsm_filter_validation.py # validacao M1/FGSM apos filtro adaptativo
-  attacks.py          # FGSM e C&W usando as bibliotecas originais
-  noise_reduction.py  # quantizacao, entropia e filtro adaptativo
-  detection.py        # regra de deteccao por mudanca de predicao
-  evaluation.py       # TP, FN, FP, TTP, precision, recall
-  experiments.py      # orquestracao ataque -> reducao -> avaliacao
+configs/
+  mnist_fgsm.yaml
+  mnist_entropy.yaml
+src/deepdetector/
+  data/
+  models/
+  attacks/
+  filters/
+  detection/
+  evaluation/
+  utils/
+scripts/
+  smoke_test.py
+tests/
+results/
+  mnist/
+  imagenet/
+reproduction_notes/
+  environment_setup.md
+  caffe_setup.md
 ```
 
-## Testes
+## Configuracoes Iniciais
 
-Testes rapidos das partes que nao exigem o runtime legado completo:
+- `configs/mnist_fgsm.yaml`: esqueleto do experimento MNIST com FGSM.
+- `configs/mnist_entropy.yaml`: parametros iniciais da reducao adaptativa por
+  entropia descrita na reproducao.
+
+Os arquivos de configuracao ainda nao executam experimentos completos; eles
+servem como contrato inicial para os proximos marcos.
+
+## Validacao Rapida
+
+O smoke test valida somente imports da pilha minima:
 
 ```bash
-pytest tests
+python scripts/smoke_test.py
 ```
 
-Se o `pytest` estiver em outro ambiente, use:
-
-```powershell
-$env:PYTHONPATH=(Resolve-Path '.').Path; pytest tests
-```
+Quando esse comando falha, o problema esperado esta no ambiente legado, nao na
+estrutura modular do projeto.

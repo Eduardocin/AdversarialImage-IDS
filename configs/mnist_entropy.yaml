@@ -1,0 +1,15 @@
+filter:
+  name: adaptive_noise_reduction
+  dataset: mnist
+
+entropy_thresholds:
+  low: 4.0
+  medium: 5.0
+
+quantization_levels:
+  low_entropy: 128
+  medium_entropy: 64
+  high_entropy: 43
+
+post_processing:
+  high_entropy_filter: cross_mean

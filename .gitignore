@@ -183,7 +183,12 @@ cython_debug/
 # Project artifacts
 /models
 /outputs
-/results
+/results/*
+!/results/
+!/results/mnist/
+!/results/mnist/.gitkeep
+!/results/imagenet/
+!/results/imagenet/.gitkeep
 *.caffemodel
 *.solverstate
 *.h5

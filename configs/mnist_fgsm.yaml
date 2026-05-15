@@ -1,0 +1,23 @@
+experiment:
+  name: mnist_fgsm
+  dataset: mnist
+  seed: 1234
+
+model:
+  family: keras
+  reference: DeepDetector MNIST classifier
+  checkpoint_dir: results/mnist/checkpoints
+
+attack:
+  name: fgsm
+  library: cleverhans
+  epsilon: 0.3
+  clip_min: 0.0
+  clip_max: 1.0
+
+detection:
+  method: adaptive_noise_reduction
+  filter_config: configs/mnist_entropy.yaml
+
+outputs:
+  root: results/mnist/fgsm
