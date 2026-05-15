@@ -79,3 +79,25 @@ python scripts/smoke_test.py
 
 Quando esse comando falha, o problema esperado esta no ambiente legado, nao na
 estrutura modular do projeto.
+
+## MNIST Clean Baseline
+
+O primeiro pipeline executavel treina ou carrega o classificador MNIST limpo
+com TensorFlow 1.x, Keras e CleverHans:
+
+```bash
+python scripts/train_mnist.py --epochs 1 --batch-size 256 --learning-rate 0.001
+```
+
+Para restaurar o checkpoint salvo:
+
+```bash
+python scripts/train_mnist.py --load-model
+```
+
+O script salva checkpoint em `results/mnist/clean_baseline/checkpoints/` e
+registra a acuracia limpa em:
+
+```text
+results/mnist/clean_baseline/summary.md
+```
