@@ -21,6 +21,10 @@ Este projeto usa bibliotecas antigas de proposito:
 Ambiente conda usado localmente:
 
 ```bash
+# Se for a primeira vez, crie o ambiente:
+conda create -n adversarialimage-ids-legacy python=3.7
+
+# Ative o ambiente e instale as dependencias:
 conda activate adversarialimage-ids-legacy
 pip install -r requirements.txt
 python scripts/smoke_test.py
@@ -66,24 +70,21 @@ reproduction_notes/
 - `configs/mnist_entropy.yaml`: parametros iniciais da reducao adaptativa por
   entropia descrita na reproducao.
 
-Os arquivos de configuracao ainda nao executam experimentos completos; eles
-servem como contrato inicial para os proximos marcos.
+Os arquivos de configuracao ainda não executam experimentos completos, eles servem como contrato inicial para os proximos marcos.
 
 ## Validacao Rapida
 
-O smoke test valida somente imports da pilha minima:
+O smoke test valida somente imports da pilha mínima:
 
 ```bash
 python scripts/smoke_test.py
 ```
 
-Quando esse comando falha, o problema esperado esta no ambiente legado, nao na
-estrutura modular do projeto.
+Quando esse comando falha, o problema esperado esta no ambiente legado, não na estrutura modular do projeto.
 
 ## MNIST Clean Baseline
 
-O primeiro pipeline executavel treina ou carrega o classificador MNIST limpo
-com TensorFlow 1.x, Keras e CleverHans:
+O primeiro pipeline executável treina ou carrega o classificador MNIST limpo com TensorFlow 1.x, Keras e CleverHans:
 
 ```bash
 python scripts/train_mnist.py --epochs 1 --batch-size 256 --learning-rate 0.001
