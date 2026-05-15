@@ -101,3 +101,25 @@ registra a acuracia limpa em:
 ```text
 results/mnist/clean_baseline/summary.md
 ```
+
+## MNIST FGSM
+
+Gerar exemplos adversariais FGSM com CleverHans a partir do baseline limpo:
+
+```bash
+python scripts/generate_mnist_fgsm.py --load-model --epsilons 0.2 --samples 4500
+```
+
+Para comparar epsilons:
+
+```bash
+python scripts/generate_mnist_fgsm.py --load-model --epsilons 0.1,0.2
+```
+
+As imagens adversariais ficam em `results/mnist/fgsm/eps_<valor>/` e as
+metricas agregadas em:
+
+```text
+results/mnist/fgsm/summary.csv
+results/mnist/fgsm/summary.md
+```

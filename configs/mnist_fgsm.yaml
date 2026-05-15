@@ -11,7 +11,7 @@ model:
 attack:
   name: fgsm
   library: cleverhans
-  epsilon: 0.3
+  epsilon: 0.2
   clip_min: 0.0
   clip_max: 1.0
 
