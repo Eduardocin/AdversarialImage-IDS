@@ -11,9 +11,13 @@ from typing import Any, Dict, Iterable, List
 import numpy as np
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = PROJECT_ROOT / "src"
-sys.path.insert(0, str(SRC_ROOT))
+SCRIPTS_ROOT = next(
+    parent for parent in Path(__file__).resolve().parents if (parent / "_project_root.py").is_file()
+)
+sys.path.insert(0, str(SCRIPTS_ROOT))
+from _project_root import configure_project_paths
+
+PROJECT_ROOT = configure_project_paths(__file__)
 
 from deepdetector.attacks.fgsm import generate_fgsm_examples
 from deepdetector.data.mnist import load_mnist_data
@@ -153,7 +157,7 @@ def main() -> int:
 
     import tensorflow as tf
 
-    tf.set_random_seed(1234)
+    tf.compat.v1.set_random_seed(1234)
     rng = np.random.RandomState([2017, 8, 30])
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -164,8 +168,8 @@ def main() -> int:
     X_eval = X_test[:sample_count]
     Y_eval = Y_test[:sample_count]
 
-    x = tf.placeholder(tf.float32, shape=(None, 28, 28, 1), name="x")
-    y = tf.placeholder(tf.float32, shape=(None, 10), name="y")
+    x = tf.compat.v1.placeholder(tf.float32, shape=(None, 28, 28, 1), name="x")
+    y = tf.compat.v1.placeholder(tf.float32, shape=(None, 10), name="y")
     model, predictions = build_mnist_model(x)
 
     train_or_load_mnist_model(

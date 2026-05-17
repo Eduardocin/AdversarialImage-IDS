@@ -1,4 +1,4 @@
-"""Run the MNIST prediction-change detector for every registered filter."""
+﻿"""Run the MNIST prediction-change detector for every registered filter."""
 
 from __future__ import print_function
 
@@ -14,9 +14,13 @@ import numpy as np
 import tensorflow as tf
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = PROJECT_ROOT / "src"
-sys.path.insert(0, str(SRC_ROOT))
+SCRIPTS_ROOT = next(
+    parent for parent in Path(__file__).resolve().parents if (parent / "_project_root.py").is_file()
+)
+sys.path.insert(0, str(SCRIPTS_ROOT))
+from _project_root import configure_project_paths
+
+PROJECT_ROOT = configure_project_paths(__file__)
 
 from deepdetector.data.mnist import load_mnist_data
 from deepdetector.detection.prediction_change import PredictionChangeDetector
@@ -75,11 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def create_tf1_session() -> tf.Session:
+def create_tf1_session() -> tf.compat.v1.Session:
     """Create a TF1 session and attach it to the standalone Keras backend."""
-    config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
+    sess = tf.compat.v1.Session(config=config)
     K.set_session(sess)
     if hasattr(K, "set_learning_phase"):
         K.set_learning_phase(0)
@@ -88,13 +92,13 @@ def create_tf1_session() -> tf.Session:
     return sess
 
 
-def restore_latest_checkpoint(sess: tf.Session, train_dir: str) -> str:
+def restore_latest_checkpoint(sess: tf.compat.v1.Session, train_dir: str) -> str:
     """Restore the latest TensorFlow Saver checkpoint from a directory."""
     checkpoint = tf.train.get_checkpoint_state(train_dir)
     if checkpoint is None or checkpoint.model_checkpoint_path is None:
         raise IOError("No TensorFlow checkpoint found in {0}".format(train_dir))
 
-    saver = tf.train.Saver()
+    saver = tf.compat.v1.train.Saver()
     saver.restore(sess, checkpoint.model_checkpoint_path)
     return checkpoint.model_checkpoint_path
 
@@ -145,7 +149,7 @@ def discard_record(
 def evaluate_filter(
     filter_name: str,
     filter_fn: FilterFn,
-    sess: tf.Session,
+    sess: tf.compat.v1.Session,
     x_placeholder: tf.Tensor,
     predictions: tf.Tensor,
     X_clean: np.ndarray,
@@ -325,7 +329,7 @@ def main() -> int:
         adversarial_path = default_adversarial_path(args.epsilon)
     if not adversarial_path.exists():
         raise IOError(
-            "Adversarial examples not found at {0}. Run scripts/generate_mnist_fgsm.py first.".format(
+            "Adversarial examples not found at {0}. Run scripts/mnist_m1_fgsm/generate_mnist_fgsm.py first.".format(
                 adversarial_path
             )
         )
@@ -348,7 +352,11 @@ def main() -> int:
         Y_eval = Y_test[:sample_count]
         print("sample_count={0}".format(sample_count))
 
-        x_placeholder = tf.placeholder(tf.float32, shape=(None, 28, 28, 1), name="x")
+        x_placeholder = tf.compat.v1.placeholder(
+            tf.float32,
+            shape=(None, 28, 28, 1),
+            name="x",
+        )
         model, predictions = build_mnist_model(x_placeholder)
         del model
 

@@ -1,4 +1,4 @@
-"""Evaluate MNIST detection with entropy-based quantization."""
+﻿"""Evaluate MNIST detection with entropy-based quantization."""
 
 from __future__ import print_function
 
@@ -15,9 +15,13 @@ import numpy as np
 import tensorflow as tf
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = PROJECT_ROOT / "src"
-sys.path.insert(0, str(SRC_ROOT))
+SCRIPTS_ROOT = next(
+    parent for parent in Path(__file__).resolve().parents if (parent / "_project_root.py").is_file()
+)
+sys.path.insert(0, str(SCRIPTS_ROOT))
+from _project_root import configure_project_paths
+
+PROJECT_ROOT = configure_project_paths(__file__)
 
 from deepdetector.data.mnist import load_mnist_data
 from deepdetector.detection.prediction_change import PredictionChangeDetector
@@ -63,11 +67,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def create_tf1_session() -> tf.Session:
+def create_tf1_session() -> tf.compat.v1.Session:
     """Create a TensorFlow 1.x session and attach it to Keras."""
-    config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
+    sess = tf.compat.v1.Session(config=config)
     K.set_session(sess)
     if hasattr(K, "set_learning_phase"):
         K.set_learning_phase(0)
@@ -76,13 +80,13 @@ def create_tf1_session() -> tf.Session:
     return sess
 
 
-def restore_latest_checkpoint(sess: tf.Session, train_dir: str) -> str:
+def restore_latest_checkpoint(sess: tf.compat.v1.Session, train_dir: str) -> str:
     """Restore the latest TensorFlow Saver checkpoint from a directory."""
     checkpoint = tf.train.get_checkpoint_state(train_dir)
     if checkpoint is None or checkpoint.model_checkpoint_path is None:
         raise IOError("No TensorFlow checkpoint found in {0}".format(train_dir))
 
-    saver = tf.train.Saver()
+    saver = tf.compat.v1.train.Saver()
     saver.restore(sess, checkpoint.model_checkpoint_path)
     return checkpoint.model_checkpoint_path
 
@@ -139,7 +143,7 @@ def _increment_range_counts(
             range_counts[adv_range]["{0}TTP".format(adv_range)] += 1
     else:
         if adv_range == "mid":
-            # BUG ORIGINAL: highFN incrementado no caso mid não detectado — reproduzido fielmente
+            # BUG ORIGINAL: highFN incrementado no caso mid nÃ£o detectado â€” reproduzido fielmente
             range_counts["high"]["highFN"] += 1
         else:
             range_counts[adv_range]["{0}FN".format(adv_range)] += 1
@@ -169,7 +173,7 @@ def _range_rates(counts: Dict[str, int], name: str) -> Dict[str, float]:
 
 
 def evaluate_entropy_detector(
-    sess: tf.Session,
+    sess: tf.compat.v1.Session,
     x_placeholder: tf.Tensor,
     predictions: tf.Tensor,
     X_clean: np.ndarray,
@@ -274,7 +278,7 @@ def save_entropy_summary_md(
     lines = [
         "# MNIST Entropy Detector",
         "",
-        "## Métricas globais",
+        "## MÃ©tricas globais",
         "",
         "| n_total | n_descartados | TP | FP | FN | TN | TTP | precision | recall | f1 | ttp_rate |",
         "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -293,7 +297,7 @@ def save_entropy_summary_md(
             ttp_rate=float(global_metrics["ttp_rate"]),
         ),
         "",
-        "## Métricas por faixa",
+        "## MÃ©tricas por faixa",
         "",
         "| faixa | n_valid | TP | FP | FN | TTP | precision | recall | f1 | ttp_rate |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -320,10 +324,10 @@ def save_entropy_summary_md(
     lines.extend(
         [
             "",
-            "## Nota de reprodução",
+            "## Nota de reproduÃ§Ã£o",
             "",
-            "Quando a entropia adversarial está na faixa `mid` e o filtro não muda a "
-            "predição, o contador incrementado é `highFN`, não `midFN`. Esse "
+            "Quando a entropia adversarial estÃ¡ na faixa `mid` e o filtro nÃ£o muda a "
+            "prediÃ§Ã£o, o contador incrementado Ã© `highFN`, nÃ£o `midFN`. Esse "
             "comportamento desloca falsos negativos da faixa `mid` para a faixa "
             "`high`, reduzindo o denominador de recall em `mid` e aumentando o "
             "denominador de recall em `high`.",
@@ -348,7 +352,7 @@ def main() -> int:
         adversarial_path = default_adversarial_path(args.epsilon)
     if not adversarial_path.exists():
         raise IOError(
-            "Adversarial examples not found at {0}. Run scripts/generate_mnist_fgsm.py first.".format(
+            "Adversarial examples not found at {0}. Run scripts/mnist_m1_fgsm/generate_mnist_fgsm.py first.".format(
                 adversarial_path
             )
         )
@@ -369,7 +373,11 @@ def main() -> int:
     X_adv = np.asarray(X_adv[:sample_count], dtype=np.float32)
     Y_eval = Y_test[:sample_count]
 
-    x_placeholder = tf.placeholder(tf.float32, shape=(None, 28, 28, 1), name="x")
+    x_placeholder = tf.compat.v1.placeholder(
+        tf.float32,
+        shape=(None, 28, 28, 1),
+        name="x",
+    )
     model, predictions = build_mnist_model(x_placeholder)
     del model
 
