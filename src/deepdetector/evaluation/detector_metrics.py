@@ -125,9 +125,32 @@ def _summary_rows(metrics: Dict[str, Any], filter_name: str) -> List[Dict[str, A
     return rows
 
 
+def _summary_display_rows(metrics: Dict[str, Any], filter_name: str) -> List[Dict[str, Any]]:
+    """Return summary rows with derived display fields."""
+    rows = []
+    for row in _summary_rows(metrics, filter_name):
+        display_row = dict(row)
+        n_discarded = int(display_row.get("n_discarded_clean_error", 0)) + int(
+            display_row.get("n_discarded_attack_failed", 0)
+        )
+        n_total = int(display_row.get("n_total", 0))
+        if not n_total:
+            n_total = (
+                int(display_row.get("TP", 0))
+                + int(display_row.get("FN", 0))
+                + n_discarded
+            )
+
+        display_row["n_total"] = n_total
+        display_row["n_discarded"] = n_discarded
+        display_row["n_evaluated"] = n_total - n_discarded
+        rows.append(display_row)
+    return rows
+
+
 def save_summary_md(metrics: Dict[str, Any], filter_name: str, path: str) -> str:
     """Save a Markdown table comparing detector metrics by filter."""
-    rows = _summary_rows(metrics, filter_name)
+    rows = _summary_display_rows(metrics, filter_name)
     directory = os.path.dirname(path)
     if directory and not os.path.isdir(directory):
         os.makedirs(directory)
@@ -140,19 +163,12 @@ def save_summary_md(metrics: Dict[str, Any], filter_name: str, path: str) -> str
     ]
 
     for row in rows:
-        n_discarded = int(row.get("n_discarded_clean_error", 0)) + int(
-            row.get("n_discarded_attack_failed", 0)
-        )
-        n_total = int(row.get("n_total", 0))
-        if not n_total:
-            n_total = int(row.get("TP", 0)) + int(row.get("FN", 0)) + n_discarded
-
         lines.append(
             "| {filter_name} | {n_total} | {n_discarded} | {TP} | {FP} | {FN} | {TTP} | "
             "{precision:.6f} | {recall:.6f} | {f1:.6f} | {ttp_rate:.6f} |".format(
                 filter_name=row["filter_name"],
-                n_total=n_total,
-                n_discarded=n_discarded,
+                n_total=int(row["n_total"]),
+                n_discarded=int(row["n_discarded"]),
                 TP=int(row.get("TP", 0)),
                 FP=int(row.get("FP", 0)),
                 FN=int(row.get("FN", 0)),

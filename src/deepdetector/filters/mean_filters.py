@@ -60,6 +60,32 @@ def _convolve_reflect(image_2d: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     return output
 
 
+def _cross_convolve_reflect(image_2d: np.ndarray, radius: int) -> np.ndarray:
+    """Apply a cross-mask mean filter with reflect padding."""
+    _validate_positive_radius(radius)
+    padded = np.pad(
+        np.asarray(image_2d, dtype=np.float32),
+        ((radius, radius), (radius, radius)),
+        mode="reflect",
+    )
+    height, width = image_2d.shape
+    output = np.zeros_like(image_2d, dtype=np.float32)
+
+    for offset in range(-radius, radius + 1):
+        output += padded[
+            radius + offset : radius + offset + height,
+            radius : radius + width,
+        ]
+        if offset != 0:
+            output += padded[
+                radius : radius + height,
+                radius + offset : radius + offset + width,
+            ]
+
+    output /= float(4 * radius + 1)
+    return output
+
+
 def _clip_and_restore_shape(image_2d: np.ndarray) -> np.ndarray:
     """Clip a 2D filtered image and restore MNIST channel shape."""
     return np.clip(image_2d, 0.0, 1.0).astype(np.float32).reshape(MNIST_IMAGE_SHAPE)
@@ -105,7 +131,7 @@ def box_mean_filter(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
 def cross_mean_filter(image: np.ndarray, radius: int = 1) -> np.ndarray:
     """Apply a cross-shaped local mean filter to a grayscale image."""
     image_array = _as_mnist_image(image)
-    filtered = _convolve_reflect(image_array[:, :, 0], _cross_kernel(radius))
+    filtered = _cross_convolve_reflect(image_array[:, :, 0], radius)
     return _clip_and_restore_shape(filtered)
 
 
