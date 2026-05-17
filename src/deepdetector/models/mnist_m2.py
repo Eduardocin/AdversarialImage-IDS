@@ -1,10 +1,4 @@
-"""TensorFlow 1.x/Keras M2 model used for MNIST CW reproduction.
-
-The DeepDetector paper reports MNIST CW experiments with an M2 model from
-reference [36]. The exact architecture is not present in this repository, so
-this module provides a separate TF1/Keras CNN for the M2 reproduction path. It
-does not replace the existing M1 model in ``mnist_cnn.py``.
-"""
+"""TensorFlow 1.x/Keras M2 model used for MNIST CW experiments."""
 
 from __future__ import print_function
 
@@ -15,14 +9,13 @@ from typing import Any, Optional, Tuple
 def build_mnist_m2_model(x_placeholder: Any) -> Tuple[Any, Any]:
     """Build the MNIST M2 CNN and return ``(model, predictions)``.
 
-    The architecture mirrors the base M2 CNN definition used for MNIST CW
-    reproduction and is compatible with TF1, standalone Keras, and CleverHans
-    attacks:
+    The model stacks convolutional blocks, dense layers, dropout, and a logits
+    output layer:
 
     Conv(32) -> Conv(32) -> MaxPool -> Conv(64) -> Conv(64) -> MaxPool
     -> Flatten -> Dense(200) -> Dropout -> Dense(200) -> Dense(10).
 
-    The final layer returns logits (no softmax activation).
+    The final layer returns logits without a softmax activation.
     """
     from keras.layers import Activation, Dense, Dropout, Flatten
     from keras.layers import Convolution2D, MaxPooling2D

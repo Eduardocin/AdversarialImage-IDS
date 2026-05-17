@@ -2,12 +2,10 @@
 
 ## Objetivo
 
-Reproduzir as linhas 9-13 e 19 da Tabela 10 do artigo DeepDetector
-(M2 + MNIST + CW).
+Executar o fluxo M2 + MNIST + CW e comparar as metricas obtidas com os valores
+de referencia configurados nos scripts.
 
 ## Escopo
-
-Apenas:
 
 - CW L2 kappa=0.0
 - CW L2 kappa=0.5
@@ -20,10 +18,6 @@ Apenas:
 
 MNIST, ultimos 1000 digitos: indices 9000-9999.
 
-## Artigo-base
-
-Tabela 10: linhas CW L2 kappa={0.0,0.5,1.0,2.0,4.0} e CW Linf.
-
 ## Amostras
 
 Por padrao os scripts usam `test_start=9000` e `test_end=10000`, isto e, indices
@@ -31,12 +25,9 @@ Por padrao os scripts usam `test_start=9000` e `test_end=10000`, isto e, indices
 
 ## Modelo
 
-A arquitetura M2 exata da referencia [36] nao foi localizada; esta
-implementacao usa uma arquitetura MNIST compativel com CW como aproximacao
-experimental.
-
-Foi encontrada uma arquitetura base usada em implementacoes de treino, e ela
-foi alinhada em `src/deepdetector/models/mnist_m2.py`:
+A arquitetura M2 exata da referencia [36] nao foi localizada no projeto. Esta
+implementacao usa uma CNN MNIST compativel com TensorFlow 1.x, Keras legado e
+ataques CW:
 
 - Conv2D(32) + ReLU
 - Conv2D(32) + ReLU
@@ -49,8 +40,6 @@ foi alinhada em `src/deepdetector/models/mnist_m2.py`:
 - Dropout(0.5)
 - Dense(200) + ReLU
 - Dense(10) (logits)
-
-Essa implementacao e compativel com TensorFlow 1.x, Keras legado e CleverHans.
 
 ## Metricas
 
@@ -69,32 +58,28 @@ Essa implementacao e compativel com TensorFlow 1.x, Keras legado e CleverHans.
 - CW L2 com kappa = 0.0, 0.5, 1.0, 2.0, 4.0
 - CW Linf
 
-CW L2 e gerado por `src/deepdetector/attacks/cw_l2.py`, usando
-`CarliniWagnerL2` quando disponivel na instalacao CleverHans compativel.
+CW L2 e gerado por `src/deepdetector/attacks/cw_l2.py`.
 
-CW Linf foi preparado como interface em `src/deepdetector/attacks/cw_linf.py`.
-Na stack declarada no `environment.yml` (`cleverhans==3.1.0`), nao ha uma API
-CW Linf estavel equivalente ao CW L2 para este projeto TF1/Keras. Por isso o
-script `scripts/mnist_m2_cw/generate_mnist_cw_linf.py` registra `status="not_executed"` e
-um motivo claro em vez de inventar resultados.
+CW Linf e gerado por `src/deepdetector/attacks/cw_linf.py` com uma
+implementacao TensorFlow 1.x local que otimiza uma margem untargeted e reduz um
+limiar Linf (`tau`) ao longo das iteracoes.
 
 ## Saidas esperadas
 
 - adversariais salvos
 - metricas do ataque
 - metricas do detector
-- comparacao com a Tabela 10
+- comparacao com valores de referencia
 
 Os artefatos ficam isolados em `results/mnist/m2_cw/` para nao sobrescrever o
 fluxo M1 + FGSM.
 
 ## Limitacoes
 
-- A arquitetura M2 segue a base encontrada, mas ainda pode haver divergencias
-  com a referencia [36].
+- A arquitetura M2 pode divergir da referencia [36].
 - CW L2 e computacionalmente caro; a execucao completa com 1000 amostras e cinco
   kappas pode demorar bastante.
-- CW Linf nao foi implementado nesta etapa por falta de API compativel na stack
-  CleverHans legada do projeto.
-- As metricas so devem ser comparadas com a Tabela 10 depois de treinar/restaurar
-  M2, gerar adversariais CW L2 e rodar o detector.
+- CW Linf usa uma implementacao local porque a stack CleverHans 3.1.0 usada aqui
+  nao fornece uma API CW Linf equivalente ao CW L2.
+- As metricas so devem ser comparadas depois de treinar/restaurar M2, gerar os
+  adversariais CW e rodar o detector.

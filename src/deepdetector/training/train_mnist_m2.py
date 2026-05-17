@@ -1,4 +1,4 @@
-"""MNIST M2 training loop for the DeepDetector CW reproduction path."""
+"""MNIST M2 training loop for CW experiments."""
 
 from __future__ import print_function
 
@@ -11,7 +11,7 @@ from deepdetector.models.mnist_m2 import (
     load_mnist_m2_model,
     save_mnist_m2_model,
 )
-from deepdetector.training.train_mnist import smooth_one_hot_labels
+from deepdetector.training.train_mnist_m1 import smooth_one_hot_labels
 
 
 def train_or_load_mnist_m2_model(

@@ -1,10 +1,4 @@
-"""Orchestration helpers for reproducing MNIST tables from DeepDetector.
-
-This module intentionally reuses the existing data loader, MNIST model,
-FGSM attack, quantization filters, and metric logic. It only adds the
-article-specific experiment splits, interval mappings, table formatting,
-and cross-filter orchestration needed to reproduce the reported tables.
-"""
+"""MNIST experiment helpers for fixed splits, filters, metrics, and reports."""
 
 from __future__ import print_function
 
@@ -48,7 +42,7 @@ INTERVAL_TO_SIZE = {
 
 
 def interval_size(number_of_intervals: int) -> int:
-    """Return the scalar quantization interval size used by the article."""
+    """Return the scalar quantization interval size for an interval count."""
     try:
         return INTERVAL_TO_SIZE[int(number_of_intervals)]
     except KeyError:
@@ -62,16 +56,15 @@ def scalar_filter_for_intervals(number_of_intervals: int) -> FilterFn:
 
 
 def adaptive_quantization_filter(image: np.ndarray) -> np.ndarray:
-    """Apply the Table 6 adaptive scalar quantization rule."""
+    """Apply entropy-dependent scalar quantization."""
     return entropy_based_quantization(image)[0]
 
 
 def proposed_detection_filter(image: np.ndarray) -> np.ndarray:
-    """Apply the article's final MNIST detection filter.
+    """Apply entropy-dependent quantization and smoothing.
 
     Low-entropy images use 2 intervals, mid-entropy images use 4 intervals,
-    and high-entropy images use 6 intervals plus the 7x7 cross smoothing
-    combination described in Equation 9.
+    and high-entropy images use 6 intervals plus 7x7 cross smoothing.
     """
     image_array = np.asarray(image, dtype=np.float32)
     entropy = one_d_entropy(image_array)
@@ -87,7 +80,7 @@ def proposed_detection_filter(image: np.ndarray) -> np.ndarray:
 
 
 def ensure_output_dir(output_dir: str = ARTICLE_OUTPUT_DIR) -> str:
-    """Create the article reproduction output directory."""
+    """Create the configured output directory."""
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
     return output_dir
@@ -177,7 +170,7 @@ def evaluate_filter_predictions(
     filtered_clean_pred: np.ndarray,
     filtered_adv_pred: np.ndarray,
 ) -> Dict[str, Any]:
-    """Compute article-style detection counts and derived metrics."""
+    """Compute detection counts and derived metrics."""
     y_true = np.asarray(y_true, dtype=np.int64)
     clean_pred = np.asarray(clean_pred, dtype=np.int64)
     adv_pred = np.asarray(adv_pred, dtype=np.int64)
@@ -335,7 +328,7 @@ def format_percent(value: Any) -> str:
 
 
 def percent_delta(ours: Any, article: Any) -> float:
-    """Return ours minus article, both on the 0-100 scale."""
+    """Return local minus reference value on the 0-100 scale."""
     return float(ours) - float(article)
 
 

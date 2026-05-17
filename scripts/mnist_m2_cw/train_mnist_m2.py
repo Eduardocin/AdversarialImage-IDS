@@ -63,10 +63,7 @@ def _summary_row(result: Dict[str, Any]) -> Dict[str, Any]:
         "checkpoint_path": result["checkpoint_path"],
         "seed_tf": SEED_TF,
         "seed_numpy": SEED_NUMPY,
-        "notes": (
-            "Separate M2 CNN checkpoint for MNIST CW reproduction; "
-            "architecture aligned to the base M2 definition."
-        ),
+        "notes": "Separate M2 CNN checkpoint for MNIST CW experiments.",
     }
 
 
@@ -124,9 +121,8 @@ def write_summary_md(result: Dict[str, Any], output_dir: Path) -> Path:
         "",
         "## Notes",
         "",
-        "The exact M2 architecture from reference [36] is not present in this "
-        "repository. This checkpoint uses the base M2 CNN definition aligned "
-        "in `src/deepdetector/models/mnist_m2.py`.",
+        "This checkpoint uses the M2 CNN definition in "
+        "`src/deepdetector/models/mnist_m2.py`.",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")

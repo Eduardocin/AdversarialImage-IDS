@@ -1,4 +1,4 @@
-﻿"""Reproduce DeepDetector Table 4 for MNIST scalar quantization intervals."""
+"""Compare scalar quantization intervals on MNIST adversarial samples."""
 
 from __future__ import print_function
 
@@ -56,7 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    """Run the Table 4 reproduction."""
+    """Run the interval comparison and write CSV and Markdown outputs."""
     args = build_parser().parse_args()
     output_dir = ensure_output_dir(args.output_dir)
     images, labels = load_mnist_test_slice(0, 4500)
@@ -147,24 +147,24 @@ def main() -> int:
 
     md_path = write_markdown_table(
         str(Path(output_dir) / "table_4_scalar_quantization_intervals.md"),
-        "Table 4 - Scalar Quantization Intervals",
+        "Scalar Quantization Intervals",
         [
             "Intervals",
             "Interval size",
-            "Article recall",
+            "Reference recall",
             "Our recall",
             "Delta recall",
-            "Article precision",
+            "Reference precision",
             "Our precision",
             "Delta precision",
-            "Article F1",
+            "Reference F1",
             "Our F1",
             "Delta F1",
         ],
         markdown_rows,
         notes=[
-            "Article values are from Liang et al., Table 4.",
-            "The reproduction uses MNIST test digits 0-4499 and FGSM epsilon 0.2.",
+            "Reference values use the fixed comparison targets configured in this script.",
+            "This run uses MNIST test digits 0-4499 and FGSM epsilon 0.2.",
         ],
     )
 

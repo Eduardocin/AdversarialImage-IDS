@@ -1,4 +1,4 @@
-﻿"""Reproduce DeepDetector Table 3 for MNIST uniform vs non-uniform quantization."""
+"""Compare uniform and non-uniform quantization on MNIST samples."""
 
 from __future__ import print_function
 
@@ -48,7 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    """Run the Table 3 reproduction."""
+    """Run the quantization comparison and write CSV and Markdown outputs."""
     args = build_parser().parse_args()
     output_dir = ensure_output_dir(args.output_dir)
     images, labels = load_mnist_test_slice(0, 100)
@@ -122,24 +122,24 @@ def main() -> int:
 
     md_path = write_markdown_table(
         str(Path(output_dir) / "table_3_uniform_vs_nonuniform.md"),
-        "Table 3 - Uniform vs Non-uniform Quantization",
+        "Uniform vs Non-uniform Quantization",
         [
             "Quantization",
-            "Article time",
+            "Reference time",
             "Our time",
-            "Article recall",
+            "Reference recall",
             "Our recall",
             "Delta recall",
-            "Article precision",
+            "Reference precision",
             "Our precision",
             "Delta precision",
-            "Article F1",
+            "Reference F1",
             "Our F1",
             "Delta F1",
         ],
         markdown_rows,
         notes=[
-            "Article values are from Liang et al., Table 3.",
+            "Reference values use the fixed comparison targets configured in this script.",
             "Our timing measures NumPy filter application on the 100 selected MNIST test digits.",
         ],
     )

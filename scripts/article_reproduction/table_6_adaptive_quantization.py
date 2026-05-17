@@ -1,4 +1,4 @@
-﻿"""Reproduce DeepDetector Table 6 for adaptive MNIST quantization."""
+"""Evaluate adaptive quantization on fixed MNIST test-set slices."""
 
 from __future__ import print_function
 
@@ -46,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    """Run the Table 6 reproduction."""
+    """Run adaptive quantization evaluation and write comparison outputs."""
     args = build_parser().parse_args()
     output_dir = ensure_output_dir(args.output_dir)
     graph = create_restored_mnist_graph(args.train_dir)
@@ -128,29 +128,29 @@ def main() -> int:
 
     md_path = write_markdown_table(
         str(Path(output_dir) / "table_6_adaptive_quantization.md"),
-        "Table 6 - Adaptive Quantization",
+        "Adaptive Quantization",
         [
             "Split",
-            "Article TP",
+            "Reference TP",
             "Our TP",
-            "Article FN",
+            "Reference FN",
             "Our FN",
-            "Article FP",
+            "Reference FP",
             "Our FP",
-            "Article recall",
+            "Reference recall",
             "Our recall",
             "Delta recall",
-            "Article precision",
+            "Reference precision",
             "Our precision",
             "Delta precision",
-            "Article F1",
+            "Reference F1",
             "Our F1",
             "Delta F1",
         ],
         markdown_rows,
         notes=[
-            "Article values are from Liang et al., Table 6.",
-            "Training and Validation name the article's MNIST test-set slices 0-4499 and 4500-5499.",
+            "Reference values use the fixed comparison targets configured in this script.",
+            "Training and Validation name the MNIST test-set slices 0-4499 and 4500-5499.",
             "Adaptive quantization maps H < 4 to 2 intervals, 4 <= H < 5 to 4 intervals, and H >= 5 to 6 intervals.",
         ],
     )

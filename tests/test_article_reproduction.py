@@ -16,7 +16,7 @@ from deepdetector.evaluation.article_reproduction import (
 
 
 def test_interval_size_uses_article_mapping() -> None:
-    """Check the article's interval-count to interval-size mapping."""
+    """Check interval-count to interval-size mapping."""
     assert interval_size(2) == 128
     assert interval_size(6) == 43
     assert interval_size(10) == 26

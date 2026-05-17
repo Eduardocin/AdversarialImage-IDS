@@ -1,4 +1,4 @@
-﻿"""Evaluate the DeepDetector prediction-change rule on MNIST M2 CW examples."""
+﻿"""Evaluate prediction-change detection on MNIST M2 CW examples."""
 
 from __future__ import print_function
 
@@ -81,7 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def select_filter(name: str) -> FilterFn:
-    """Return the requested DeepDetector filter."""
+    """Return the requested image transformation function."""
     if name == "final":
         return proposed_detection_filter
     if name == "adaptive":
@@ -111,7 +111,7 @@ def compute_detector_metrics(
     filtered_clean_pred: np.ndarray,
     filtered_adv_pred: np.ndarray,
 ) -> Dict[str, Any]:
-    """Compute Table 10-style detector counts."""
+    """Compute detector counts and derived percent metrics."""
     true_labels = np.asarray(y_true, dtype=np.int64)
     clean_pred = np.asarray(clean_pred, dtype=np.int64)
     adv_pred = np.asarray(adv_pred, dtype=np.int64)
@@ -271,7 +271,7 @@ def write_summary_md(path: Path, title: str, rows: List[Dict[str, Any]]) -> Path
     lines.extend(
         [
             "",
-            "Metrics are percentages on the same scale as Table 10. Clean errors and attack failures are recorded separately.",
+            "Metrics are percentages on the 0-100 scale. Clean errors and attack failures are recorded separately.",
             "",
         ]
     )

@@ -12,7 +12,7 @@ PathLike = Union[str, Path]
 
 
 def find_project_root(start: PathLike) -> Path:
-    """Find the repository root by walking up from ``start``."""
+    """Find the project root by walking up from ``start``."""
     path = Path(start).resolve()
     current = path if path.is_dir() else path.parent
 
@@ -26,7 +26,7 @@ def find_project_root(start: PathLike) -> Path:
 
 
 def configure_project_paths(start: PathLike) -> Path:
-    """Add ``src`` to ``sys.path`` and return the repository root."""
+    """Add ``src`` to ``sys.path`` and return the project root."""
     configure_legacy_ml_output()
     project_root = find_project_root(start)
     src_root = project_root / "src"

@@ -1,4 +1,4 @@
-﻿"""Reproduce DeepDetector Table 10 rows 1-4 for MNIST FGSM."""
+"""Evaluate MNIST FGSM detector metrics for fixed epsilon values."""
 
 from __future__ import print_function
 
@@ -47,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    """Run the Table 10 reproduction."""
+    """Run FGSM detector evaluation and write comparison outputs."""
     args = build_parser().parse_args()
     output_dir = ensure_output_dir(args.output_dir)
     images, labels = load_mnist_test_slice(5500, 10000)
@@ -131,34 +131,34 @@ def main() -> int:
 
     md_path = write_markdown_table(
         str(Path(output_dir) / "table_10_mnist_fgsm_test.md"),
-        "Table 10 - MNIST FGSM Test Rows 1-4",
+        "MNIST FGSM Detector Metrics",
         [
             "Attack/Model",
-            "Article #F",
+            "Reference #F",
             "Our #F",
-            "Article TP",
+            "Reference TP",
             "Our TP",
-            "Article FN",
+            "Reference FN",
             "Our FN",
-            "Article FP",
+            "Reference FP",
             "Our FP",
-            "Article RTP",
+            "Reference RTP",
             "Our RTP",
-            "Article RTP%",
+            "Reference RTP%",
             "Our RTP%",
-            "Article recall",
+            "Reference recall",
             "Our recall",
-            "Article precision",
+            "Reference precision",
             "Our precision",
-            "Article F1",
+            "Reference F1",
             "Our F1",
             "Delta F1",
         ],
         markdown_rows,
         notes=[
-            "Article values are from Liang et al., Table 10 rows 1-4.",
+            "Reference values use the fixed comparison targets configured in this script.",
             "#F denotes samples whose FGSM image is still classified as the true label.",
-            "The reproduction uses MNIST test digits 5500-9999 and the final entropy-aware detection filter.",
+            "This run uses MNIST test digits 5500-9999 and the final entropy-aware detection filter.",
         ],
     )
 
