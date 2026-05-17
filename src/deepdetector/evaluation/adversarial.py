@@ -18,6 +18,19 @@ def evaluate_attack_success(
     """Evaluate clean/adversarial predictions using CleverHans argmax."""
     from cleverhans.utils_tf import model_argmax
 
+    def learning_phase_feed() -> Dict[Any, Any]:
+        """Return a feed dict for Keras learning phase when needed."""
+        try:
+            from keras import backend as K
+        except Exception:
+            return {}
+        if not hasattr(K, "learning_phase"):
+            return {}
+        phase = K.learning_phase()
+        if hasattr(phase, "op"):
+            return {phase: 0}
+        return {}
+
     if X_clean.shape != X_adv.shape:
         raise ValueError("X_clean and X_adv must have the same shape.")
     if len(X_clean) != len(Y_true):
@@ -26,8 +39,9 @@ def evaluate_attack_success(
         raise ValueError("Y_true must be one-hot encoded.")
 
     true_labels = np.argmax(Y_true, axis=1)
-    clean_predictions = model_argmax(sess, x, predictions, X_clean)
-    adv_predictions = model_argmax(sess, x, predictions, X_adv)
+    feed = learning_phase_feed()
+    clean_predictions = model_argmax(sess, x, predictions, X_clean, feed=feed)
+    adv_predictions = model_argmax(sess, x, predictions, X_adv, feed=feed)
 
     clean_correct = clean_predictions == true_labels
     adv_correct = adv_predictions == true_labels

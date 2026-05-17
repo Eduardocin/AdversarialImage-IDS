@@ -17,16 +17,25 @@ def generate_fgsm_examples(
     clip_max: float = 1.0,
 ) -> np.ndarray:
     """Generate FGSM adversarial examples for a batch of MNIST images."""
-    from cleverhans.attacks import FastGradientMethod
     from cleverhans.utils_keras import KerasModelWrapper
+    import tensorflow as tf
 
     wrapper = KerasModelWrapper(model)
-    fgsm = FastGradientMethod(wrapper, sess=sess)
-    adv_tensor = fgsm.generate(
-        x_placeholder,
-        eps=eps,
-        clip_min=clip_min,
-        clip_max=clip_max,
+    logits = wrapper.get_logits(x_placeholder)
+
+    predicted_labels = tf.stop_gradient(
+        tf.cast(
+            tf.equal(logits, tf.reduce_max(logits, axis=1, keepdims=True)),
+            tf.float32,
+        )
     )
+    loss = tf.nn.softmax_cross_entropy_with_logits_v2(
+        labels=predicted_labels,
+        logits=logits,
+    )
+    gradient = tf.compat.v1.gradients(loss, x_placeholder)[0]
+    adv_tensor = x_placeholder + eps * tf.sign(gradient)
+    adv_tensor = tf.clip_by_value(adv_tensor, clip_min, clip_max)
+
     adv_examples = sess.run(adv_tensor, feed_dict={x_placeholder: images})
     return np.clip(adv_examples, clip_min, clip_max).astype(np.float32)

@@ -11,10 +11,10 @@ def create_tf_session(allow_growth: bool = True) -> Any:
     import tensorflow as tf
     from keras import backend as keras_backend
 
-    config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = allow_growth
 
-    sess = tf.Session(config=config)
+    sess = tf.compat.v1.Session(config=config)
     keras_backend.set_session(sess)
     keras_backend.set_image_dim_ordering("tf")
     return sess
@@ -45,13 +45,13 @@ def latest_checkpoint(train_dir: str) -> Optional[str]:
 
 
 def save_mnist_model(sess: Any, train_dir: str, filename: str) -> str:
-    """Save graph variables with ``tf.train.Saver``."""
+    """Save graph variables with a TensorFlow 1.x saver."""
     import tensorflow as tf
 
     if not os.path.isdir(train_dir):
         os.makedirs(train_dir)
 
-    saver = tf.train.Saver()
+    saver = tf.compat.v1.train.Saver()
     save_path = saver.save(sess, checkpoint_path(train_dir, filename))
     return save_path
 
@@ -64,6 +64,6 @@ def load_mnist_model(sess: Any, train_dir: str) -> Optional[str]:
     if checkpoint is None:
         return None
 
-    saver = tf.train.Saver()
+    saver = tf.compat.v1.train.Saver()
     saver.restore(sess, checkpoint)
     return checkpoint

@@ -18,7 +18,7 @@ class PredictionChangeDetector(object):
 
     def __init__(
         self,
-        sess: tf.Session,
+        sess: tf.compat.v1.Session,
         x_placeholder: tf.Tensor,
         predictions: tf.Tensor,
         filter_fn: FilterFn,
