@@ -1,4 +1,4 @@
-"""Generate MNIST M2 CW comparison artifacts against DeepDetector Table 10."""
+"""Generate MNIST M2 CW metric comparison artifacts."""
 
 from __future__ import print_function
 
@@ -10,9 +10,13 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = PROJECT_ROOT / "src"
-sys.path.insert(0, str(SRC_ROOT))
+SCRIPTS_ROOT = next(
+    parent for parent in Path(__file__).resolve().parents if (parent / "_project_root.py").is_file()
+)
+sys.path.insert(0, str(SCRIPTS_ROOT))
+from _project_root import configure_project_paths
+
+PROJECT_ROOT = configure_project_paths(__file__)
 
 
 M2_CW_DIR = PROJECT_ROOT / "results" / "mnist" / "m2_cw"
@@ -124,8 +128,8 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the command-line interface."""
     return argparse.ArgumentParser(
         description=(
-            "Generate MNIST M2 CW comparison artifacts against DeepDetector "
-            "Table 10. Percent metrics use the 0-100 scale."
+            "Generate MNIST M2 CW comparison artifacts. Percent metrics use "
+            "the 0-100 scale."
         )
     )
 
@@ -191,7 +195,7 @@ def _get_metric(ours_row: Optional[Dict[str, Any]], name: str) -> Any:
 
 
 def build_comparison() -> pd.DataFrame:
-    """Build the Table 10 comparison dataframe."""
+    """Load detector CSVs and return one comparison row per attack setting."""
     l2 = _read_optional_csv(DETECTOR_DIR / "cw_l2_detector_results.csv")
     linf = _read_optional_csv(DETECTOR_DIR / "cw_linf_detector_results.csv")
     ours = pd.concat([df for df in [l2, linf] if df is not None], ignore_index=True) if any(
@@ -226,7 +230,7 @@ def build_comparison() -> pd.DataFrame:
 
 def write_markdown(df: pd.DataFrame, path: Path) -> Path:
     """Write a Markdown table."""
-    lines = ["# Table 10 MNIST M2 CW Comparison", ""]
+    lines = ["# MNIST M2 CW Comparison", ""]
     headers = list(df.columns)
     lines.append("| {0} |".format(" | ".join(headers)))
     lines.append("| {0} |".format(" | ".join(["---"] * len(headers))))
@@ -234,14 +238,14 @@ def write_markdown(df: pd.DataFrame, path: Path) -> Path:
         values = ["" if pd.isna(row[column]) else str(row[column]) for column in headers]
         lines.append("| {0} |".format(" | ".join(values)))
     lines.append("")
-    lines.append("Percent metrics use the same 0-100 scale as the article.")
+    lines.append("Percent metrics use the 0-100 scale.")
     lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
 
 
 def _plot_l2_metric(df: pd.DataFrame, metric: str, output_path: Path) -> None:
-    """Plot article versus local L2 metric values."""
+    """Plot reference and local L2 metric values."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -253,7 +257,7 @@ def _plot_l2_metric(df: pd.DataFrame, metric: str, output_path: Path) -> None:
     our_values = pd.to_numeric(l2["our_{0}".format(metric)], errors="coerce").values
 
     plt.figure(figsize=(7, 4))
-    plt.plot(kappas, article_values, marker="o", label="Article")
+    plt.plot(kappas, article_values, marker="o", label="Reference")
     if not pd.isna(our_values).all():
         plt.plot(kappas, our_values, marker="s", label="Ours")
     plt.xlabel("CW L2 kappa")

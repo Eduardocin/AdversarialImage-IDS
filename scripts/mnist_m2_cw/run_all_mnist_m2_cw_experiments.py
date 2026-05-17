@@ -1,4 +1,4 @@
-"""Run the MNIST M2 + CW reproduction pipeline end to end."""
+"""Run the MNIST M2 + CW experiment pipeline end to end."""
 
 from __future__ import print_function
 
@@ -188,9 +188,9 @@ def main() -> int:
 
         if not args.skip_comparison:
             run_step(
-                py + ["analysis/generate_mnist_m2_cw_article_comparison.py"],
+                py + ["scripts/mnist_m2_cw/generate_mnist_m2_cw_article_comparison.py"],
                 log_handle,
-                "generate_article_comparison",
+                "generate_metric_comparison",
             )
 
         _write_log_line(log_handle, "MNIST M2 + CW pipeline finished")
@@ -202,8 +202,7 @@ def main() -> int:
     print("- cw_l2: {0}".format(M2_CW_DIR / "cw_l2"))
     print("- cw_linf: {0}".format(M2_CW_DIR / "cw_linf"))
     print("- detector: {0}".format(M2_CW_DIR / "detector"))
-    print("- article_comparison: {0}".format(M2_CW_DIR / "article_comparison"))
-    print("- limitation: CW Linf is recorded as not_executed unless a compatible implementation is added.")
+    print("- metric_comparison: {0}".format(M2_CW_DIR / "article_comparison"))
     return 0
 
 
