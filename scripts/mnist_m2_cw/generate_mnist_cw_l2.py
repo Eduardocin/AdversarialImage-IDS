@@ -136,6 +136,46 @@ def write_summary_csv(output_dir: Path, rows: Iterable[Dict[str, Any]]) -> Path:
     return path
 
 
+def append_progress_csv(
+    output_dir: Path,
+    kappa: float,
+    batch_start: int,
+    batch_end: int,
+    total: int,
+    elapsed_seconds: float,
+) -> Path:
+    """Append one CW L2 batch progress row."""
+    path = output_dir / "progress.csv"
+    write_header = not path.exists()
+    fieldnames = [
+        "timestamp",
+        "kappa",
+        "batch_start",
+        "batch_end",
+        "n_done",
+        "n_total",
+        "percent_done",
+        "elapsed_seconds",
+    ]
+    with path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        if write_header:
+            writer.writeheader()
+        writer.writerow(
+            {
+                "timestamp": _timestamp(),
+                "kappa": float(kappa),
+                "batch_start": int(batch_start),
+                "batch_end": int(batch_end),
+                "n_done": int(batch_end),
+                "n_total": int(total),
+                "percent_done": float(100.0 * batch_end / float(total)),
+                "elapsed_seconds": float(elapsed_seconds),
+            }
+        )
+    return path
+
+
 def write_summary_md(output_dir: Path, rows: List[Dict[str, Any]], args: argparse.Namespace) -> Path:
     """Write aggregate CW L2 metrics as Markdown."""
     path = output_dir / "summary.md"
@@ -237,6 +277,23 @@ def main() -> int:
             ),
             flush=True,
         )
+
+        def on_batch_done(batch_start: int, batch_end: int, total: int) -> None:
+            elapsed = time.time() - kappa_started
+            append_progress_csv(output_dir, kappa, batch_start, batch_end, total, elapsed)
+            print(
+                "[{0}] PROGRESS cw_l2 kappa={1:g} n_done={2}/{3} "
+                "percent={4:.1f}% elapsed_seconds={5:.1f}".format(
+                    _timestamp(),
+                    kappa,
+                    batch_end,
+                    total,
+                    100.0 * batch_end / float(total),
+                    elapsed,
+                ),
+                flush=True,
+            )
+
         adv_examples = generate_cw_l2_examples(
             sess=sess,
             model=model,
@@ -250,6 +307,7 @@ def main() -> int:
             binary_search_steps=args.binary_search_steps,
             clip_min=0.0,
             clip_max=1.0,
+            progress_callback=on_batch_done,
         )
         adv_path = kappa_dir / "adversarial_examples.npy"
         np.save(str(adv_path), adv_examples)

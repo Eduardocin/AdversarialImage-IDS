@@ -1,8 +1,8 @@
-"""CW L2 attack generation for TF1/Keras MNIST models."""
+﻿"""CW L2 attack generation for TF1/Keras MNIST models."""
 
 from __future__ import print_function
 
-from typing import Any, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
 
@@ -100,12 +100,12 @@ def generate_cw_l2_examples(
     binary_search_steps: int,
     clip_min: float = 0.0,
     clip_max: float = 1.0,
+    progress_callback: Optional[Callable[[int, int, int], None]] = None,
 ) -> np.ndarray:
     """Generate CW L2 adversarial examples.
 
-    CW L2 is substantially more expensive than FGSM. ``confidence`` is the
-    kappa parameter from the DeepDetector paper, which reports MNIST M2 rows
-    for kappa values 0.0, 0.5, 1.0, 2.0, and 4.0.
+    CW L2 optimizes a margin loss and an L2 distortion penalty. ``confidence``
+    controls the classification margin used by the optimizer.
     """
     CWL2 = _load_cwl2()
 
@@ -131,17 +131,12 @@ def generate_cw_l2_examples(
         pass
 
     label_array = _one_hot(labels)
-    padded_images, padded_labels, pad = _pad_to_batch(
-        image_array,
-        label_array,
-        int(batch_size),
-    )
-
     wrapper = LogitsWrapper(model)
+    batch_size = int(batch_size)
     attack = CWL2(
         sess,
         wrapper,
-        int(batch_size),
+        batch_size,
         float(confidence),
         False,
         float(learning_rate),
@@ -154,10 +149,27 @@ def generate_cw_l2_examples(
         int(label_array.shape[1]),
         tuple(image_array.shape[1:]),
     )
-    adv_padded = attack.attack(padded_images, padded_labels)
-    if pad:
-        adv_examples = adv_padded[:-pad]
-    else:
-        adv_examples = adv_padded
+
+    adv_batches = []
+    total = len(image_array)
+    for start in range(0, total, batch_size):
+        end = min(start + batch_size, total)
+        batch_images = image_array[start:end]
+        batch_labels = label_array[start:end]
+        padded_images, padded_labels, pad = _pad_to_batch(
+            batch_images,
+            batch_labels,
+            batch_size,
+        )
+        adv_padded = attack.attack(padded_images, padded_labels)
+        if pad:
+            adv_batch = adv_padded[:-pad]
+        else:
+            adv_batch = adv_padded
+        adv_batches.append(adv_batch)
+        if progress_callback is not None:
+            progress_callback(start, end, total)
+
+    adv_examples = np.concatenate(adv_batches, axis=0)
 
     return np.clip(adv_examples, clip_min, clip_max).astype(np.float32)
