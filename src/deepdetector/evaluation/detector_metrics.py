@@ -8,18 +8,36 @@ from typing import Any, Dict, Iterable, List
 
 
 def _as_bool(value: Any) -> bool:
-    """Parse booleans that may have been read back from CSV-like records."""
+    """Parse booleans that may come from Python values or CSV strings."""
     if isinstance(value, bool):
         return value
+    if value is None:
+        return False
     if isinstance(value, str):
         return value.strip().lower() in ("1", "true", "yes")
     return bool(value)
 
 
 def compute_detector_counts(records: Iterable[Dict[str, Any]]) -> Dict[str, int]:
-    """Compute detector counts over clean/adversarial pair records."""
-    counts = {"TP": 0, "FP": 0, "FN": 0, "TN": 0, "TTP": 0}
+    """Compute TP/FP/FN/TN/TTP and discard counts from detector records."""
+    counts = {
+        "TP": 0,
+        "FP": 0,
+        "FN": 0,
+        "TN": 0,
+        "TTP": 0,
+        "n_discarded_clean_error": 0,
+        "n_discarded_attack_failed": 0,
+    }
+
     for record in records:
+        if _as_bool(record.get("discarded_clean_error", False)):
+            counts["n_discarded_clean_error"] += 1
+            continue
+        if _as_bool(record.get("discarded_attack_failed", False)):
+            counts["n_discarded_attack_failed"] += 1
+            continue
+
         detected = _as_bool(record.get("detected", False))
         false_positive = _as_bool(record.get("false_positive", False))
         corrected = _as_bool(record.get("corrected", False))
@@ -33,38 +51,34 @@ def compute_detector_counts(records: Iterable[Dict[str, Any]]) -> Dict[str, int]
 
         if false_positive:
             counts["FP"] += 1
-        else:
+        elif not detected:
             counts["TN"] += 1
+
     return counts
 
 
 def compute_precision_recall(counts: Dict[str, int]) -> Dict[str, float]:
-    """Compute precision and recall from detector counts."""
+    """Compute precision, recall, F1 and TTP rate with zero-safe division."""
     tp = int(counts.get("TP", 0))
     fp = int(counts.get("FP", 0))
     fn = int(counts.get("FN", 0))
-    tn = int(counts.get("TN", 0))
     ttp = int(counts.get("TTP", 0))
 
-    precision_denominator = tp + fp
-    recall_denominator = tp + fn
-    fpr_denominator = fp + tn
-
-    precision = tp / float(precision_denominator) if precision_denominator else 0.0
-    recall = tp / float(recall_denominator) if recall_denominator else 0.0
-    false_positive_rate = fp / float(fpr_denominator) if fpr_denominator else 0.0
-    correction_rate = ttp / float(tp) if tp else 0.0
+    precision = tp / float(tp + fp) if tp + fp else 0.0
+    recall = tp / float(tp + fn) if tp + fn else 0.0
+    f1 = 2.0 * precision * recall / float(precision + recall) if precision + recall else 0.0
+    ttp_rate = ttp / float(tp) if tp else 0.0
 
     return {
         "precision": float(precision),
         "recall": float(recall),
-        "false_positive_rate": float(false_positive_rate),
-        "correction_rate": float(correction_rate),
+        "f1": float(f1),
+        "ttp_rate": float(ttp_rate),
     }
 
 
 def save_results_csv(records: Iterable[Dict[str, Any]], path: str) -> str:
-    """Save per-example detector records to CSV."""
+    """Save one CSV row per evaluated clean/adversarial pair."""
     rows = list(records)
     directory = os.path.dirname(path)
     if directory and not os.path.isdir(directory):
@@ -72,7 +86,6 @@ def save_results_csv(records: Iterable[Dict[str, Any]], path: str) -> str:
 
     preferred = [
         "filter_name",
-        "epsilon",
         "sample_index",
         "true_label",
         "clean_pred",
@@ -80,8 +93,11 @@ def save_results_csv(records: Iterable[Dict[str, Any]], path: str) -> str:
         "filtered_clean_pred",
         "filtered_adv_pred",
         "detected",
-        "false_positive",
         "corrected",
+        "false_positive",
+        "discarded_clean_error",
+        "discarded_attack_failed",
+        "discard_reason",
     ]
     extra = sorted({key for row in rows for key in row.keys()} - set(preferred))
     fieldnames = preferred + extra
@@ -94,26 +110,24 @@ def save_results_csv(records: Iterable[Dict[str, Any]], path: str) -> str:
     return path
 
 
-def _summary_rows(metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Normalize a single metrics dict or a mapping of metrics dicts."""
-    if "TP" in metrics or "precision" in metrics:
+def _summary_rows(metrics: Dict[str, Any], filter_name: str) -> List[Dict[str, Any]]:
+    """Normalize either one metrics dict or a mapping of filter metrics."""
+    if "TP" in metrics:
         row = dict(metrics)
-        row.setdefault("filter_name", "all")
-        row.setdefault("evaluated_pairs", int(row.get("TP", 0)) + int(row.get("FN", 0)))
+        row["filter_name"] = filter_name
         return [row]
 
     rows = []
-    for filter_name, values in sorted(metrics.items()):
+    for name, values in metrics.items():
         row = dict(values)
-        row.setdefault("filter_name", filter_name)
-        row.setdefault("evaluated_pairs", int(row.get("TP", 0)) + int(row.get("FN", 0)))
+        row["filter_name"] = name
         rows.append(row)
     return rows
 
 
-def save_summary_md(metrics: Dict[str, Any], path: str) -> str:
-    """Save aggregate detector metrics as a Markdown table."""
-    rows = _summary_rows(metrics)
+def save_summary_md(metrics: Dict[str, Any], filter_name: str, path: str) -> str:
+    """Save a Markdown table comparing detector metrics by filter."""
+    rows = _summary_rows(metrics, filter_name)
     directory = os.path.dirname(path)
     if directory and not os.path.isdir(directory):
         os.makedirs(directory)
@@ -121,23 +135,40 @@ def save_summary_md(metrics: Dict[str, Any], path: str) -> str:
     lines = [
         "# MNIST Prediction-Change Detector",
         "",
-        "| filter | pairs | TP | FP | FN | TN | TTP | precision | recall | false_positive_rate | correction_rate |",
+        "| filtro | n_total | n_descartados | TP | FP | FN | TTP | precision | recall | f1 | ttp_rate |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
+
     for row in rows:
+        n_discarded = int(row.get("n_discarded_clean_error", 0)) + int(
+            row.get("n_discarded_attack_failed", 0)
+        )
+        n_total = int(row.get("n_total", 0))
+        if not n_total:
+            n_total = int(row.get("TP", 0)) + int(row.get("FN", 0)) + n_discarded
+
         lines.append(
-            "| {filter_name} | {evaluated_pairs} | {TP} | {FP} | {FN} | {TN} | {TTP} | "
-            "{precision:.6f} | {recall:.6f} | {false_positive_rate:.6f} | "
-            "{correction_rate:.6f} |".format(**row)
+            "| {filter_name} | {n_total} | {n_discarded} | {TP} | {FP} | {FN} | {TTP} | "
+            "{precision:.6f} | {recall:.6f} | {f1:.6f} | {ttp_rate:.6f} |".format(
+                filter_name=row["filter_name"],
+                n_total=n_total,
+                n_discarded=n_discarded,
+                TP=int(row.get("TP", 0)),
+                FP=int(row.get("FP", 0)),
+                FN=int(row.get("FN", 0)),
+                TTP=int(row.get("TTP", 0)),
+                precision=float(row.get("precision", 0.0)),
+                recall=float(row.get("recall", 0.0)),
+                f1=float(row.get("f1", 0.0)),
+                ttp_rate=float(row.get("ttp_rate", 0.0)),
+            )
         )
 
     lines.extend(
         [
             "",
-            "TP counts adversarial examples detected by prediction change after filtering.",
-            "FP counts clean examples whose prediction changed after filtering.",
-            "FN counts adversarial examples that kept the same prediction after filtering.",
-            "TTP counts detected adversarial examples whose filtered prediction returned to the true label.",
+            "Descartes incluem erro limpo e ataque FGSM que nao mudou a classe verdadeira.",
+            "TTP e o subconjunto dos TP em que a filtragem tambem corrige a classe para o rotulo verdadeiro.",
             "",
         ]
     )

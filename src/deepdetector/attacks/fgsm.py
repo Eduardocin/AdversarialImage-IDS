@@ -1,4 +1,4 @@
-"""FGSM attack generation with the legacy CleverHans API."""
+"""FGSM attack generation with CleverHans."""
 
 from __future__ import print_function
 

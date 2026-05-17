@@ -7,6 +7,8 @@ from pathlib import Path
 import sys
 from typing import Any, Dict
 
+import numpy as np
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -76,9 +78,11 @@ def main() -> int:
 
     import tensorflow as tf
 
+    tf.set_random_seed(1234)
+    rng = np.random.RandomState([2017, 8, 30])
     sess = create_tf_session()
 
-    X_train, Y_train, X_test, Y_test = load_mnist_data()
+    X_train, Y_train, X_test, Y_test = load_mnist_data(rng=rng)
     x = tf.placeholder(tf.float32, shape=(None, 28, 28, 1), name="x")
     y = tf.placeholder(tf.float32, shape=(None, 10), name="y")
 
@@ -100,6 +104,7 @@ def main() -> int:
             "train_dir": args.train_dir,
             "filename": args.filename,
             "load_model": args.load_model,
+            "rng": rng,
         },
     )
 

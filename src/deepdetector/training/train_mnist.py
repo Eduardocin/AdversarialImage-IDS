@@ -46,6 +46,9 @@ def train_or_load_mnist_model(
     learning_rate = float(config.get("learning_rate", 0.001))
     load_model = bool(config.get("load_model", False))
     label_smoothing = float(config.get("label_smoothing", 0.1))
+    rng = config.get("rng")
+    if rng is None:
+        rng = np.random.RandomState([2017, 8, 30])
 
     eval_params = {"batch_size": batch_size}
 
@@ -77,7 +80,6 @@ def train_or_load_mnist_model(
             "batch_size": batch_size,
             "learning_rate": learning_rate,
         }
-        rng = np.random.RandomState([2017, 8, 30])
         model_train(
             sess,
             x,

@@ -1,1 +1,1 @@
-"""Training routines for reproduction experiments."""
+"""Training routines."""

@@ -136,7 +136,7 @@ def write_summary_md(output_dir: Path, rows: List[Dict[str, Any]], args: argpars
             "",
             "`adversarial_accuracy` is the fraction of adversarial images still "
             "classified as the true label. `attack_success_rate` is computed only "
-            "over clean images that were originally classified correctly.",
+            "over clean images classified correctly before perturbation.",
             "",
         ]
     )
@@ -153,11 +153,13 @@ def main() -> int:
 
     import tensorflow as tf
 
+    tf.set_random_seed(1234)
+    rng = np.random.RandomState([2017, 8, 30])
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     sess = create_tf_session()
-    X_train, Y_train, X_test, Y_test = load_mnist_data()
+    X_train, Y_train, X_test, Y_test = load_mnist_data(rng=rng)
     sample_count = min(args.samples, len(X_test))
     X_eval = X_test[:sample_count]
     Y_eval = Y_test[:sample_count]
@@ -182,6 +184,7 @@ def main() -> int:
             "train_dir": args.train_dir,
             "filename": args.filename,
             "load_model": args.load_model,
+            "rng": rng,
         },
     )
 

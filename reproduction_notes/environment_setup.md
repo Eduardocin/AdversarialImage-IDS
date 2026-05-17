@@ -19,7 +19,20 @@ Activate it with:
 conda activate adversarialimage-ids-legacy
 ```
 
-Install the Python dependencies with:
+Create it from scratch with:
+
+```bash
+conda env create -f environment.yml
+```
+
+Synchronize an existing copy with:
+
+```bash
+conda env update -n adversarialimage-ids-legacy -f environment.yml
+```
+
+The same pinned Python packages are also listed in `requirements.txt` for
+pip-only inspection or emergency repair:
 
 ```bash
 pip install -r requirements.txt
@@ -64,6 +77,14 @@ model and the CleverHans APIs used by the original MNIST attack flow.
 - If a platform-specific package build forces a version adjustment, document
   the exact package, build source, and reason in this file before running
   experiments.
+
+## Seeds
+
+```text
+Seed TensorFlow : tf.set_random_seed(1234)
+Seed NumPy      : np.random.RandomState([2017, 8, 30])
+Fonte           : código original do repositório de referência
+```
 
 ## Current Validation Command
 

@@ -1,4 +1,4 @@
-"""NumPy quantization filters faithful to the DeepDetector MNIST logic."""
+"""NumPy quantization filters for MNIST grayscale images."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def normalize_image_range(image_data: np.ndarray) -> np.ndarray:
 
 
 def scalar_quantization(input_digit: np.ndarray, interval: int, left: bool = True) -> np.ndarray:
-    """Apply the legacy scalar quantization rule on normalized image data."""
+    """Apply scalar quantization to normalized image data."""
     if interval <= 0:
         raise ValueError("interval must be positive.")
 
@@ -59,7 +59,7 @@ def _nonuniform_quantization_single(image: np.ndarray) -> np.ndarray:
 
 
 def nonuniform_quantization(image: np.ndarray) -> np.ndarray:
-    """Apply legacy non-uniform quantization to an image or a batch."""
+    """Apply non-uniform quantization to an image or a batch."""
     image_array = np.asarray(image, dtype=np.float32)
     if image_array.ndim == 4:
         quantized = [_nonuniform_quantization_single(single) for single in image_array]

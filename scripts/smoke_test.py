@@ -29,7 +29,7 @@ def get_version(module_name, module):
 
 
 def main():
-    """Import the legacy runtime dependencies and print their versions."""
+    """Import runtime dependencies and print their versions."""
     for module_name in REQUIRED_IMPORTS:
         module = import_module(module_name)
         module_version = get_version(module_name, module)
