@@ -1,4 +1,4 @@
-"""Run the MNIST M2 + CW experiment pipeline end to end."""
+﻿"""Run the MNIST M2 + CW experiment pipeline end to end."""
 
 from __future__ import print_function
 
@@ -8,18 +8,11 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import time
 from typing import List
 
 
-SCRIPTS_ROOT = next(
-    parent for parent in Path(__file__).resolve().parents if (parent / "_project_root.py").is_file()
-)
-sys.path.insert(0, str(SCRIPTS_ROOT))
-from _project_root import configure_project_paths
-
-PROJECT_ROOT = configure_project_paths(__file__)
+PROJECT_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
 M2_CW_DIR = PROJECT_ROOT / "results" / "mnist" / "m2_cw"
 
 
@@ -208,3 +201,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

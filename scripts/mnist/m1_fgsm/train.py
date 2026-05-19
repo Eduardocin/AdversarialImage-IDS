@@ -1,26 +1,19 @@
-"""Train or load the MNIST clean baseline with TF1/Keras/CleverHans."""
+﻿"""Train or load the MNIST clean baseline with TF1/Keras/CleverHans."""
 
 from __future__ import print_function
 
 import argparse
 from pathlib import Path
-import sys
 from typing import Any, Dict
 
 import numpy as np
 
 
-SCRIPTS_ROOT = next(
-    parent for parent in Path(__file__).resolve().parents if (parent / "_project_root.py").is_file()
-)
-sys.path.insert(0, str(SCRIPTS_ROOT))
-from _project_root import configure_project_paths
-
-PROJECT_ROOT = configure_project_paths(__file__)
+PROJECT_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
 
 from deepdetector.data.mnist import load_mnist_data
 from deepdetector.models.mnist_cnn import build_mnist_model, create_tf_session
-from deepdetector.training.train_mnist import train_or_load_mnist_model
+from deepdetector.training.train_mnist_m1 import train_or_load_mnist_model
 
 
 SUMMARY_DIR = PROJECT_ROOT / "results" / "mnist" / "clean_baseline"
@@ -121,3 +114,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

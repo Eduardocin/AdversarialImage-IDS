@@ -1,29 +1,22 @@
-"""Generate MNIST FGSM adversarial examples with CleverHans."""
+﻿"""Generate MNIST FGSM adversarial examples with CleverHans."""
 
 from __future__ import print_function
 
 import argparse
 import csv
 from pathlib import Path
-import sys
 from typing import Any, Dict, Iterable, List
 
 import numpy as np
 
 
-SCRIPTS_ROOT = next(
-    parent for parent in Path(__file__).resolve().parents if (parent / "_project_root.py").is_file()
-)
-sys.path.insert(0, str(SCRIPTS_ROOT))
-from _project_root import configure_project_paths
-
-PROJECT_ROOT = configure_project_paths(__file__)
+PROJECT_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
 
 from deepdetector.attacks.fgsm import generate_fgsm_examples
 from deepdetector.data.mnist import load_mnist_data
 from deepdetector.evaluation.adversarial import evaluate_attack_success
 from deepdetector.models.mnist_cnn import build_mnist_model, create_tf_session
-from deepdetector.training.train_mnist import train_or_load_mnist_model
+from deepdetector.training.train_mnist_m1 import train_or_load_mnist_model
 
 
 CLEAN_BASELINE_DIR = PROJECT_ROOT / "results" / "mnist" / "clean_baseline"
@@ -243,3 +236,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

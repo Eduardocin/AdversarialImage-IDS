@@ -6,20 +6,13 @@ import argparse
 import csv
 from datetime import datetime
 from pathlib import Path
-import sys
 import time
 from typing import Any, Dict, Iterable, List
 
 import numpy as np
 
 
-SCRIPTS_ROOT = next(
-    parent for parent in Path(__file__).resolve().parents if (parent / "_project_root.py").is_file()
-)
-sys.path.insert(0, str(SCRIPTS_ROOT))
-from _project_root import configure_project_paths
-
-PROJECT_ROOT = configure_project_paths(__file__)
+PROJECT_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
 
 from deepdetector.attacks.cw_l2 import generate_cw_l2_examples
 from deepdetector.data.mnist import load_mnist_data
@@ -376,3 +369,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

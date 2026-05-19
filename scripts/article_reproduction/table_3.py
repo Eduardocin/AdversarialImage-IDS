@@ -1,38 +1,33 @@
-"""Evaluate adaptive quantization on fixed MNIST test-set slices."""
+﻿"""Compare uniform and non-uniform quantization on MNIST samples."""
 
 from __future__ import print_function
 
 import argparse
 from pathlib import Path
-import sys
 
 
-SCRIPTS_ROOT = next(
-    parent for parent in Path(__file__).resolve().parents if (parent / "_project_root.py").is_file()
-)
-sys.path.insert(0, str(SCRIPTS_ROOT))
-from _project_root import configure_project_paths
-
-PROJECT_ROOT = configure_project_paths(__file__)
+PROJECT_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
 
 from deepdetector.evaluation.article_reproduction import (  # noqa: E402
     ARTICLE_OUTPUT_DIR,
-    adaptive_quantization_filter,
     close_graph,
     create_restored_mnist_graph,
     ensure_output_dir,
     evaluate_filter_on_images,
     format_percent,
     load_mnist_test_slice,
+    nonuniform_quantization,
     percent_delta,
+    scalar_filter_for_intervals,
+    time_filter_application,
     write_csv,
     write_markdown_table,
 )
 
 
-ARTICLE_TABLE_6 = {
-    "Training": {"TP": 3482, "FN": 370, "FP": 146, "recall": 90.39, "precision": 95.98, "f1": 93.10},
-    "Validation": {"TP": 939, "FN": 81, "FP": 48, "recall": 92.06, "precision": 95.14, "f1": 93.57},
+ARTICLE_ROWS = {
+    "Uniform": {"time_seconds": 0.004, "recall": 94.00, "precision": 100.00, "f1": 96.91},
+    "Non-uniform": {"time_seconds": 137.7, "recall": 94.00, "precision": 51.65, "f1": 66.67},
 }
 
 
@@ -46,36 +41,33 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    """Run adaptive quantization evaluation and write comparison outputs."""
+    """Run the quantization comparison and write CSV and Markdown outputs."""
     args = build_parser().parse_args()
     output_dir = ensure_output_dir(args.output_dir)
+    images, labels = load_mnist_test_slice(0, 100)
     graph = create_restored_mnist_graph(args.train_dir)
     rows = []
 
     try:
-        splits = [
-            ("Training", 0, 4500),
-            ("Validation", 4500, 5500),
+        filters = [
+            ("Uniform", scalar_filter_for_intervals(2)),
+            ("Non-uniform", nonuniform_quantization),
         ]
-        for split_name, start, end in splits:
-            images, labels = load_mnist_test_slice(start, end)
+        for name, filter_fn in filters:
             metrics = evaluate_filter_on_images(
                 graph=graph,
                 images=images,
                 labels=labels,
                 epsilon=args.epsilon,
-                filter_fn=adaptive_quantization_filter,
+                filter_fn=filter_fn,
             )
-            article = ARTICLE_TABLE_6[split_name]
+            article = ARTICLE_ROWS[name]
             metrics.update(
                 {
-                    "split": split_name,
-                    "start": start,
-                    "end": end,
+                    "quantization": name,
                     "epsilon": args.epsilon,
-                    "article_TP": article["TP"],
-                    "article_FN": article["FN"],
-                    "article_FP": article["FP"],
+                    "time_seconds": time_filter_application(filter_fn, images),
+                    "article_time_seconds": article["time_seconds"],
                     "article_recall_percent": article["recall"],
                     "article_precision_percent": article["precision"],
                     "article_f1_percent": article["f1"],
@@ -86,13 +78,12 @@ def main() -> int:
         close_graph(graph)
 
     csv_path = write_csv(
-        str(Path(output_dir) / "table_6_adaptive_quantization.csv"),
+        str(Path(output_dir) / "table_3_uniform_vs_nonuniform.csv"),
         rows,
         [
-            "split",
-            "start",
-            "end",
+            "quantization",
             "epsilon",
+            "time_seconds",
             "F",
             "TP",
             "FN",
@@ -107,13 +98,9 @@ def main() -> int:
     for row in rows:
         markdown_rows.append(
             [
-                row["split"],
-                row["article_TP"],
-                row["TP"],
-                row["article_FN"],
-                row["FN"],
-                row["article_FP"],
-                row["FP"],
+                row["quantization"],
+                "{0:.4f}".format(float(row["article_time_seconds"])),
+                "{0:.4f}".format(float(row["time_seconds"])),
                 format_percent(row["article_recall_percent"]),
                 format_percent(row["recall_percent"]),
                 "{0:+.2f}".format(percent_delta(row["recall_percent"], row["article_recall_percent"])),
@@ -127,16 +114,12 @@ def main() -> int:
         )
 
     md_path = write_markdown_table(
-        str(Path(output_dir) / "table_6_adaptive_quantization.md"),
-        "Adaptive Quantization",
+        str(Path(output_dir) / "table_3_uniform_vs_nonuniform.md"),
+        "Uniform vs Non-uniform Quantization",
         [
-            "Split",
-            "Reference TP",
-            "Our TP",
-            "Reference FN",
-            "Our FN",
-            "Reference FP",
-            "Our FP",
+            "Quantization",
+            "Reference time",
+            "Our time",
             "Reference recall",
             "Our recall",
             "Delta recall",
@@ -150,8 +133,7 @@ def main() -> int:
         markdown_rows,
         notes=[
             "Reference values use the fixed comparison targets configured in this script.",
-            "Training and Validation name the MNIST test-set slices 0-4499 and 4500-5499.",
-            "Adaptive quantization maps H < 4 to 2 intervals, 4 <= H < 5 to 4 intervals, and H >= 5 to 6 intervals.",
+            "Our timing measures NumPy filter application on the 100 selected MNIST test digits.",
         ],
     )
 
@@ -162,3 +144,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
