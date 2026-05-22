@@ -7,8 +7,8 @@ os imports funcionam com o pacote instalado em modo editavel (`pip install -e .`
 
 | Script | Papel | Saidas principais |
 | --- | --- | --- |
-| `mnist/m1_fgsm/train.py` | Treina ou restaura o baseline MNIST M1 | `results/mnist/clean_baseline/` |
-| `mnist/m1_fgsm/generate_attack.py` | Gera adversariais FGSM | `results/mnist/fgsm/` |
+| `mnist/m1_fgsm/train.py` | Treina ou restaura o baseline MNIST M1 | modelo em `artifacts/models/mnist/m1/`; resumo em `results/mnist/clean_baseline/` |
+| `mnist/m1_fgsm/generate_attack.py` | Gera adversariais FGSM | imagens em `artifacts/adversarial_examples/mnist/m1/fgsm/`; resumo em `results/mnist/fgsm/` |
 | `mnist/m1_fgsm/evaluate_detector.py` | Avalia detectores por mudanca de predicao | `results/mnist/detector/` |
 | `mnist/m1_fgsm/evaluate_entropy.py` | Avalia detector com filtro por entropia | `results/mnist/entropy/` |
 | `mnist/m1_fgsm/run_comparison.py` | Orquestra comparacao de filtros MNIST | `results/mnist/final_mnist_results.csv` |
@@ -34,9 +34,9 @@ python scripts/mnist/m1_fgsm/run_comparison.py
 
 | Script | Papel | Saidas principais |
 | --- | --- | --- |
-| `mnist/m2_cw/train.py` | Treina ou restaura o baseline M2 | `results/mnist/m2_cw/clean_baseline/` |
-| `mnist/m2_cw/generate_attack_l2.py` | Gera CW L2 para kappas configurados | `results/mnist/m2_cw/cw_l2/` |
-| `mnist/m2_cw/generate_attack_linf.py` | Gera CW Linf com implementacao local TF1 | `results/mnist/m2_cw/cw_linf/` |
+| `mnist/m2_cw/train.py` | Treina ou restaura o baseline M2 | modelo em `artifacts/models/mnist/m2/`; resumo em `results/mnist/m2_cw/clean_baseline/` |
+| `mnist/m2_cw/generate_attack_l2.py` | Gera CW L2 para kappas configurados | imagens em `artifacts/adversarial_examples/mnist/m2/cw_l2/`; resumo em `results/mnist/m2_cw/cw_l2/` |
+| `mnist/m2_cw/generate_attack_linf.py` | Gera CW Linf com implementacao local TF1 | imagens em `artifacts/adversarial_examples/mnist/m2/cw_linf/`; resumo em `results/mnist/m2_cw/cw_linf/` |
 | `mnist/m2_cw/evaluate_detector.py` | Avalia detector em CW L2/Linf | `results/mnist/m2_cw/detector/` |
 | `mnist/m2_cw/run_experiments.py` | Orquestra o fluxo M2 + CW | `results/mnist/m2_cw/` |
 

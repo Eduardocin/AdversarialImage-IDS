@@ -1,0 +1,11 @@
+[2026-05-17 17:00:55] MNIST M2 + CW pipeline started
+[2026-05-17 17:00:55] log_file=results\mnist\m2_cw\run_smoke.log
+[2026-05-17 17:00:55] kappas=0.0,0.5,1.0,2.0,4.0 samples=1 start_index=9000
+[2026-05-17 17:00:55] START generate_cw_linf
+[2026-05-17 17:00:55] running: C:\Users\Eduar\miniconda3\envs\adversarialimage-ids-legacy\python.exe scripts/mnist_m2_cw/generate_mnist_cw_linf.py --load-model --samples 1 --start-index 9000
+status=not_executed
+reason=CleverHans 3.1.0 in this project provides CW L2 but no compatible CW Linf attack API.
+summary_csv=C:\Users\Eduar\OneDrive\Documentos\GitHub\AdversarialImage-IDS\results\mnist\m2_cw\cw_linf\summary.csv
+summary_md=C:\Users\Eduar\OneDrive\Documentos\GitHub\AdversarialImage-IDS\results\mnist\m2_cw\cw_linf\summary.md
+[2026-05-17 17:00:55] DONE generate_cw_linf elapsed_seconds=0.5
+[2026-05-17 17:00:55] MNIST M2 + CW pipeline finished

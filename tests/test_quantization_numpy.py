@@ -11,6 +11,8 @@ sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.filters.quantization import (
     find_border,
+    find_border_legacy,
+    nonuniform_quantization_legacy,
     nonuniform_quantization,
     normalize_image_range,
     scalar_quantization,
@@ -61,6 +63,16 @@ class QuantizationNumpyTests(unittest.TestCase):
 
         self.assertEqual(border, 255)
 
+    def test_find_border_legacy_uses_dynamic_histogram_range(self):
+        image = np.full((28, 28), 0.2, dtype=np.float32)
+        image[14:, :] = 0.5
+
+        fixed_range_border = find_border(image)
+        dynamic_range_border = find_border_legacy(image)
+
+        self.assertEqual(fixed_range_border, 128)
+        self.assertEqual(dynamic_range_border, 255)
+
     def test_nonuniform_quantization_preserves_shape_and_range(self):
         image_2d = np.zeros((28, 28), dtype=np.float32)
         image_2d[14:, :] = 1.0
@@ -80,6 +92,18 @@ class QuantizationNumpyTests(unittest.TestCase):
         quantized = nonuniform_quantization(image)
 
         np.testing.assert_allclose(quantized, np.zeros_like(image))
+
+    def test_nonuniform_quantization_legacy_preserves_shape_and_range(self):
+        image = np.full((28, 28), 0.2, dtype=np.float32)
+        image[14:, :] = 0.5
+        image_3d = image.reshape(28, 28, 1)
+        batch = np.stack([image_3d, image_3d], axis=0)
+
+        for sample in (image, image_3d, batch):
+            quantized = nonuniform_quantization_legacy(sample)
+            self.assertEqual(quantized.shape, sample.shape)
+            self.assertGreaterEqual(float(quantized.min()), 0.0)
+            self.assertLessEqual(float(quantized.max()), 1.0)
 
 
 if __name__ == "__main__":

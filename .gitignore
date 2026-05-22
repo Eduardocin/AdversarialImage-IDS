@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.codex/
 
 # C extensions
 *.so
@@ -181,19 +182,18 @@ cython_debug/
 .cursorindexingignore
 
 # Project artifacts
-/models
 /outputs
+
 /results/*
 !/results/
 !/results/mnist/
-/results/mnist/*
-!/results/mnist/.gitkeep
-!/results/mnist/quantization/
-/results/mnist/quantization/*
-!/results/mnist/quantization/filter_notes.md
+!/results/mnist/**
+
 !/results/imagenet/
 /results/imagenet/*
 !/results/imagenet/.gitkeep
+!/results/imagenet/imagenet_status.md
+
 *.caffemodel
 *.solverstate
 *.npy
@@ -203,10 +203,8 @@ cython_debug/
 *.h5
 *.hdf5
 run.log
-results/mnist/**/checkpoints/
-results/mnist/**/adversarial_examples.npy
-/third_party/nn_robust_attacks/data/
-/third_party/nn_robust_attacks/models/
+
+!/results/mnist/**
 
 ### Custom ignore rules <fmn>
 /data

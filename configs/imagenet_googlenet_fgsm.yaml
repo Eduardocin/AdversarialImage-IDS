@@ -1,0 +1,38 @@
+experiment:
+  name: imagenet_googlenet_fgsm
+
+dataset:
+  images_dir: data/imagenet/val/
+  labels_csv: data/imagenet/val_labels.csv
+  n_samples: 500
+  image_size: 224
+
+model:
+  name: googlenet_caffe
+  model_dir: models/googlenet/
+  deploy_proto: models/googlenet/deploy.prototxt
+  caffemodel: models/googlenet/bvlc_googlenet.caffemodel
+  mean_file: models/googlenet/ilsvrc_2012_mean.npy
+  use_gpu: false
+
+attack:
+  name: fgsm
+  eps: 0.01569
+  clip_min: 0.0
+  clip_max: 1.0
+  batch_size: 32
+
+detection:
+  filters:
+    - scalar_128
+    - scalar_64
+    - scalar_43
+    - entropy_adaptive
+    - box_3
+
+output:
+  results_dir: results/imagenet/googlenet_fgsm/
+
+seeds:
+  tf_seed: 1234
+  np_seed: [2017, 8, 30]

@@ -15,6 +15,7 @@ from deepdetector.filters.adaptive_quantization import entropy_based_quantizatio
 from deepdetector.filters.entropy import one_d_entropy
 from deepdetector.filters.mean_filters import cross_mean_filter
 from deepdetector.filters.quantization import (
+    nonuniform_quantization_legacy,
     nonuniform_quantization,
     scalar_quantization,
 )
@@ -169,6 +170,7 @@ def evaluate_filter_predictions(
     adv_pred: np.ndarray,
     filtered_clean_pred: np.ndarray,
     filtered_adv_pred: np.ndarray,
+    exclude_invalid_pairs: bool = False,
 ) -> Dict[str, Any]:
     """Compute detection counts and derived metrics."""
     y_true = np.asarray(y_true, dtype=np.int64)
@@ -177,12 +179,20 @@ def evaluate_filter_predictions(
     filtered_clean_pred = np.asarray(filtered_clean_pred, dtype=np.int64)
     filtered_adv_pred = np.asarray(filtered_adv_pred, dtype=np.int64)
 
-    attack_failed = adv_pred == y_true
-    effectual = ~attack_failed
+    if exclude_invalid_pairs:
+        clean_correct = clean_pred == y_true
+        attack_failed = clean_correct & (adv_pred == clean_pred)
+        effectual = clean_correct & ~attack_failed
+        false_positive_scope = effectual
+    else:
+        attack_failed = adv_pred == y_true
+        effectual = ~attack_failed
+        false_positive_scope = np.ones_like(effectual, dtype=bool)
+
     detected = filtered_adv_pred != adv_pred
     true_positive = effectual & detected
     false_negative = effectual & ~detected
-    false_positive = filtered_clean_pred != clean_pred
+    false_positive = false_positive_scope & (filtered_clean_pred != clean_pred)
     recovered_true_positive = true_positive & (filtered_adv_pred == y_true)
 
     tp = int(np.sum(true_positive))
@@ -221,6 +231,9 @@ def evaluate_filter_on_images(
     epsilon: float,
     filter_fn: FilterFn,
     batch_size: int = 256,
+    clip_min: float = 0.0,
+    clip_max: float = 1.0,
+    exclude_invalid_pairs: bool = False,
 ) -> Dict[str, Any]:
     """Generate FGSM examples and evaluate one detection filter."""
     sess = graph["sess"]
@@ -232,8 +245,8 @@ def evaluate_filter_on_images(
         x_placeholder=x_placeholder,
         images=images,
         eps=epsilon,
-        clip_min=0.0,
-        clip_max=1.0,
+        clip_min=clip_min,
+        clip_max=clip_max,
     )
 
     clean_pred = predict_labels(sess, x_placeholder, predictions, images, batch_size)
@@ -260,6 +273,7 @@ def evaluate_filter_on_images(
         adv_pred=adv_pred,
         filtered_clean_pred=filtered_clean_pred,
         filtered_adv_pred=filtered_adv_pred,
+        exclude_invalid_pairs=exclude_invalid_pairs,
     )
 
 
@@ -272,6 +286,7 @@ def evaluate_filter_on_existing_adversarial(
     adv_pred: np.ndarray,
     filter_fn: FilterFn,
     batch_size: int = 256,
+    exclude_invalid_pairs: bool = False,
 ) -> Dict[str, Any]:
     """Evaluate one filter when adversarial examples and base predictions exist."""
     sess = graph["sess"]
@@ -299,6 +314,7 @@ def evaluate_filter_on_existing_adversarial(
         adv_pred=adv_pred,
         filtered_clean_pred=filtered_clean_pred,
         filtered_adv_pred=filtered_adv_pred,
+        exclude_invalid_pairs=exclude_invalid_pairs,
     )
 
 

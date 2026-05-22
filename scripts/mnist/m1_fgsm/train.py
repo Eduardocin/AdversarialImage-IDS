@@ -13,10 +13,11 @@ PROJECT_ROOT = next(parent for parent in Path(__file__).resolve().parents if (pa
 
 from deepdetector.data.mnist import load_mnist_data
 from deepdetector.models.mnist_cnn import build_mnist_model, create_tf_session
+from deepdetector.paths import MNIST_M1_CHECKPOINT_DIR, MNIST_RESULTS_DIR
 from deepdetector.training.train_mnist_m1 import train_or_load_mnist_model
 
 
-SUMMARY_DIR = PROJECT_ROOT / "results" / "mnist" / "clean_baseline"
+SUMMARY_DIR = MNIST_RESULTS_DIR / "clean_baseline"
 SUMMARY_PATH = SUMMARY_DIR / "summary.md"
 
 
@@ -28,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument(
         "--train-dir",
-        default=str(SUMMARY_DIR / "checkpoints"),
+        default=str(MNIST_M1_CHECKPOINT_DIR),
         help="Directory used for TensorFlow checkpoint files.",
     )
     parser.add_argument("--filename", default="mnist.ckpt")

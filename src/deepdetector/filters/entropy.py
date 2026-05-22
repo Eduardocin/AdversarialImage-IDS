@@ -1,4 +1,4 @@
-"""Entropy helpers for grayscale image filters."""
+"""Entropy helpers for normalized image filters."""
 
 from __future__ import print_function
 

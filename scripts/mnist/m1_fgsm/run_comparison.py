@@ -23,11 +23,15 @@ from deepdetector.evaluation.detector_metrics import (
 )
 from deepdetector.filters.registry import FILTER_REGISTRY
 from deepdetector.models.mnist_cnn import build_mnist_model
+from deepdetector.paths import (
+    MNIST_M1_ADVERSARIAL_DIR,
+    MNIST_M1_CHECKPOINT_DIR,
+    MNIST_RESULTS_DIR,
+)
 
 
-CLEAN_BASELINE_DIR = PROJECT_ROOT / "results" / "mnist" / "clean_baseline"
-FGSM_RESULTS_DIR = PROJECT_ROOT / "results" / "mnist" / "fgsm"
-FINAL_RESULTS_DIR = PROJECT_ROOT / "results" / "mnist"
+FGSM_ADVERSARIAL_DIR = MNIST_M1_ADVERSARIAL_DIR / "fgsm"
+FINAL_RESULTS_DIR = MNIST_RESULTS_DIR
 
 
 FilterFn = Callable[[np.ndarray], np.ndarray]
@@ -54,7 +58,7 @@ def format_epsilon(eps: float) -> str:
 
 def default_adversarial_path(eps: float) -> Path:
     """Return the default adversarial examples path for an epsilon."""
-    return FGSM_RESULTS_DIR / "eps_{0}".format(format_epsilon(eps)) / "adversarial_examples.npy"
+    return FGSM_ADVERSARIAL_DIR / "eps_{0}".format(format_epsilon(eps)) / "adversarial_examples.npy"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -65,7 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--adversarial-path", default=None)
     parser.add_argument(
         "--train-dir",
-        default=str(CLEAN_BASELINE_DIR / "checkpoints"),
+        default=str(MNIST_M1_CHECKPOINT_DIR),
         help="Directory containing TensorFlow checkpoint files.",
     )
     parser.add_argument("--output-dir", default=str(FINAL_RESULTS_DIR))

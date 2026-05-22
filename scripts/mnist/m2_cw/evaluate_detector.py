@@ -24,11 +24,16 @@ from deepdetector.evaluation.article_reproduction import (
 )
 from deepdetector.models.mnist_cnn import create_tf_session
 from deepdetector.models.mnist_m2 import build_mnist_m2_model, load_mnist_m2_model
+from deepdetector.paths import (
+    MNIST_M2_ADVERSARIAL_DIR,
+    MNIST_M2_CHECKPOINT_DIR,
+    MNIST_M2_RESULTS_DIR,
+)
 
 
 FilterFn = Callable[[np.ndarray], np.ndarray]
-CLEAN_BASELINE_DIR = PROJECT_ROOT / "results" / "mnist" / "m2_cw" / "clean_baseline"
-M2_CW_DIR = PROJECT_ROOT / "results" / "mnist" / "m2_cw"
+M2_CW_DIR = MNIST_M2_RESULTS_DIR
+M2_CW_ADVERSARIAL_DIR = MNIST_M2_ADVERSARIAL_DIR
 DETECTOR_RESULTS_DIR = M2_CW_DIR / "detector"
 
 
@@ -59,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-index", type=int, default=9000)
     parser.add_argument(
         "--train-dir",
-        default=str(CLEAN_BASELINE_DIR / "checkpoints"),
+        default=str(MNIST_M2_CHECKPOINT_DIR),
         help="Directory containing the M2 TensorFlow checkpoint.",
     )
     parser.add_argument("--output-dir", default=str(DETECTOR_RESULTS_DIR))
@@ -277,7 +282,7 @@ def evaluate_cw_l2(args: argparse.Namespace, graph: Dict[str, Any], clean_images
     filter_fn = select_filter(args.filter)
     rows = []
     for kappa in args.kappas:
-        adv_path = M2_CW_DIR / "cw_l2" / "kappa_{0}".format(format_kappa(kappa)) / "adversarial_examples.npy"
+        adv_path = M2_CW_ADVERSARIAL_DIR / "cw_l2" / "kappa_{0}".format(format_kappa(kappa)) / "adversarial_examples.npy"
         metrics = evaluate_adversarial_file(
             graph=graph,
             clean_images=clean_images,
@@ -313,7 +318,7 @@ def evaluate_cw_l2(args: argparse.Namespace, graph: Dict[str, Any], clean_images
 
 def evaluate_cw_linf(args: argparse.Namespace, graph: Dict[str, Any], clean_images: np.ndarray, labels: np.ndarray) -> List[Dict[str, Any]]:
     """Evaluate CW Linf if adversarial examples exist."""
-    adv_path = M2_CW_DIR / "cw_linf" / "adversarial_examples.npy"
+    adv_path = M2_CW_ADVERSARIAL_DIR / "cw_linf" / "adversarial_examples.npy"
     if not adv_path.exists():
         return [
             {

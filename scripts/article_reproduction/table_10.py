@@ -21,6 +21,7 @@ from deepdetector.evaluation.article_reproduction import (  # noqa: E402
     write_csv,
     write_markdown_table,
 )
+from deepdetector.paths import MNIST_M1_CHECKPOINT_DIR  # noqa: E402
 
 
 ARTICLE_TABLE_10 = {
@@ -34,7 +35,7 @@ ARTICLE_TABLE_10 = {
 def build_parser() -> argparse.ArgumentParser:
     """Build command-line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--train-dir", default=str(PROJECT_ROOT / "results" / "mnist" / "clean_baseline" / "checkpoints"))
+    parser.add_argument("--train-dir", default=str(MNIST_M1_CHECKPOINT_DIR))
     parser.add_argument("--output-dir", default=str(PROJECT_ROOT / ARTICLE_OUTPUT_DIR))
     return parser
 

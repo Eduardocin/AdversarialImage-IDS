@@ -1,0 +1,71 @@
+experiment:
+  name: mnist_table_10_m2_cw
+  type: faithful_reproduction
+  seed: null
+  objective: Evaluate Table 10 MNIST M2 rows using saved CW adversarial examples.
+
+dataset:
+  name: mnist
+  split: test
+  start: 9000
+  samples: 1000
+  image_shape: [28, 28, 1]
+  value_range: [0.0, 1.0]
+
+model:
+  name: M2
+  family: keras
+  checkpoint_dir: artifacts/models/mnist/m2/clean_baseline/checkpoints
+
+detection:
+  filter: final
+  method: entropy_aware_prediction_change
+
+attacks:
+  - name: CW L2 / M2
+    attack: CW
+    norm: L2
+    kappas: [0.0, 0.5, 1.0, 2.0, 4.0]
+    adversarial_template: artifacts/adversarial_examples/mnist/m2/cw_l2/kappa_{kappa}/adversarial_examples.npy
+  - name: CW Linf / M2
+    attack: CW
+    norm: Linf
+    kappas: [null]
+    adversarial_path: artifacts/adversarial_examples/mnist/m2/cw_linf/adversarial_examples.npy
+
+evaluation:
+  batch_size: 256
+  use_saved_adversarial_examples: true
+  train_model: false
+  generate_attacks: false
+
+metrics:
+  columns:
+    - Attack/Model
+    - Dataset
+    - "#F"
+    - TP
+    - FN
+    - FP
+    - RTP
+    - RTP%
+    - Recall
+    - Precision
+    - F1
+  raw_fields:
+    - Attack/Model
+    - Dataset
+    - "#F"
+    - TP
+    - FN
+    - FP
+    - RTP
+    - RTP%
+    - Recall
+    - Precision
+    - F1
+
+output:
+  results_dir: results/mnist/article_reproduction
+  csv: table_10_m2_mnist_cw.csv
+  markdown: table_10_m2_mnist_cw.md

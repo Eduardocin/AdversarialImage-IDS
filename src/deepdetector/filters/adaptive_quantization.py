@@ -1,4 +1,4 @@
-"""Adaptive scalar quantization for grayscale images."""
+"""Adaptive scalar quantization for normalized images."""
 
 from __future__ import print_function
 

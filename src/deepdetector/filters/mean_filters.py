@@ -1,19 +1,18 @@
-"""Local mean filters for MNIST grayscale images."""
+"""Local mean filters for normalized images."""
 
 from __future__ import print_function
 
 import numpy as np
 
 
-MNIST_IMAGE_SHAPE = (28, 28, 1)
-
-
-def _as_mnist_image(image: np.ndarray) -> np.ndarray:
-    """Return a single MNIST image as float32 data."""
+def _as_single_image(image: np.ndarray) -> np.ndarray:
+    """Return one 2D or HWC image as float32 data."""
     image_array = np.asarray(image, dtype=np.float32)
-    if image_array.shape != MNIST_IMAGE_SHAPE:
-        raise ValueError("Expected image shape (28, 28, 1).")
-    return image_array
+    if image_array.ndim == 2:
+        return image_array
+    if image_array.ndim == 3 and image_array.shape[2] >= 1:
+        return image_array
+    raise ValueError("Expected image shape (H, W) or (H, W, C).")
 
 
 def _normalize_kernel(kernel: np.ndarray) -> np.ndarray:
@@ -86,9 +85,33 @@ def _cross_convolve_reflect(image_2d: np.ndarray, radius: int) -> np.ndarray:
     return output
 
 
-def _clip_and_restore_shape(image_2d: np.ndarray) -> np.ndarray:
-    """Clip a 2D filtered image and restore MNIST channel shape."""
-    return np.clip(image_2d, 0.0, 1.0).astype(np.float32).reshape(MNIST_IMAGE_SHAPE)
+def _filter_channels(image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
+    """Apply a 2D convolution to each channel independently."""
+    if image.ndim == 2:
+        return _convolve_reflect(image, kernel)
+
+    channels = [
+        _convolve_reflect(image[:, :, channel], kernel)
+        for channel in range(image.shape[2])
+    ]
+    return np.stack(channels, axis=2).astype(np.float32)
+
+
+def _cross_filter_channels(image: np.ndarray, radius: int) -> np.ndarray:
+    """Apply a cross-mask mean filter to each channel independently."""
+    if image.ndim == 2:
+        return _cross_convolve_reflect(image, radius)
+
+    channels = [
+        _cross_convolve_reflect(image[:, :, channel], radius)
+        for channel in range(image.shape[2])
+    ]
+    return np.stack(channels, axis=2).astype(np.float32)
+
+
+def _clip_and_restore_shape(filtered: np.ndarray, original_shape: tuple) -> np.ndarray:
+    """Clip filtered values and restore the input shape."""
+    return np.clip(filtered, 0.0, 1.0).astype(np.float32).reshape(original_shape)
 
 
 def _cross_kernel(radius: int) -> np.ndarray:
@@ -122,21 +145,21 @@ def _box_kernel(kernel_size: int) -> np.ndarray:
 
 
 def box_mean_filter(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
-    """Apply a square local mean filter to a grayscale image."""
-    image_array = _as_mnist_image(image)
-    filtered = _convolve_reflect(image_array[:, :, 0], _box_kernel(kernel_size))
-    return _clip_and_restore_shape(filtered)
+    """Apply a square local mean filter to a normalized image."""
+    image_array = _as_single_image(image)
+    filtered = _filter_channels(image_array, _box_kernel(kernel_size))
+    return _clip_and_restore_shape(filtered, image_array.shape)
 
 
 def cross_mean_filter(image: np.ndarray, radius: int = 1) -> np.ndarray:
-    """Apply a cross-shaped local mean filter to a grayscale image."""
-    image_array = _as_mnist_image(image)
-    filtered = _cross_convolve_reflect(image_array[:, :, 0], radius)
-    return _clip_and_restore_shape(filtered)
+    """Apply a cross-shaped local mean filter to a normalized image."""
+    image_array = _as_single_image(image)
+    filtered = _cross_filter_channels(image_array, radius)
+    return _clip_and_restore_shape(filtered, image_array.shape)
 
 
 def diamond_mean_filter(image: np.ndarray, radius: int = 1) -> np.ndarray:
-    """Apply a Manhattan-distance local mean filter to a grayscale image."""
-    image_array = _as_mnist_image(image)
-    filtered = _convolve_reflect(image_array[:, :, 0], _diamond_kernel(radius))
-    return _clip_and_restore_shape(filtered)
+    """Apply a Manhattan-distance local mean filter to a normalized image."""
+    image_array = _as_single_image(image)
+    filtered = _filter_channels(image_array, _diamond_kernel(radius))
+    return _clip_and_restore_shape(filtered, image_array.shape)

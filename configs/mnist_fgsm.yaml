@@ -6,7 +6,7 @@ experiment:
 model:
   family: keras
   reference: DeepDetector MNIST classifier
-  checkpoint_dir: results/mnist/checkpoints
+  checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
 
 attack:
   name: fgsm
@@ -21,3 +21,4 @@ detection:
 
 outputs:
   root: results/mnist/fgsm
+  adversarial_root: artifacts/adversarial_examples/mnist/m1/fgsm

@@ -16,11 +16,16 @@ from deepdetector.attacks.fgsm import generate_fgsm_examples
 from deepdetector.data.mnist import load_mnist_data
 from deepdetector.evaluation.adversarial import evaluate_attack_success
 from deepdetector.models.mnist_cnn import build_mnist_model, create_tf_session
+from deepdetector.paths import (
+    MNIST_M1_ADVERSARIAL_DIR,
+    MNIST_M1_CHECKPOINT_DIR,
+    MNIST_RESULTS_DIR,
+)
 from deepdetector.training.train_mnist_m1 import train_or_load_mnist_model
 
 
-CLEAN_BASELINE_DIR = PROJECT_ROOT / "results" / "mnist" / "clean_baseline"
-FGSM_RESULTS_DIR = PROJECT_ROOT / "results" / "mnist" / "fgsm"
+FGSM_RESULTS_DIR = MNIST_RESULTS_DIR / "fgsm"
+FGSM_ADVERSARIAL_DIR = MNIST_M1_ADVERSARIAL_DIR / "fgsm"
 
 
 def parse_epsilons(value: str) -> List[float]:
@@ -59,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument(
         "--train-dir",
-        default=str(CLEAN_BASELINE_DIR / "checkpoints"),
+        default=str(MNIST_M1_CHECKPOINT_DIR),
         help="Directory used for TensorFlow checkpoint files.",
     )
     parser.add_argument("--filename", default="mnist.ckpt")
@@ -70,7 +75,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--clip-min", type=float, default=0.0)
     parser.add_argument("--clip-max", type=float, default=1.0)
-    parser.add_argument("--output-dir", default=str(FGSM_RESULTS_DIR))
+    parser.add_argument(
+        "--adversarial-dir",
+        default=str(FGSM_ADVERSARIAL_DIR),
+        help="Directory where adversarial .npy arrays are stored.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=str(FGSM_RESULTS_DIR),
+        help="Directory where CSV/Markdown summaries are stored.",
+    )
     return parser
 
 
@@ -154,6 +168,8 @@ def main() -> int:
     rng = np.random.RandomState([2017, 8, 30])
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    adversarial_dir = Path(args.adversarial_dir)
+    adversarial_dir.mkdir(parents=True, exist_ok=True)
 
     sess = create_tf_session()
     X_train, Y_train, X_test, Y_test = load_mnist_data(rng=rng)
@@ -187,7 +203,7 @@ def main() -> int:
 
     rows = []
     for eps in args.epsilons:
-        eps_dir = output_dir / "eps_{0}".format(format_epsilon(eps))
+        eps_dir = adversarial_dir / "eps_{0}".format(format_epsilon(eps))
         eps_dir.mkdir(parents=True, exist_ok=True)
         adv_examples = generate_fgsm_examples(
             sess=sess,

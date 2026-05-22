@@ -19,13 +19,18 @@ from deepdetector.data.mnist import load_mnist_data
 from deepdetector.evaluation.adversarial import evaluate_attack_success
 from deepdetector.models.mnist_cnn import create_tf_session
 from deepdetector.models.mnist_m2 import build_mnist_m2_model
+from deepdetector.paths import (
+    MNIST_M2_ADVERSARIAL_DIR,
+    MNIST_M2_CHECKPOINT_DIR,
+    MNIST_M2_RESULTS_DIR,
+)
 from deepdetector.training.train_mnist_m2 import train_or_load_mnist_m2_model
 
 
 SEED_TF = 1234
 SEED_NUMPY = 20170830
-CLEAN_BASELINE_DIR = PROJECT_ROOT / "results" / "mnist" / "m2_cw" / "clean_baseline"
-CW_LINF_RESULTS_DIR = PROJECT_ROOT / "results" / "mnist" / "m2_cw" / "cw_linf"
+CW_LINF_RESULTS_DIR = MNIST_M2_RESULTS_DIR / "cw_linf"
+CW_LINF_ADVERSARIAL_DIR = MNIST_M2_ADVERSARIAL_DIR / "cw_linf"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,8 +49,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tau-check-interval", type=int, default=50)
     parser.add_argument(
         "--train-dir",
-        default=str(CLEAN_BASELINE_DIR / "checkpoints"),
+        default=str(MNIST_M2_CHECKPOINT_DIR),
         help="Directory containing the M2 TensorFlow checkpoint.",
+    )
+    parser.add_argument(
+        "--adversarial-dir",
+        default=str(CW_LINF_ADVERSARIAL_DIR),
+        help="Directory where CW Linf adversarial .npy arrays are stored.",
     )
     parser.add_argument("--output-dir", default=str(CW_LINF_RESULTS_DIR))
     return parser
@@ -186,6 +196,8 @@ def main() -> int:
     rng = np.random.RandomState([2017, 8, 30])
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    adversarial_dir = Path(args.adversarial_dir)
+    adversarial_dir.mkdir(parents=True, exist_ok=True)
 
     end_index = args.start_index + args.samples
     sess = create_tf_session()
@@ -263,7 +275,7 @@ def main() -> int:
         progress_callback=on_batch_done,
     )
 
-    adv_path = output_dir / "adversarial_examples.npy"
+    adv_path = adversarial_dir / "adversarial_examples.npy"
     np.save(str(adv_path), adv_examples)
 
     metrics = evaluate_attack_success(

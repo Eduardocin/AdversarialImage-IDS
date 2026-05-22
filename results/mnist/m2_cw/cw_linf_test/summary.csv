@@ -1,0 +1,2 @@
+experiment,dataset,model,attack,norm,n_total,n_clean_correct,n_clean_wrong,n_attack_success,n_attack_failed,clean_accuracy,adversarial_accuracy,attack_success_rate,mean_linf_distortion,median_linf_distortion,adv_examples_path,seed_tf,seed_numpy,status,notes
+mnist_m2_cw_linf,mnist,M2,CW,Linf,10,10,0,5,5,1.0,0.5,0.5,0.2753113806247711,0.2628505825996399,results\mnist\m2_cw\cw_linf_test\adversarial_examples.npy,1234,20170830,executed,Local TF1 CW Linf-style implementation; not CleverHans-provided.

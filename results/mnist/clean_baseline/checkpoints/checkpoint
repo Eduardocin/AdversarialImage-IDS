@@ -1,0 +1,2 @@
+model_checkpoint_path: "C:\\Users\\Eduar\\OneDrive\\Documentos\\GitHub\\AdversarialImage-IDS\\results\\mnist\\clean_baseline\\checkpoints\\mnist.ckpt"
+all_model_checkpoint_paths: "C:\\Users\\Eduar\\OneDrive\\Documentos\\GitHub\\AdversarialImage-IDS\\results\\mnist\\clean_baseline\\checkpoints\\mnist.ckpt"

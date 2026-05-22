@@ -1,11 +1,8 @@
-"""NumPy quantization filters for MNIST grayscale images."""
+"""NumPy quantization filters for normalized images."""
 
 from __future__ import annotations
 
 import numpy as np
-
-
-MNIST_HALF_PIXELS = 392
 
 
 def normalize_image_range(image_data: np.ndarray) -> np.ndarray:
@@ -28,17 +25,44 @@ def scalar_quantization(input_digit: np.ndarray, interval: int, left: bool = Tru
 
 
 def find_border(image: np.ndarray) -> int:
-    """Find the non-uniform quantization border for a single MNIST image."""
+    """Find the non-uniform quantization border for a single image."""
     image_array = normalize_image_range(image)
     if image_array.ndim == 4:
         raise ValueError("find_border expects a single image, not a batch.")
 
     counts, _ = np.histogram(image_array.ravel(), bins=256, range=(0.0, 1.0))
+    half_pixels = int(image_array.size // 2)
     running_count = 0
     border = 0
     for index, count in enumerate(counts):
         running_count += int(count)
-        if running_count >= MNIST_HALF_PIXELS:
+        if running_count >= half_pixels:
+            border = index + 1
+            break
+
+    for index in range(border, 256):
+        if counts[index] > 0:
+            return index
+    return border
+
+
+def find_border_legacy(image: np.ndarray) -> int:
+    """Find the non-uniform border using the original DeepDetector histogram rule.
+
+    The original script used ``plt.hist(image.flatten(), bins=256)`` without an
+    explicit range and then reused the histogram bin index as a 0-255 threshold.
+    This function reproduces that behavior without the matplotlib side effect.
+    """
+    image_array = normalize_image_range(image)
+    if image_array.ndim == 4:
+        raise ValueError("find_border_legacy expects a single image, not a batch.")
+
+    counts, _ = np.histogram(image_array.ravel(), bins=256)
+    running_count = 0
+    border = 0
+    for index, count in enumerate(counts):
+        running_count += int(count)
+        if running_count >= 392:
             border = index + 1
             break
 
@@ -58,6 +82,16 @@ def _nonuniform_quantization_single(image: np.ndarray) -> np.ndarray:
     return normalize_image_range(quantized)
 
 
+def _nonuniform_quantization_legacy_single(image: np.ndarray) -> np.ndarray:
+    """Apply the original DeepDetector non-uniform quantization to one image."""
+    border = find_border_legacy(image)
+    quantized = normalize_image_range(image) * 255.0
+    quantized[quantized <= border] = 0.0
+    quantized[quantized > border] = float(border)
+    quantized /= 255.0
+    return normalize_image_range(quantized)
+
+
 def nonuniform_quantization(image: np.ndarray) -> np.ndarray:
     """Apply non-uniform quantization to an image or a batch."""
     image_array = np.asarray(image, dtype=np.float32)
@@ -65,3 +99,12 @@ def nonuniform_quantization(image: np.ndarray) -> np.ndarray:
         quantized = [_nonuniform_quantization_single(single) for single in image_array]
         return np.asarray(quantized, dtype=np.float32).reshape(image_array.shape)
     return _nonuniform_quantization_single(image_array).reshape(image_array.shape)
+
+
+def nonuniform_quantization_legacy(image: np.ndarray) -> np.ndarray:
+    """Apply non-uniform quantization with the original DeepDetector border rule."""
+    image_array = np.asarray(image, dtype=np.float32)
+    if image_array.ndim == 4:
+        quantized = [_nonuniform_quantization_legacy_single(single) for single in image_array]
+        return np.asarray(quantized, dtype=np.float32).reshape(image_array.shape)
+    return _nonuniform_quantization_legacy_single(image_array).reshape(image_array.shape)

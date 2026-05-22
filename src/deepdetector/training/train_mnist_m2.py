@@ -11,6 +11,7 @@ from deepdetector.models.mnist_m2 import (
     load_mnist_m2_model,
     save_mnist_m2_model,
 )
+from deepdetector.paths import MNIST_M2_CHECKPOINT_DIR
 from deepdetector.training.train_mnist_m1 import smooth_one_hot_labels
 
 
@@ -56,7 +57,7 @@ def train_or_load_mnist_m2_model(
     train_dir = str(
         config.get(
             "train_dir",
-            "results/mnist/m2_cw/clean_baseline/checkpoints",
+            MNIST_M2_CHECKPOINT_DIR,
         )
     )
     filename = str(config.get("filename", "mnist_m2.ckpt"))

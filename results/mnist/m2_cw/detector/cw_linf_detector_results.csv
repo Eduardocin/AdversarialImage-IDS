@@ -1,0 +1,2 @@
+row_id,attack,norm,kappa,dataset,model,n_total,F,#F,TP,FN,FP,RTP,RTP_percent,recall,precision,f1,n_clean_wrong,n_attack_failed,filter_name,filter,adversarial_examples_path,notes
+cw_linf,CW,Linf,,mnist,M2,0,,,,,,,,,,,,,final,final,C:\Users\Eduar\OneDrive\Documentos\GitHub\AdversarialImage-IDS\results\mnist\m2_cw\cw_linf\adversarial_examples.npy,not_executed: CW Linf adversarial examples were not found.

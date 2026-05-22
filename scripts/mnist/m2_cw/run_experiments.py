@@ -8,12 +8,21 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import time
 from typing import List
 
 
 PROJECT_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
-M2_CW_DIR = PROJECT_ROOT / "results" / "mnist" / "m2_cw"
+
+from deepdetector.paths import (  # noqa: E402
+    MNIST_M2_ADVERSARIAL_DIR,
+    MNIST_M2_CHECKPOINT_DIR,
+    MNIST_M2_RESULTS_DIR,
+)
+
+
+M2_CW_DIR = MNIST_M2_RESULTS_DIR
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -124,7 +133,7 @@ def main() -> int:
 
         if not args.skip_training:
             run_step(
-                py + ["scripts/mnist_m2_cw/train_mnist_m2.py", "--load-model"],
+                py + ["scripts/mnist/m2_cw/train.py", "--load-model"],
                 log_handle,
                 "train_or_restore_m2",
             )
@@ -133,7 +142,7 @@ def main() -> int:
             run_step(
                 py
                 + [
-                    "scripts/mnist_m2_cw/generate_mnist_cw_l2.py",
+                    "scripts/mnist/m2_cw/generate_attack_l2.py",
                     "--load-model",
                     "--kappas",
                     args.kappas,
@@ -150,7 +159,7 @@ def main() -> int:
             run_step(
                 py
                 + [
-                    "scripts/mnist_m2_cw/generate_mnist_cw_linf.py",
+                    "scripts/mnist/m2_cw/generate_attack_linf.py",
                     "--load-model",
                     "--samples",
                     str(args.samples),
@@ -165,7 +174,7 @@ def main() -> int:
             run_step(
                 py
                 + [
-                    "scripts/mnist_m2_cw/evaluate_mnist_m2_cw_detector.py",
+                    "scripts/mnist/m2_cw/evaluate_detector.py",
                     "--attack",
                     "all",
                     "--kappas",
@@ -181,7 +190,7 @@ def main() -> int:
 
         if not args.skip_comparison:
             run_step(
-                py + ["scripts/mnist_m2_cw/generate_mnist_m2_cw_article_comparison.py"],
+                py + ["scripts/article_reproduction/table_10_m2.py"],
                 log_handle,
                 "generate_metric_comparison",
             )
@@ -191,11 +200,13 @@ def main() -> int:
     print("")
     print("MNIST M2 + CW pipeline artifacts:")
     print("- run_log: {0}".format(log_path))
-    print("- checkpoint: {0}".format(M2_CW_DIR / "clean_baseline" / "checkpoints"))
-    print("- cw_l2: {0}".format(M2_CW_DIR / "cw_l2"))
-    print("- cw_linf: {0}".format(M2_CW_DIR / "cw_linf"))
+    print("- checkpoint: {0}".format(MNIST_M2_CHECKPOINT_DIR))
+    print("- cw_l2_adversarial: {0}".format(MNIST_M2_ADVERSARIAL_DIR / "cw_l2"))
+    print("- cw_linf_adversarial: {0}".format(MNIST_M2_ADVERSARIAL_DIR / "cw_linf"))
+    print("- cw_l2_results: {0}".format(M2_CW_DIR / "cw_l2"))
+    print("- cw_linf_results: {0}".format(M2_CW_DIR / "cw_linf"))
     print("- detector: {0}".format(M2_CW_DIR / "detector"))
-    print("- metric_comparison: {0}".format(M2_CW_DIR / "article_comparison"))
+    print("- metric_comparison: {0}".format(M2_CW_DIR.parent / "article_reproduction"))
     return 0
 
 

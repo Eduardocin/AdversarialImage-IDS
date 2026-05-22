@@ -1,8 +1,8 @@
-"""Prediction-change detector for MNIST images."""
+"""Prediction-change detector for normalized image classifiers."""
 
 from __future__ import print_function
 
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 import keras.backend as K
 import numpy as np
@@ -11,6 +11,7 @@ from cleverhans.utils_tf import model_argmax
 
 
 FilterFn = Callable[[np.ndarray], np.ndarray]
+PredictLabelFn = Callable[[np.ndarray], np.ndarray]
 
 
 class PredictionChangeDetector(object):
@@ -22,25 +23,28 @@ class PredictionChangeDetector(object):
         x_placeholder: tf.Tensor,
         predictions: tf.Tensor,
         filter_fn: FilterFn,
+        predict_label_fn: Optional[PredictLabelFn] = None,
     ) -> None:
-        """Store the TF1 graph handles used for CleverHans predictions."""
+        """Store prediction handles used by the detector."""
         self.sess = sess
         self.x_placeholder = x_placeholder
         self.predictions = predictions
         self.filter_fn = filter_fn
-        K.set_session(sess)
+        self.predict_label_fn = predict_label_fn
+        if sess is not None:
+            K.set_session(sess)
 
     @staticmethod
     def _as_single_image_batch(image: np.ndarray) -> np.ndarray:
-        """Return an MNIST image as a ``(1, 28, 28, 1)`` float32 batch."""
+        """Return one image as a single-example float32 batch."""
         image_array = np.asarray(image, dtype=np.float32)
 
-        if image_array.shape == (28, 28, 1):
-            return image_array.reshape((1, 28, 28, 1))
-        if image_array.shape == (1, 28, 28, 1):
+        if image_array.ndim == 3:
+            return image_array.reshape((1,) + image_array.shape)
+        if image_array.ndim == 4 and image_array.shape[0] == 1:
             return image_array
 
-        raise ValueError("Expected image shape (28, 28, 1) or (1, 28, 28, 1).")
+        raise ValueError("Expected image shape (H, W, C) or (1, H, W, C).")
 
     @staticmethod
     def _label_to_int(label: Any) -> int:
@@ -51,8 +55,15 @@ class PredictionChangeDetector(object):
         return int(np.argmax(label_array))
 
     def predict_label(self, image: np.ndarray) -> int:
-        """Predict a single image label with CleverHans ``model_argmax``."""
+        """Predict a single image label."""
         image_batch = self._as_single_image_batch(image)
+        if self.predict_label_fn is not None:
+            labels = self.predict_label_fn(image_batch)
+            return int(np.asarray(labels).reshape(-1)[0])
+
+        if self.sess is None or self.x_placeholder is None or self.predictions is None:
+            raise ValueError("TF graph handles or predict_label_fn must be provided.")
+
         label = model_argmax(
             self.sess,
             self.x_placeholder,

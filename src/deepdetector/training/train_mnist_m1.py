@@ -11,6 +11,7 @@ from deepdetector.models.mnist_cnn import (
     load_mnist_model,
     save_mnist_model,
 )
+from deepdetector.paths import MNIST_M1_CHECKPOINT_DIR
 
 
 def smooth_one_hot_labels(labels: np.ndarray, smoothing: float = 0.1) -> np.ndarray:
@@ -39,7 +40,7 @@ def train_or_load_mnist_model(
     """Train or restore the MNIST CNN, then evaluate clean accuracy."""
     from cleverhans.utils_tf import model_eval, model_train
 
-    train_dir = str(config.get("train_dir", "results/mnist/clean_baseline/checkpoints"))
+    train_dir = str(config.get("train_dir", MNIST_M1_CHECKPOINT_DIR))
     filename = str(config.get("filename", "mnist.ckpt"))
     batch_size = int(config.get("batch_size", 128))
     nb_epochs = int(config.get("nb_epochs", config.get("epochs", 6)))
