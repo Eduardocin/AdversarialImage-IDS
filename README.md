@@ -26,7 +26,6 @@ conda env create -f environment.yml
 
 # Ative o ambiente e valide as dependencias:
 conda activate adversarialimage-ids-legacy
-python scripts/smoke_test.py
 ```
 
 Se o ambiente ja existir e voce quiser sincronizar os pacotes com este
