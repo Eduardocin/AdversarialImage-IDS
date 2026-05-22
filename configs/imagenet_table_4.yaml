@@ -1,0 +1,77 @@
+experiment:
+  name: imagenet_table_4_scalar_quantization_intervals
+  type: faithful_reproduction
+  seed: 20170830
+  deterministic_slice: true
+  objective: Evaluate scalar quantization with different numbers of intervals on the local ImageNet subset.
+
+dataset:
+  name: imagenet
+  split: train
+  images_dir: data/imagenet/subset/train
+  n_samples: null
+  image_size: 224
+  image_shape: [224, 224, 3]
+  value_range: [0.0, 1.0]
+  shuffle: false
+  class_indices:
+    clock: 530
+    goldfish: 1
+    pineapple: 953
+
+model:
+  name: googlenet_caffe
+  family: caffe
+  reference: BVLC GoogLeNet
+  model_dir: artifacts/models/imagenet/googlenet/
+  deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
+  caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+  mean_file: artifacts/models/imagenet/googlenet/ilsvrc_2012_mean.npy
+  use_gpu: false
+  batch_size: 32
+
+attack:
+  name: fgsm
+  epsilon: 0.01569
+  clip_min: 0.0
+  clip_max: 1.0
+  batch_size: 32
+  adversarial_path: artifacts/adversarial_examples/imagenet/googlenet/fgsm/eps_0p01569/adversarial_examples.npy
+  save_adversarial_path: artifacts/adversarial_examples/imagenet/googlenet/fgsm/eps_0p01569/adversarial_examples.npy
+
+quantization:
+  method: scalar_quantization
+  intervals: [2, 3, 4, 5, 6, 7, 8, 9, 10]
+  interval_sizes:
+    2: 128
+    3: 85
+    4: 64
+    5: 51
+    6: 43
+    7: 37
+    8: 32
+    9: 28
+    10: 26
+  left: true
+
+evaluation:
+  exclude_invalid_pairs: false
+
+metrics:
+  columns:
+    - Intervals
+    - Interval size
+    - Recall
+    - Precision
+    - F1
+  raw_fields:
+    - intervals
+    - interval_size
+    - recall_percent
+    - precision_percent
+    - f1_percent
+
+output:
+  results_dir: results/imagenet/article_reproduction
+  csv: table_4_imagenet_scalar_quantization_intervals.csv
+  markdown: table_4_imagenet_scalar_quantization_intervals.md

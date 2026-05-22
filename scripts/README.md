@@ -26,9 +26,17 @@ python scripts/mnist/m1_fgsm/run_comparison.py
 | Script | Objetivo | Saidas principais |
 | --- | --- | --- |
 | `article_reproduction/table_3.py` | Quantizacao uniforme vs nao uniforme | `results/mnist/article_reproduction/table_3_*` |
-| `article_reproduction/table_4.py` | Intervalos de quantizacao escalar | `results/mnist/article_reproduction/table_4_*` |
+| `article_reproduction/table_4_mnist.py` | Intervalos de quantizacao escalar | `results/mnist/article_reproduction/table_4_*` |
 | `article_reproduction/table_6.py` | Quantizacao adaptativa | `results/mnist/article_reproduction/table_6_*` |
 | `article_reproduction/table_10.py` | Detector MNIST FGSM | `results/mnist/article_reproduction/table_10_mnist_fgsm_test.*` |
+
+`article_reproduction/table_4.py` permanece como entrada de compatibilidade para a Tabela 4 MNIST.
+
+## Comparacoes ImageNet com valores de referencia
+
+| Script | Objetivo | Saidas principais |
+| --- | --- | --- |
+| `article_reproduction/table_4_imagenet.py` | Intervalos de quantizacao escalar em ImageNet/GoogLeNet | `results/imagenet/article_reproduction/table_4_imagenet_*` |
 
 ## Fluxo MNIST M2 + CW
 
