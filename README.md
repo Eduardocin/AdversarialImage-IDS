@@ -26,6 +26,7 @@ conda env create -f environment.yml
 
 # Ative o ambiente e valide as dependencias:
 conda activate adversarialimage-ids-legacy
+python scripts/dev/smoke_test.py
 ```
 
 Se o ambiente ja existir e voce quiser sincronizar os pacotes com este
@@ -33,12 +34,14 @@ repositorio:
 
 ```bash
 conda env update -n adversarialimage-ids-legacy -f environment.yml
+conda activate adversarialimage-ids-legacy
+python scripts/dev/smoke_test.py
 ```
 
 Em automacao sem ativar o shell:
 
 ```bash
-conda run -n adversarialimage-ids-legacy python scripts/smoke_test.py
+conda run -n adversarialimage-ids-legacy python scripts/dev/smoke_test.py
 ```
 
 Detalhes de versao e decisoes estao em
@@ -52,7 +55,7 @@ Detalhes de versao e decisoes estao em
 │   ├── mnist_fgsm.yaml        # parametros do ataque FGSM em MNIST
 │   └── mnist_entropy.yaml     # parametros da reducao adaptativa por entropia
 ├── scripts/
-│   ├── smoke_test.py          # valida imports do ambiente legado
+│   ├── dev/smoke_test.py      # valida imports do ambiente legado
 │   ├── train_mnist.py         # treina/carrega baseline limpo MNIST
 │   ├── generate_mnist_fgsm.py # gera adversariais FGSM com CleverHans
 │   └── evaluate_mnist_detector.py # avalia detector por mudanca de predicao
@@ -108,10 +111,22 @@ Os arquivos de configuracao ainda não executam experimentos completos, eles ser
 O smoke test valida somente imports da pilha mínima:
 
 ```bash
-python scripts/smoke_test.py
+python scripts/dev/smoke_test.py
 ```
 
 Quando esse comando falha, o problema esperado esta no ambiente legado, não na estrutura modular do projeto.
+
+## ImageNet GoogLeNet Assets
+
+A trilha ImageNet usa o BVLC GoogLeNet do Caffe. Antes de executar as tabelas
+ImageNet, baixe os artefatos locais:
+
+```bash
+python scripts/imagenet/download_googlenet_assets.py
+```
+
+Os arquivos ficam em `artifacts/models/imagenet/googlenet/` e não são
+versionados no Git.
 
 ## MNIST Clean Baseline
 

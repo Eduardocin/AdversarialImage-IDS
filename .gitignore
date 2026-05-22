@@ -183,6 +183,7 @@ cython_debug/
 
 # Project artifacts
 /outputs
+/artifacts/models/imagenet/
 
 /results/*
 !/results/

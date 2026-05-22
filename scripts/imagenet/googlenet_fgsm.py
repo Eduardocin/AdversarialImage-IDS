@@ -366,6 +366,16 @@ def run(args: argparse.Namespace) -> int:
             message=str(exc),
         )
         return 0
+    except OSError as exc:
+        logger.warning("%s", exc)
+        write_status(
+            results_dir,
+            "bloqueado_modelo_googlenet",
+            limitation="assets_googlenet_indisponiveis",
+            message=str(exc),
+            setup_command="python scripts/imagenet/download_googlenet_assets.py",
+        )
+        return 0
 
     images, labels = load_images(config, rng)
     print("images_shape={0}".format(images.shape))
