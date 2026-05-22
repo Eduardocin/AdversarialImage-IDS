@@ -1,30 +1,31 @@
-# Caffe Setup Notes
+# Notas de Configuracao do Caffe
 
-## When Caffe Is Needed
+## Quando o Caffe e necessario
 
-Caffe is required for the ImageNet reproduction path if the team chooses to
-preserve the original DeepDetector setup based on CaffeNet and GoogLeNet.
+O Caffe e necessario na trilha ImageNet quando a reproducao precisa preservar o
+fluxo original baseado em modelos ImageNet compativeis com Caffe.
 
-The MNIST path can start with TensorFlow 1.x, Keras, and CleverHans. The
-ImageNet path should not be treated as equivalent unless the Caffe-based model
-loading, preprocessing, labels, and evaluation flow are reproduced or the
-deviation is explicitly documented.
+A trilha MNIST pode comecar com TensorFlow 1.x, Keras e CleverHans. A trilha
+ImageNet nao deve ser tratada como equivalente enquanto o carregamento do modelo
+Caffe, preprocessamento, rotulos e avaliacao nao forem reproduzidos ou enquanto
+o desvio nao estiver documentado explicitamente.
 
-## Expected Role In The Reproduction
+## Papel esperado na reproducao
 
-- Load CaffeNet and GoogLeNet-compatible model definitions and weights.
-- Preserve ImageNet preprocessing used by the original implementation.
-- Generate and evaluate adversarial examples against the same model family used
-  in the reference project.
-- Compare detector behavior before and after adaptive noise reduction.
+- Carregar definicoes e pesos de modelos ImageNet compativeis com Caffe.
+- Preservar o preprocessamento ImageNet usado pela implementacao original.
+- Gerar e avaliar exemplos adversariais contra a mesma familia de modelos usada
+  no projeto de referencia.
+- Comparar o comportamento do detector antes e depois da reducao adaptativa de
+  ruido.
 
-## Conda Setup
+## Ambiente Conda
 
-The ImageNet track expects the `caffe` Python module from the conda-forge Caffe
-package. It is declared in `environment.yml` as a Conda dependency because
-`pycaffe` is not installed through `pip`.
+A trilha ImageNet espera o modulo Python `caffe` do pacote Caffe do
+`conda-forge`. Ele esta declarado em `environment.yml` como dependencia Conda
+porque `pycaffe` nao e instalado via `pip`.
 
-Create or update the local environment with:
+Para criar ou atualizar o ambiente local:
 
 ```bash
 conda env create -f environment.yml
@@ -32,7 +33,7 @@ conda activate adversarialimage-ids-legacy
 python scripts/dev/smoke_test.py
 ```
 
-For an existing environment:
+Para um ambiente existente:
 
 ```bash
 conda env update -n adversarialimage-ids-legacy -f environment.yml
@@ -40,24 +41,41 @@ conda activate adversarialimage-ids-legacy
 python scripts/dev/smoke_test.py
 ```
 
-The expected package source is `conda-forge::caffe`. The current reproduction is
-configured for CPU execution by default (`use_gpu: false` in the ImageNet YAMLs).
-If a GPU build is used later, record the CUDA/cuDNN versions and any package
-channel changes here before running experiments.
+A fonte esperada do pacote e `conda-forge::caffe`. A reproducao atual esta
+configurada para CPU por padrao (`use_gpu: false` nos YAMLs ImageNet). Se uma
+build com GPU for usada depois, registre aqui as versoes de CUDA/cuDNN e
+qualquer mudanca de canal antes de executar experimentos.
 
-Model assets are still local artifacts and must exist at the configured paths:
+## Assets dos modelos
+
+Os assets dos modelos sao artefatos locais. A trilha ImageNet executavel hoje
+espera GoogLeNet nestes caminhos:
 
 - `artifacts/models/imagenet/googlenet/deploy.prototxt`
 - `artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel`
 - `artifacts/models/imagenet/googlenet/ilsvrc_2012_mean.npy`
 
-Download them with:
+Baixe com:
 
 ```bash
-python scripts/imagenet/download_googlenet_assets.py
+python scripts/imagenet/download_caffe_imagenet_assets.py --model googlenet
 ```
 
-The model definition comes from `BVLC/caffe` at
-`models/bvlc_googlenet/deploy.prototxt`. The pretrained weights come from the
-model URL documented in that directory's `readme.md`, with SHA1
-`405fc5acd08a3bb12de8ee5e23a96bec22f08204`.
+O downloader generico tambem conhece o AlexNet, que foi o fallback verificavel
+mais proximo encontrado durante a busca por pesos CaffeNet:
+
+```bash
+python scripts/imagenet/download_caffe_imagenet_assets.py --list-models
+python scripts/imagenet/download_caffe_imagenet_assets.py --model alexnet
+```
+
+A definicao do GoogLeNet vem de `BVLC/caffe` em
+`models/bvlc_googlenet/deploy.prototxt`. Os pesos pre-treinados vem da URL
+documentada no `readme.md` desse diretorio, com SHA1
+`405fc5acd08a3bb12de8ee5e23a96bec22f08204`. Como o host antigo da BVLC pode
+ficar indisponivel, o downloader do projeto tenta primeiro um espelho da
+DeepDetect e ainda exige que o SHA1 oficial bata.
+
+Veja `reproduction_notes/caffe_model_downloads.md` para caminhos, fontes,
+decisoes sobre espelhos e a justificativa de por que CaffeNet e Inception v3 nao
+ficam expostos como downloads suportados.

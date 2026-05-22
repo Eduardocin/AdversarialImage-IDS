@@ -315,7 +315,7 @@ def main() -> int:
             "bloqueado_modelo_googlenet",
             limitation="assets_googlenet_indisponiveis",
             message=str(exc),
-            setup_command="python scripts/imagenet/download_googlenet_assets.py",
+            setup_command="python scripts/imagenet/download_caffe_imagenet_assets.py --model googlenet",
         )
         return 0
 

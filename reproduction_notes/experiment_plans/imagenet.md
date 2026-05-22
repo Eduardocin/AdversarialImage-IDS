@@ -1,4 +1,4 @@
-# ImageNet Experiment Plan
+# Plano de Experimento ImageNet
 
 ## 1. Dependências externas
 
@@ -6,14 +6,16 @@ Arquivos necessários que não entram no repositório:
 
 - `data/imagenet/val/`: imagens do conjunto de validação ILSVRC 2012.
 - `data/imagenet/val_labels.csv`: CSV sem header com `filename,label_index`.
-- `models/googlenet/deploy.prototxt`: definição da rede GoogLeNet para Caffe.
-- `models/googlenet/bvlc_googlenet.caffemodel`: pesos treinados da GoogLeNet.
-- `models/googlenet/ilsvrc_2012_mean.npy`: média de canal usada pelo preprocessamento Caffe.
+- `artifacts/models/imagenet/googlenet/deploy.prototxt`: definicao da rede GoogLeNet para Caffe.
+- `artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel`: pesos treinados da GoogLeNet.
+- `artifacts/models/imagenet/googlenet/ilsvrc_2012_mean.npy`: media de canal usada pelo preprocessamento Caffe.
+- `artifacts/models/imagenet/alexnet/`: assets BVLC AlexNet, disponiveis por espelho NVIDIA Box. Este modelo e semelhante a familia CaffeNet, mas deve ser marcado como substituicao metodologica porque o peso oficial CaffeNet nao foi baixado.
 
 Fontes de obtenção:
 
 - Caffe Model Zoo: https://github.com/BVLC/caffe/wiki/Model-Zoo
 - BVLC GoogLeNet no repositório Caffe: https://github.com/BVLC/caffe/tree/master/models/bvlc_googlenet
+- Detalhes locais de download Caffe: `reproduction_notes/caffe_model_downloads.md`
 - ImageNet ILSVRC 2012: https://www.image-net.org/challenges/LSVRC/2012/
 - Download ImageNet: https://www.image-net.org/download
 
@@ -21,7 +23,7 @@ O diretório de imagens deve conter os nomes usados no CSV, por exemplo
 `ILSVRC2012_val_00000001.JPEG`. Os rótulos devem usar os índices de classe
 esperados pelo modelo usado na avaliação.
 
-## 2. Fallback sem Caffe
+## 2. Caminho sem Caffe
 
 Quando Caffe não está disponível, `scripts/imagenet/googlenet_fgsm.py` registra
 `status: bloqueado_caffe` em `results/imagenet/googlenet_fgsm/status.json` e
@@ -36,10 +38,9 @@ A validação parcial sem Caffe cobre:
 - teste isolado do gerador FGSM em um grafo TF1 simples;
 - teste dos filtros selecionados em imagens HWC normalizadas.
 
-Um `TensorFlowInceptionWrapper` pode ser usado futuramente como substituto
-operacional para validar o fluxo com um grafo TensorFlow. Essa alternativa deve
-ser marcada como não comparável à trilha GoogLeNet Caffe, porque muda arquitetura
-e preprocessamento.
+Um wrapper alternativo pode ser usado futuramente para validar o fluxo com outra
+arquitetura ImageNet. Essa alternativa deve ser marcada como nao comparavel a
+trilha GoogLeNet Caffe, porque muda arquitetura e preprocessamento.
 
 ## 3. Diferenças em relação ao MNIST
 

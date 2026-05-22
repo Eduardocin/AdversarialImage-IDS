@@ -116,17 +116,28 @@ python scripts/dev/smoke_test.py
 
 Quando esse comando falha, o problema esperado esta no ambiente legado, não na estrutura modular do projeto.
 
-## ImageNet GoogLeNet Assets
+## ImageNet Caffe Assets
 
-A trilha ImageNet usa o BVLC GoogLeNet do Caffe. Antes de executar as tabelas
-ImageNet, baixe os artefatos locais:
+A trilha ImageNet usa modelos Caffe. O pipeline atual ja esta configurado para
+BVLC GoogLeNet:
 
 ```bash
-python scripts/imagenet/download_googlenet_assets.py
+python scripts/imagenet/download_caffe_imagenet_assets.py --model googlenet
 ```
 
 Os arquivos ficam em `artifacts/models/imagenet/googlenet/` e não são
 versionados no Git.
+
+Para listar e preparar os outros modelos Caffe com download verificado:
+
+```bash
+python scripts/imagenet/download_caffe_imagenet_assets.py --list-models
+python scripts/imagenet/download_caffe_imagenet_assets.py --model alexnet
+```
+
+Os arquivos ficam em `artifacts/models/imagenet/<modelo>/` e nao sao
+versionados no Git. Detalhes de fontes, espelhos e limitacoes estao em
+`reproduction_notes/caffe_model_downloads.md`.
 
 ## MNIST Clean Baseline
 
