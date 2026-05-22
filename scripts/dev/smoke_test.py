@@ -16,6 +16,7 @@ REQUIRED_IMPORTS = (
     "tensorflow",
     "keras",
     "cleverhans",
+    "caffe",
     "numpy",
 )
 

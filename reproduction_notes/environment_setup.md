@@ -41,7 +41,7 @@ pip install -r requirements.txt
 Validate the import surface with:
 
 ```bash
-python scripts/smoke_test.py
+python scripts/dev/smoke_test.py
 ```
 
 ## Version Decisions
@@ -50,17 +50,18 @@ The baseline dependency pins are:
 
 ```text
 tensorflow==1.15.5
-keras==2.2.4
-cleverhans==2.1.0
+keras<2.0
+cleverhans==3.1.0
 numpy==1.18.5
 scipy==1.5.4
-matplotlib==3.5.3
-pillow==9.5.0
-pyyaml==6.0.1
+matplotlib==3.3.4
+pillow==8.4.0
+pyyaml==5.4.1
 tqdm==4.64.1
-pandas==1.3.5
+pandas==1.1.5
 h5py==2.10.0
-protobuf==3.20.3
+protobuf==3.19.6
+caffe==1.0
 ```
 
 These versions were verified in the local `adversarialimage-ids-legacy`
@@ -89,5 +90,5 @@ Fonte           : código original do repositório de referência
 ## Current Validation Command
 
 ```bash
-conda run -n adversarialimage-ids-legacy python scripts/smoke_test.py
+conda run -n adversarialimage-ids-legacy python scripts/dev/smoke_test.py
 ```

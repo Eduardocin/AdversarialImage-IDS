@@ -7,6 +7,7 @@ dependencies:
   - pip=21.3.1
   - setuptools
   - wheel
+  - caffe=1.0
   - pip:
       - tensorflow==1.15.5
       - keras<2.0
