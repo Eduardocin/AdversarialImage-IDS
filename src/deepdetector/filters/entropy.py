@@ -19,3 +19,24 @@ def one_d_entropy(input_digit: np.ndarray) -> float:
     p_nonzero = p[p > 0]
     H = -np.sum(p_nonzero * np.log2(p_nonzero))
     return float(H)
+
+
+def image_entropy_255_chw(image: np.ndarray) -> float:
+    """Compute mean per-channel Shannon entropy for CxHxW 0-255 image data."""
+    image_array = np.asarray(image, dtype=np.float32)
+    if image_array.ndim != 3:
+        raise ValueError("image must have shape (C, H, W).")
+
+    entropies = []
+    clipped = np.clip(image_array, 0.0, 255.0).astype(np.uint8)
+    for channel in clipped:
+        counts = np.bincount(channel.ravel(), minlength=256).astype(np.float64)
+        total = float(counts.sum())
+        if total == 0.0:
+            entropies.append(0.0)
+            continue
+
+        probabilities = counts[counts > 0.0] / total
+        entropies.append(float(-np.sum(probabilities * np.log2(probabilities))))
+
+    return float(np.mean(entropies)) if entropies else 0.0

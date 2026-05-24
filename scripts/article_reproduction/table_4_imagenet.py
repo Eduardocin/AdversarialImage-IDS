@@ -1,6 +1,6 @@
-"""Compare scalar quantization intervals on ImageNet adversarial samples."""
+"""Reproduce ImageNet Table 4 scalar quantization metrics."""
 
-from __future__ import print_function
+from __future__ import annotations
 
 import argparse
 import json
@@ -20,20 +20,17 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "imagenet_table_4.yaml"
+DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "article_reproduction" / "imagenet_table_4.yaml"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "imagenet" / "article_reproduction"
 IMAGE_EXTENSIONS = (".jpeg", ".jpg", ".png")
 
-from deepdetector.attacks.fgsm_imagenet import generate_fgsm_imagenet  # noqa: E402
 from deepdetector.data.imagenet import resize_normalized_image  # noqa: E402
-from deepdetector.evaluation.article_reproduction import (  # noqa: E402
-    apply_filter_batch,
-    evaluate_filter_predictions,
-    format_percent,
-    interval_size,
-    scalar_filter_for_intervals,
-    write_csv,
-    write_markdown_table,
+from deepdetector.evaluation.table4_imagenet import (  # noqa: E402
+    TABLE4_INTERVALS,
+    Table4Sample,
+    evaluate_table4_imagenet,
+    validate_attack_success,
+    write_table4_outputs,
 )
 from deepdetector.models.imagenet_wrappers import GoogLeNetCaffeWrapper  # noqa: E402
 
@@ -45,11 +42,27 @@ def build_parser() -> argparse.ArgumentParser:
     """Build command-line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
-    parser.add_argument("--output-dir", default=None)
     parser.add_argument(
-        "--adv-path",
+        "--data-root",
         default=None,
-        help="Path to a pre-generated .npy array with adversarial images.",
+        help="Root directory containing ImageNet class folders.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Optional number of images to evaluate for a quick run.",
+    )
+    parser.add_argument(
+        "--epsilon",
+        type=float,
+        default=None,
+        help="FGSM epsilon in 0-255 Caffe scale. Defaults to config or 1.0.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Directory for table_4_imagenet.csv and diagnostics.",
     )
     parser.add_argument(
         "--dry-run",
@@ -80,7 +93,7 @@ def load_config(path: Path) -> Dict[str, Any]:
 
 def configured_intervals(config: Dict[str, Any]) -> Iterable[int]:
     """Return scalar quantization interval counts from config."""
-    intervals = config.get("quantization", {}).get("intervals", [])
+    intervals = config.get("quantization", {}).get("intervals", TABLE4_INTERVALS)
     if not intervals:
         raise ValueError("Config must define quantization.intervals.")
     for value in intervals:
@@ -99,7 +112,7 @@ def write_status(output_dir: Path, status: str, **fields: Any) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     payload = {"status": status}
     payload.update(fields)
-    path = output_dir / "status.json"
+    path = output_dir / "table_4_status.json"
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     return path
 
@@ -130,7 +143,7 @@ def _read_rgb_image(path: Path) -> np.ndarray:
         return (np.asarray(rgb_image, dtype=np.float32) / 255.0).astype(np.float32)
 
 
-def _class_image_rows(images_dir: Path, class_indices: Dict[str, Any]) -> List[Tuple[Path, int]]:
+def _class_image_rows(images_dir: Path, class_indices: Dict[str, Any]) -> List[Tuple[Path, str, int]]:
     """Return sorted image paths and labels for a class-folder ImageNet subset."""
     rows = []
     for class_name, label_index in sorted(class_indices.items()):
@@ -139,14 +152,18 @@ def _class_image_rows(images_dir: Path, class_indices: Dict[str, Any]) -> List[T
             raise IOError("Missing ImageNet class directory: {0}".format(class_dir))
         for path in sorted(class_dir.iterdir()):
             if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
-                rows.append((path, int(label_index)))
+                rows.append((path, str(class_name), int(label_index)))
     return rows
 
 
-def load_subset_images(config: Dict[str, Any]) -> Tuple[np.ndarray, np.ndarray]:
+def load_subset_samples(
+    config: Dict[str, Any],
+    data_root_override: Optional[str] = None,
+    limit_override: Optional[int] = None,
+) -> List[Table4Sample]:
     """Load the configured local ImageNet subset from class folders."""
     dataset_config = config.get("dataset", {})
-    images_dir = _resolve_path(dataset_config.get("images_dir"))
+    images_dir = _resolve_path(data_root_override or dataset_config.get("images_dir"))
     if images_dir is None:
         raise ValueError("Config must define dataset.images_dir.")
 
@@ -160,128 +177,39 @@ def load_subset_images(config: Dict[str, Any]) -> Tuple[np.ndarray, np.ndarray]:
         order = rng.permutation(len(rows))
         rows = [rows[int(index)] for index in order]
 
-    configured_n_samples = dataset_config.get("n_samples")
-    if configured_n_samples in (None, "", "all"):
+    configured_limit = limit_override if limit_override is not None else dataset_config.get("n_samples")
+    if configured_limit in (None, "", "all"):
         n_samples = len(rows)
     else:
-        n_samples = int(configured_n_samples)
+        n_samples = int(configured_limit)
     rows = rows[:n_samples]
     image_size = int(dataset_config.get("image_size", 224))
 
-    images = []
-    labels = []
-    for path, label_index in rows:
+    samples = []
+    for path, class_name, label_index in rows:
         image = _read_rgb_image(path)
-        images.append(resize_normalized_image(image, image_size=image_size))
-        labels.append(int(label_index))
-
-    if not images:
-        return np.empty((0,), dtype=np.float32), np.empty((0,), dtype=np.int32)
-    return np.asarray(images, dtype=np.float32), np.asarray(labels, dtype=np.int32)
-
-
-def predict_labels(model: GoogLeNetCaffeWrapper, images: np.ndarray, batch_size: int) -> np.ndarray:
-    """Predict labels for a batch of ImageNet images."""
-    labels = []
-    for start in range(0, len(images), batch_size):
-        batch = images[start : start + batch_size]
-        labels.extend(np.asarray(model.predict_label(batch), dtype=np.int32).tolist())
-    return np.asarray(labels, dtype=np.int32)
-
-
-def load_adversarial_images(path: Path, expected_shape: Tuple[int, ...]) -> np.ndarray:
-    """Load adversarial images and validate their shape."""
-    adv_images = np.load(str(path)).astype(np.float32)
-    if adv_images.shape != expected_shape:
-        raise ValueError(
-            "Expected adversarial array shape {0}, got {1}.".format(
-                expected_shape,
-                adv_images.shape,
+        samples.append(
+            Table4Sample(
+                image=resize_normalized_image(image, image_size=image_size),
+                true_label=label_index,
+                image_id=path.stem,
+                class_name=class_name,
             )
         )
-    return adv_images
+
+    return samples
 
 
-def generate_adversarial_images(
-    config: Dict[str, Any],
-    model: GoogLeNetCaffeWrapper,
-    images: np.ndarray,
-) -> Optional[np.ndarray]:
-    """Generate FGSM examples when the model exposes TF1 attack handles."""
-    sess = getattr(model, "sess", None)
-    x_placeholder = getattr(model, "x_placeholder", None)
-    logits = getattr(model, "logits", None)
-    if sess is None or x_placeholder is None or logits is None:
-        return None
-
+def epsilon_255_from_config(config: Dict[str, Any], override: Optional[float]) -> float:
+    """Return FGSM epsilon in 0-255 Caffe scale."""
+    if override is not None:
+        return float(override)
     attack_config = config.get("attack", {})
-    return generate_fgsm_imagenet(
-        sess=sess,
-        x_placeholder=x_placeholder,
-        logits=logits,
-        images=images,
-        eps=float(attack_config.get("epsilon", attack_config.get("eps", 4.0 / 255.0))),
-        clip_min=float(attack_config.get("clip_min", 0.0)),
-        clip_max=float(attack_config.get("clip_max", 1.0)),
-        batch_size=int(attack_config.get("batch_size", 32)),
-    )
-
-
-def adversarial_images_for_run(
-    config: Dict[str, Any],
-    model: GoogLeNetCaffeWrapper,
-    images: np.ndarray,
-    override_path: Optional[str],
-) -> Optional[np.ndarray]:
-    """Load or generate adversarial images for the table run."""
-    attack_config = config.get("attack", {})
-    adv_path = _resolve_path(override_path or attack_config.get("adversarial_path"))
-    if adv_path is not None and adv_path.is_file():
-        return load_adversarial_images(adv_path, images.shape)
-
-    adv_images = generate_adversarial_images(config, model, images)
-    if adv_images is None:
-        return None
-
-    save_path = _resolve_path(attack_config.get("save_adversarial_path"))
-    if save_path is not None:
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        np.save(str(save_path), adv_images)
-    return adv_images
-
-
-def evaluate_interval(
-    model: GoogLeNetCaffeWrapper,
-    images: np.ndarray,
-    labels: np.ndarray,
-    adv_images: np.ndarray,
-    clean_pred: np.ndarray,
-    adv_pred: np.ndarray,
-    intervals: int,
-    batch_size: int,
-    exclude_invalid_pairs: bool,
-) -> Dict[str, Any]:
-    """Evaluate one scalar quantization interval count."""
-    filter_fn = scalar_filter_for_intervals(intervals)
-    filtered_clean = apply_filter_batch(filter_fn, images)
-    filtered_adv = apply_filter_batch(filter_fn, adv_images)
-    filtered_clean_pred = predict_labels(model, filtered_clean, batch_size)
-    filtered_adv_pred = predict_labels(model, filtered_adv, batch_size)
-    metrics = evaluate_filter_predictions(
-        y_true=labels,
-        clean_pred=clean_pred,
-        adv_pred=adv_pred,
-        filtered_clean_pred=filtered_clean_pred,
-        filtered_adv_pred=filtered_adv_pred,
-        exclude_invalid_pairs=exclude_invalid_pairs,
-    )
-    metrics.update(
-        {
-            "intervals": int(intervals),
-            "interval_size": interval_size(intervals),
-        }
-    )
-    return metrics
+    if "epsilon_255" in attack_config:
+        return float(attack_config["epsilon_255"])
+    if "epsilon" in attack_config:
+        return float(attack_config["epsilon"]) * 255.0
+    return 1.0
 
 
 def main() -> int:
@@ -289,11 +217,6 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
     args = build_parser().parse_args()
     config = load_config(_resolve_path(args.config) or DEFAULT_CONFIG)
-    output_config = config.get("output", {})
-    metrics_config = config.get("metrics", {})
-    evaluation_config = config.get("evaluation", {})
-    model_config = config.get("model", {})
-
     output_dir = output_dir_from_config(config, args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -319,98 +242,68 @@ def main() -> int:
         )
         return 0
 
-    images, labels = load_subset_images(config)
-    print("images_shape={0}".format(images.shape))
-    print("labels_shape={0}".format(labels.shape))
+    samples = load_subset_samples(
+        config,
+        data_root_override=args.data_root,
+        limit_override=args.limit,
+    )
+    print("n_images={0}".format(len(samples)))
 
     if args.dry_run:
-        write_status(output_dir, "parcial", limitation="dry_run", n_loaded=int(len(images)))
+        write_status(output_dir, "parcial", limitation="dry_run", n_loaded=int(len(samples)))
         return 0
-    if len(images) == 0:
+    if len(samples) == 0:
         write_status(output_dir, "parcial", limitation="nenhuma_imagem_carregada", n_loaded=0)
         return 0
 
-    adv_images = adversarial_images_for_run(config, model, images, args.adv_path)
-    if adv_images is None:
+    attack_config = config.get("attack", {})
+    result = evaluate_table4_imagenet(
+        model=model,
+        samples=samples,
+        intervals=configured_intervals(config),
+        epsilon_255=epsilon_255_from_config(config, args.epsilon),
+        clip_min=float(attack_config.get("clip_min", 0.0)),
+        clip_max=float(attack_config.get("clip_max", 1.0)),
+    )
+    print("total_images={0}".format(result.n_clean_total))
+    print("clean_correct={0}".format(result.n_clean_correct))
+    print("skipped_wrong_baseline={0}".format(result.skipped_wrong_baseline))
+    output_config = config.get("output", {})
+    csv_path, diagnostics_path = write_table4_outputs(
+        output_dir=output_dir,
+        result=result,
+        csv_name=str(output_config.get("csv", "table_4_imagenet.csv")),
+        diagnostics_name=str(
+            output_config.get("diagnostics_csv", "table_4_imagenet_diagnostics.csv")
+        ),
+    )
+    try:
+        validate_attack_success(result)
+    except RuntimeError as exc:
         write_status(
             output_dir,
-            "parcial",
-            n_loaded=int(len(images)),
-            limitation="fgsm_requer_adversariais_salvas_ou_grafo_tensorflow",
-            message=(
-                "GoogLeNetCaffeWrapper does not expose TensorFlow tensors. "
-                "Provide --adv-path or configure attack.adversarial_path with a compatible .npy file."
-            ),
+            "falhou_fgsm_sem_sucesso",
+            n_loaded=int(len(samples)),
+            n_clean_correct=result.n_clean_correct,
+            n_attack_success=result.n_attack_success,
+            results_csv=str(csv_path),
+            diagnostics_csv=str(diagnostics_path),
+            message=str(exc),
         )
-        return 0
-
-    batch_size = int(model_config.get("batch_size", 32))
-    clean_pred = predict_labels(model, images, batch_size)
-    adv_pred = predict_labels(model, adv_images, batch_size)
-    exclude_invalid_pairs = bool(evaluation_config.get("exclude_invalid_pairs", False))
-
-    rows = []
-    for intervals in configured_intervals(config):
-        rows.append(
-            evaluate_interval(
-                model=model,
-                images=images,
-                labels=labels,
-                adv_images=adv_images,
-                clean_pred=clean_pred,
-                adv_pred=adv_pred,
-                intervals=intervals,
-                batch_size=batch_size,
-                exclude_invalid_pairs=exclude_invalid_pairs,
-            )
-        )
-
-    csv_path = write_csv(
-        str(output_dir / str(output_config.get("csv", "table_4_imagenet_scalar_quantization_intervals.csv"))),
-        rows,
-        metrics_config.get(
-            "raw_fields",
-            [
-                "intervals",
-                "interval_size",
-                "recall_percent",
-                "precision_percent",
-                "f1_percent",
-            ],
-        ),
-    )
-
-    markdown_rows = []
-    for row in rows:
-        markdown_rows.append(
-            [
-                row["intervals"],
-                row["interval_size"],
-                format_percent(row["recall_percent"]),
-                format_percent(row["precision_percent"]),
-                format_percent(row["f1_percent"]),
-            ]
-        )
-
-    md_path = write_markdown_table(
-        str(output_dir / str(output_config.get("markdown", "table_4_imagenet_scalar_quantization_intervals.md"))),
-        "ImageNet Scalar Quantization Intervals",
-        metrics_config.get(
-            "columns",
-            ["Intervals", "Interval size", "Recall", "Precision", "F1"],
-        ),
-        markdown_rows,
-    )
+        print(str(exc), file=sys.stderr)
+        return 1
 
     write_status(
         output_dir,
         "completo",
-        n_loaded=int(len(images)),
+        n_loaded=int(len(samples)),
+        n_clean_correct=result.n_clean_correct,
+        n_attack_success=result.n_attack_success,
         results_csv=str(csv_path),
-        results_md=str(md_path),
+        diagnostics_csv=str(diagnostics_path),
     )
     print("results_csv={0}".format(csv_path))
-    print("results_md={0}".format(md_path))
+    print("diagnostics_csv={0}".format(diagnostics_path))
     return 0
 
 
