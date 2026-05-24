@@ -1,40 +1,53 @@
 # DeepDetector Reimplementation
 
-Base organizada para reproduzir o metodo de Liang et al.,
-"Detecting Adversarial Image Examples in Deep Networks with Adaptive Noise
-Reduction", usando o repositorio `OwenSec/DeepDetector` como referencia
-metodologica.
+Reimplementacao organizada do metodo de Liang et al., "Detecting Adversarial
+Image Examples in Deep Networks with Adaptive Noise Reduction", usando o
+repositorio `OwenSec/DeepDetector` como referencia metodologica.
 
-O Marco 0 cria apenas a estrutura modular e documenta o ambiente legado. A
-implementacao experimental deve preservar primeiro o comportamento original
-antes de qualquer extensao.
+O objetivo principal e reproduzir primeiro o comportamento experimental do
+artigo e do codigo original antes de propor extensoes. A arquitetura atual
+separa codigo reutilizavel em `src/deepdetector`, configuracoes em `configs/`,
+scripts operacionais em `scripts/`, notas de reproducao em `reproduction_notes/`
+e saidas experimentais em `results/` e `artifacts/`.
 
-## Ambiente Legado
+## Estado Atual
 
-Este projeto usa bibliotecas antigas de proposito:
+- Pacote Python instalavel em modo editavel: `deepdetector`.
+- Trilhas MNIST:
+  - M1 + FGSM.
+  - M2 + Carlini-Wagner L2/Linf.
+- Trilha ImageNet com wrappers e utilitarios para Caffe/GoogLeNet.
+- Filtros NumPy independentes do modelo: quantizacao, media, entropia e
+  quantizacao adaptativa.
+- Avaliacoes para detectar mudanca de predicao apos reducao de ruido.
+- Scripts de reproducao para tabelas do artigo.
+- Testes unitarios focados em filtros, dados, ataques, wrappers e comparacoes
+  de reproducao.
+
+## Ambiente
+
+Este projeto preserva uma pilha legada de proposito:
 
 - TensorFlow 1.x
 - Keras 2.2.x
 - CleverHans 2.x
-- Caffe para a trilha ImageNet, se a reproducao fiel for mantida
+- Caffe para a trilha ImageNet, quando a reproducao fiel for necessaria
 
-Ambiente conda usado localmente:
+Crie e valide o ambiente Conda:
 
 ```bash
-# Se for a primeira vez, crie o ambiente completo:
 conda env create -f environment.yml
-
-# Ative o ambiente e valide as dependencias:
 conda activate adversarialimage-ids-legacy
+pip install -e .
 python scripts/dev/smoke_test.py
 ```
 
-Se o ambiente ja existir e voce quiser sincronizar os pacotes com este
-repositorio:
+Se o ambiente ja existir:
 
 ```bash
 conda env update -n adversarialimage-ids-legacy -f environment.yml
 conda activate adversarialimage-ids-legacy
+pip install -e .
 python scripts/dev/smoke_test.py
 ```
 
@@ -44,140 +57,204 @@ Em automacao sem ativar o shell:
 conda run -n adversarialimage-ids-legacy python scripts/dev/smoke_test.py
 ```
 
-Detalhes de versao e decisoes estao em
+Detalhes de versao e decisoes ficam em
 `reproduction_notes/environment_setup.md`.
 
-## Estrutura
+## Arquitetura
 
 ```text
 .
-├── configs/
-│   ├── mnist_fgsm.yaml        # parametros do ataque FGSM em MNIST
-│   └── mnist_entropy.yaml     # parametros da reducao adaptativa por entropia
-├── scripts/
-│   ├── dev/smoke_test.py      # valida imports do ambiente legado
-│   ├── train_mnist.py         # treina/carrega baseline limpo MNIST
-│   ├── generate_mnist_fgsm.py # gera adversariais FGSM com CleverHans
-│   └── evaluate_mnist_detector.py # avalia detector por mudanca de predicao
-├── src/deepdetector/
-│   ├── data/                  # carregamento e preparacao de dados
-│   │   └── mnist.py
-│   ├── models/                # modelos TensorFlow/Keras
-│   │   └── mnist_cnn.py
-│   ├── training/              # treino e restore de checkpoints
-│   │   └── train_mnist.py
-│   ├── attacks/               # ataques adversariais
-│   │   └── fgsm.py
-│   ├── filters/               # filtros NumPy independentes do modelo
-│   │   └── quantization.py
-│   ├── detection/             # regra DeepDetector-style
-│   │   └── prediction_change.py
-│   ├── evaluation/            # metricas e relatorios
-│   │   ├── adversarial.py
-│   │   └── detector_metrics.py
-│   └── utils/
-├── tests/
-│   └── test_quantization_numpy.py
-├── results/
-│   ├── mnist/
-│   │   ├── .gitkeep
-│   │   └── quantization/filter_notes.md
-│   └── imagenet/
-│       └── .gitkeep
-├── reproduction_notes/
-│   ├── environment_setup.md
-│   └── caffe_setup.md
-├── environment.yml            # criacao automatizada do conda legado
-├── requirements.txt           # pins pip do ambiente legado
-└── README.md
+|-- configs/                         # contratos YAML por responsabilidade
+|   |-- article_reproduction/         # reproducoes das tabelas do artigo
+|   |-- attacks/                      # contratos isolados dos ataques
+|   |-- experiments/                  # pipelines operacionais/exploratorios
+|   |-- filters/                      # filtros e detector
+|   `-- training/                     # treino/restauracao de modelos
+|-- scripts/
+|   |-- article_reproduction/         # scripts para tabelas do artigo
+|   |-- dev/                          # validacoes rapidas de ambiente
+|   |-- imagenet/                     # utilitarios da trilha ImageNet
+|   `-- mnist/
+|       |-- m1_fgsm/                  # fluxo MNIST M1 + FGSM
+|       `-- m2_cw/                    # fluxo MNIST M2 + CW L2/Linf
+|-- src/deepdetector/
+|   |-- attacks/                      # FGSM e CW
+|   |-- data/                         # loaders MNIST e ImageNet
+|   |-- detection/                    # regra por mudanca de predicao
+|   |-- evaluation/                   # metricas e relatorios
+|   |-- filters/                      # filtros de reducao de ruido
+|   |-- models/                       # modelos MNIST e wrappers ImageNet
+|   |-- training/                     # treino/restauracao de baselines
+|   |-- paths.py                      # convencoes de caminhos do projeto
+|   `-- utils/
+|-- tests/                            # cobertura automatizada
+|-- reproduction_notes/               # notas, planos e decisoes de reproducao
+|-- results/                          # relatorios e metricas versionaveis
+|-- artifacts/                        # modelos, datasets processados e ataques
+|-- environment.yml
+|-- requirements.txt
+|-- pyproject.toml
+`-- README.md
 ```
 
-`results/mnist/clean_baseline/`, `results/mnist/fgsm/` e
-`results/mnist/detector/` sao saidas locais de execucao e ficam ignoradas pelo
-Git. A excecao versionada em `results/` e a nota
-`results/mnist/quantization/filter_notes.md`, porque ela documenta a reproducao
-dos filtros.
+### Modulos principais
 
-## Configuracoes Iniciais
+| Modulo | Responsabilidade |
+| --- | --- |
+| `deepdetector.data` | Carregamento e preparacao de MNIST/ImageNet. |
+| `deepdetector.models` | Definicoes de modelos MNIST e wrappers ImageNet/Caffe. |
+| `deepdetector.training` | Treino e restore dos classificadores baseline. |
+| `deepdetector.attacks` | Geracao de exemplos adversariais FGSM e CW. |
+| `deepdetector.filters` | Reducoes de ruido usadas pelo detector. |
+| `deepdetector.detection` | Detector DeepDetector-style por mudanca de predicao. |
+| `deepdetector.evaluation` | Metricas, agregacoes e comparacoes com o artigo. |
 
-- `configs/mnist_fgsm.yaml`: esqueleto do experimento MNIST com FGSM.
-- `configs/mnist_entropy.yaml`: parametros iniciais da reducao adaptativa por
-  entropia descrita na reproducao.
+## Configuracoes
 
-Os arquivos de configuracao ainda não executam experimentos completos, eles servem como contrato inicial para os proximos marcos.
+Os arquivos em `configs/` documentam parametros experimentais e ajudam a manter
+os fluxos rastreaveis:
 
-## Validacao Rapida
+- `configs/article_reproduction/`: contratos das tabelas do artigo.
+- `configs/attacks/`: contratos isolados de FGSM, DeepFool e CW.
+- `configs/experiments/`: pipelines operacionais ou exploratorios.
+- `configs/filters/`: filtros/detector reutilizaveis.
+- `configs/training/`: treino e restauracao dos modelos baseline.
 
-O smoke test valida somente imports da pilha mínima:
+## Fluxos Operacionais
+
+### Validacao rapida
 
 ```bash
 python scripts/dev/smoke_test.py
+pytest
 ```
 
-Quando esse comando falha, o problema esperado esta no ambiente legado, não na estrutura modular do projeto.
+### MNIST M1 + FGSM
 
-## ImageNet Caffe Assets
+```bash
+python scripts/mnist/m1_fgsm/train.py --load-model
+python scripts/mnist/m1_fgsm/generate_attack.py --load-model
+python scripts/mnist/m1_fgsm/run_comparison.py
+```
 
-A trilha ImageNet usa modelos Caffe. O pipeline atual ja esta configurado para
-BVLC GoogLeNet:
+Scripts relacionados:
+
+- `scripts/mnist/m1_fgsm/train.py`
+- `scripts/mnist/m1_fgsm/generate_attack.py`
+- `scripts/mnist/m1_fgsm/evaluate_detector.py`
+- `scripts/mnist/m1_fgsm/evaluate_entropy.py`
+- `scripts/mnist/m1_fgsm/run_comparison.py`
+
+Saidas principais:
+
+- `artifacts/models/mnist/m1/`
+- `artifacts/adversarial_examples/mnist/m1/fgsm/`
+- `results/mnist/clean_baseline/`
+- `results/mnist/fgsm/`
+- `results/mnist/detector/`
+- `results/mnist/final_mnist_results.csv`
+
+### MNIST M2 + CW
+
+```bash
+python scripts/mnist/m2_cw/run_experiments.py --kappas 0.0,0.5,1.0,2.0,4.0 --samples 1000 --start-index 9000
+```
+
+Scripts relacionados:
+
+- `scripts/mnist/m2_cw/train.py`
+- `scripts/mnist/m2_cw/generate_attack_l2.py`
+- `scripts/mnist/m2_cw/generate_attack_linf.py`
+- `scripts/mnist/m2_cw/evaluate_detector.py`
+- `scripts/mnist/m2_cw/run_experiments.py`
+
+Saidas principais:
+
+- `artifacts/models/mnist/m2/`
+- `artifacts/adversarial_examples/mnist/m2/cw_l2/`
+- `artifacts/adversarial_examples/mnist/m2/cw_linf/`
+- `results/mnist/m2_cw/`
+
+### ImageNet / Caffe
+
+Baixe os ativos Caffe necessarios:
 
 ```bash
 python scripts/imagenet/download_caffe_imagenet_assets.py --model googlenet
 ```
 
-Os arquivos ficam em `artifacts/models/imagenet/googlenet/` e não são
-versionados no Git.
-
-Para listar e preparar os outros modelos Caffe com download verificado:
+Liste modelos suportados e prepare outros ativos:
 
 ```bash
 python scripts/imagenet/download_caffe_imagenet_assets.py --list-models
 python scripts/imagenet/download_caffe_imagenet_assets.py --model alexnet
 ```
 
-Os arquivos ficam em `artifacts/models/imagenet/<modelo>/` e nao sao
-versionados no Git. Detalhes de fontes, espelhos e limitacoes estao em
-`reproduction_notes/caffe_model_downloads.md`.
+Outros scripts:
 
-## MNIST Clean Baseline
+- `scripts/imagenet/process_imagenet_subset.py`
+- `scripts/imagenet/googlenet_fgsm.py`
 
-O primeiro pipeline executável treina ou carrega o classificador MNIST limpo com TensorFlow 1.x, Keras e CleverHans:
+Detalhes de fontes, espelhos e limitacoes ficam em
+`reproduction_notes/caffe_model_downloads.md` e
+`reproduction_notes/caffe_setup.md`.
 
-```bash
-python scripts/train_mnist.py --epochs 1 --batch-size 256 --learning-rate 0.001
-```
-
-Para restaurar o checkpoint salvo:
+### Reproducao das tabelas do artigo
 
 ```bash
-python scripts/train_mnist.py --load-model
+python scripts/article_reproduction/table_3.py
+python scripts/article_reproduction/table_4_mnist.py
+python scripts/article_reproduction/table_6.py
+python scripts/article_reproduction/table_10.py
+python scripts/article_reproduction/table_10_m2.py
 ```
 
-O script salva checkpoint em `results/mnist/clean_baseline/checkpoints/` e
-registra a acuracia limpa em:
-
-```text
-results/mnist/clean_baseline/summary.md
-```
-
-## MNIST FGSM
-
-Gerar exemplos adversariais FGSM com CleverHans a partir do baseline limpo:
+ImageNet:
 
 ```bash
-python scripts/generate_mnist_fgsm.py --load-model --epsilons 0.2 --samples 4500
+python scripts/article_reproduction/table_4_imagenet.py
+python scripts/article_reproduction/table_7_imagenet.py --config configs/article_reproduction/imagenet_table_7.yaml
 ```
 
-Para comparar epsilons:
+As comparacoes ficam em `results/mnist/article_reproduction/`,
+`results/mnist/m2_cw/article_comparison/` e
+`results/imagenet/article_reproduction/`.
+
+## Dados, Artefatos e Resultados
+
+- `data/` e ignorado pelo Git e deve conter datasets locais.
+- `artifacts/` armazena modelos, checkpoints, assets Caffe e adversariais
+  gerados. Modelos grandes e binarios nao devem ser versionados.
+- `results/` guarda relatorios, CSVs e notas de execucao que documentam a
+  reproducao. A politica atual permite versionar resultados MNIST selecionados
+  e mantem a trilha ImageNet restrita a arquivos explicitamente liberados.
+
+## Notas de Reproducao
+
+Use `reproduction_notes/` para decisoes tecnicas que precisam ser versionadas:
+
+- `environment_setup.md`
+- `caffe_setup.md`
+- `caffe_model_downloads.md`
+- `mnist_reproduction_notes.md`
+- `experiment_plans/`
+
+Documentos locais de trabalho que nao devem entrar no Git, como o guia de
+Spec-Driven Development, ficam ignorados pelo `.gitignore`.
+
+## Testes
+
+Execute toda a suite:
 
 ```bash
-python scripts/generate_mnist_fgsm.py --load-model --epsilons 0.1,0.2
+pytest
 ```
 
-As imagens adversariais ficam em `results/mnist/fgsm/eps_<valor>/` e as
-metricas agregadas em:
+Execute um teste especifico:
 
-```text
-results/mnist/fgsm/summary.csv
-results/mnist/fgsm/summary.md
+```bash
+pytest tests/test_quantization_numpy.py
 ```
+
+Os testes atuais cobrem filtros NumPy, registro de filtros, dados ImageNet,
+wrappers ImageNet, FGSM ImageNet e comparacoes de reproducao do artigo.

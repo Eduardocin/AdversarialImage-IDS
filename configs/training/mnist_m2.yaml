@@ -1,0 +1,34 @@
+training:
+  name: mnist_m2_clean_baseline
+  seed_tf: 1234
+  seed_numpy: [2017, 8, 30]
+  epochs: 10
+  batch_size: 128
+  learning_rate: 0.001
+  label_smoothing: 0.1
+  load_model: false
+
+model:
+  name: m2
+  backend: tensorflow
+  architecture: deepdetector.models.mnist_m2.build_mnist_m2_model
+  input_shape: [28, 28, 1]
+  input_scale: zero_one
+  checkpoint_dir: artifacts/models/mnist/m2/clean_baseline/checkpoints
+  checkpoint_filename: mnist_m2.ckpt
+
+dataset:
+  name: mnist
+  train_split: train
+  test_split: test
+  train_start: 0
+  train_end: 60000
+  test_start: 0
+  test_end: 10000
+  image_shape: [28, 28, 1]
+  value_range: [0.0, 1.0]
+  label_format: one_hot
+
+outputs:
+  summary_dir: results/mnist/m2_cw/clean_baseline
+  checkpoint_dir: artifacts/models/mnist/m2/clean_baseline/checkpoints

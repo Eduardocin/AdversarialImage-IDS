@@ -1,0 +1,39 @@
+attack:
+  name: fgsm
+  norm:
+  targeted: false
+  epsilon: 1.0
+  epsilon_scale: pixel_255
+  kappa:
+  max_iterations:
+  learning_rate:
+  binary_search_steps:
+  initial_const:
+  abort_early:
+  clip_min: 0.0
+  clip_max: 255.0
+  input_scale: caffe_255
+  use_true_label: true
+  table10_epsilons: [1.0, 2.0]
+
+model:
+  name: bvlc_googlenet
+  backend: caffe
+  input_scale: caffe_255
+  preprocessing: bgr_nchw_center_crop_mean
+
+dataset:
+  name: imagenet
+  split: train
+  start_index:
+  n_samples: 500
+  selection_strategy: configured_classes
+  classes:
+    - name: panda
+      label: 388
+    - name: cab
+      label: 468
+
+success_criteria:
+  skip_wrong_clean_prediction: true
+  success_rule: adv_pred != clean_pred

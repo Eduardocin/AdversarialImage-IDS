@@ -8,16 +8,16 @@ experiment:
 dataset:
   name: imagenet
   split: train
-  images_dir: data/imagenet/subset/train
+  images_dir: data/imagenet/train
   n_samples: null
   image_size: 224
   image_shape: [224, 224, 3]
   value_range: [0.0, 1.0]
   shuffle: false
   class_indices:
-    clock: 530
     goldfish: 1
     pineapple: 953
+    digital_clock: 530
 
 model:
   name: googlenet_caffe
@@ -26,18 +26,16 @@ model:
   model_dir: artifacts/models/imagenet/googlenet/
   deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
   caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
-  mean_file: artifacts/models/imagenet/googlenet/ilsvrc_2012_mean.npy
+  mean_file: null
   use_gpu: false
   batch_size: 32
 
 attack:
   name: fgsm
-  epsilon: 0.01569
+  epsilon_255: 1.0
   clip_min: 0.0
   clip_max: 1.0
   batch_size: 32
-  adversarial_path: artifacts/adversarial_examples/imagenet/googlenet/fgsm/eps_0p01569/adversarial_examples.npy
-  save_adversarial_path: artifacts/adversarial_examples/imagenet/googlenet/fgsm/eps_0p01569/adversarial_examples.npy
 
 quantization:
   method: scalar_quantization
@@ -60,18 +58,27 @@ evaluation:
 metrics:
   columns:
     - Intervals
-    - Interval size
+    - TP
+    - FN
+    - FP
     - Recall
     - Precision
     - F1
   raw_fields:
     - intervals
-    - interval_size
-    - recall_percent
-    - precision_percent
-    - f1_percent
+    - tp
+    - fn
+    - fp
+    - recall
+    - precision
+    - f1
+    - n_clean_total
+    - n_clean_correct
+    - n_attack_success
+    - disturbed_failure
+    - skipped_wrong_baseline
 
 output:
   results_dir: results/imagenet/article_reproduction
-  csv: table_4_imagenet_scalar_quantization_intervals.csv
-  markdown: table_4_imagenet_scalar_quantization_intervals.md
+  csv: table_4_imagenet.csv
+  diagnostics_csv: table_4_imagenet_diagnostics.csv

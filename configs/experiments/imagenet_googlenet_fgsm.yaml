@@ -2,8 +2,8 @@ experiment:
   name: imagenet_googlenet_fgsm
 
 dataset:
-  images_dir: data/imagenet/val/
-  labels_csv: data/imagenet/val_labels.csv
+  images_dir: data/imagenet/validation/
+  labels_csv: data/imagenet/validation_labels.csv
   n_samples: 500
   image_size: 224
 

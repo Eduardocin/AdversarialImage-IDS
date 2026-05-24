@@ -1,0 +1,55 @@
+experiment:
+  name: imagenet_table_7
+  description: Reproduce Table 7 spatial smoothing filters for high-entropy FGSM ImageNet examples.
+  seed: 20170830
+
+model:
+  name: bvlc_googlenet
+  backend: caffe
+  model_dir: artifacts/models/imagenet/googlenet/
+  deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
+  caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+  mean_file: null
+  use_gpu: false
+  batch_size: 32
+
+dataset:
+  name: imagenet
+  split: training
+  image_size: 224
+  shuffle: false
+  classes:
+    - name: goldfish
+      label: 1
+      path: data/imagenet/train/goldfish
+    - name: pineapple
+      label: 953
+      path: data/imagenet/train/pineapple
+    - name: digital_clock
+      label: 530
+      path: data/imagenet/train/digital_clock
+
+attack:
+  name: fgsm
+  epsilon_255: 1.0
+  clip_min: 0.0
+  clip_max: 1.0
+  batch_size: 32
+
+filter:
+  entropy_threshold: 5.0
+  quantization_step: 43
+  mask_types:
+    - cross
+    - diamond
+    - box
+  sizes:
+    - 3
+    - 5
+    - 7
+    - 9
+
+outputs:
+  results_dir: results/imagenet/article_reproduction
+  raw_csv: table_7_imagenet.csv
+  pivot_csv: table_7_imagenet_pivot.csv

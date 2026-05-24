@@ -1,0 +1,37 @@
+attack:
+  name: cw
+  norm: linf
+  targeted: false
+  epsilon:
+  epsilon_scale:
+  kappa: 0.0
+  max_iterations: 1000
+  learning_rate: 0.01
+  binary_search_steps: 1
+  initial_const: 1.0
+  abort_early: true
+  clip_min: 0.0
+  clip_max: 1.0
+  input_scale: zero_one
+  initial_tau: 1.0
+  tau_decay: 0.9
+  tau_check_interval: 50
+
+model:
+  name: m2
+  backend: tensorflow
+  input_scale: zero_one
+  preprocessing: none
+  checkpoint_dir: artifacts/models/mnist/m2/clean_baseline/checkpoints
+
+dataset:
+  name: mnist
+  split: test
+  start_index: 9000
+  n_samples: 1000
+  selection_strategy: sequential
+  classes: all
+
+success_criteria:
+  skip_wrong_clean_prediction: true
+  success_rule: adv_pred != clean_pred

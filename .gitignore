@@ -211,3 +211,8 @@ run.log
 /data
 /material
 /src/original
+
+# Local planning scratch files
+/specs/**/*.local.md
+/specs/**/*.draft.md
+/specs/**/scratch/

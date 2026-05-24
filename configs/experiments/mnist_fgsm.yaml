@@ -17,7 +17,7 @@ attack:
 
 detection:
   method: adaptive_noise_reduction
-  filter_config: configs/mnist_entropy.yaml
+  filter_config: configs/filters/mnist_entropy.yaml
 
 outputs:
   root: results/mnist/fgsm

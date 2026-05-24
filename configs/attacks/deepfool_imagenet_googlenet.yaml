@@ -1,0 +1,39 @@
+attack:
+  name: deepfool
+  norm: l2
+  targeted: false
+  epsilon:
+  epsilon_scale:
+  kappa:
+  max_iterations: 50
+  learning_rate:
+  binary_search_steps:
+  initial_const:
+  abort_early:
+  overshoot: 0.02
+  num_classes: 10
+  clip_min: 0.0
+  clip_max: 255.0
+  input_scale: caffe_255
+
+model:
+  name: bvlc_googlenet
+  backend: caffe
+  input_scale: caffe_255
+  preprocessing: bgr_nchw_center_crop_mean
+
+dataset:
+  name: imagenet
+  split: test
+  start_index:
+  n_samples: 500
+  selection_strategy: configured_classes
+  classes:
+    - name: panda
+      label: 388
+    - name: cab
+      label: 468
+
+success_criteria:
+  skip_wrong_clean_prediction: true
+  success_rule: adv_pred != clean_pred
