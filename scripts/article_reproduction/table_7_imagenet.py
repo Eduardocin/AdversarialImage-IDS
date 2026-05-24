@@ -37,20 +37,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "article_reproduction" / "imagenet_table_7.yaml"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "imagenet" / "article_reproduction"
 IMAGE_EXTENSIONS = (".jpeg", ".jpg", ".png")
-RAW_FIELDS = [
-    "mask_type",
-    "size",
-    "tp",
-    "fn",
-    "fp",
-    "recall",
-    "precision",
-    "f1",
-    "n_high_entropy_clean",
-    "n_high_entropy_adversarial",
-    "disturbed_failure",
-    "skipped_wrong_baseline",
-]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -315,17 +301,6 @@ def configured_masks(config: Dict[str, Any]) -> Iterable[Tuple[str, int]]:
             yield str(mask_type), int(size)
 
 
-def write_raw_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> Path:
-    """Write raw Table 7 results to CSV."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=RAW_FIELDS)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({field: row.get(field, "") for field in RAW_FIELDS})
-    return path
-
-
 def write_pivot_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> Path:
     """Write a Table 7 pivot with metric rows and mask-size columns."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -457,12 +432,8 @@ def main() -> int:
         rows.append(row)
 
     outputs = config.get("outputs", config.get("output", {}))
-    raw_path = write_raw_csv(
-        output_dir / str(outputs.get("raw_csv", "table_7_imagenet.csv")),
-        rows,
-    )
     pivot_path = write_pivot_csv(
-        output_dir / str(outputs.get("pivot_csv", "table_7_imagenet_pivot.csv")),
+        output_dir / str(outputs.get("pivot_csv", "table_7_imagnet.csv")),
         rows,
     )
 
@@ -471,10 +442,8 @@ def main() -> int:
         "completo",
         n_loaded=int(len(images)),
         **clean_summary,
-        raw_csv=str(raw_path),
         pivot_csv=str(pivot_path),
     )
-    print("raw_csv={0}".format(raw_path))
     print("pivot_csv={0}".format(pivot_path))
     return 0
 

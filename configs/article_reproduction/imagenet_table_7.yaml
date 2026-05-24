@@ -51,5 +51,4 @@ filter:
 
 outputs:
   results_dir: results/imagenet/article_reproduction
-  raw_csv: table_7_imagenet.csv
-  pivot_csv: table_7_imagenet_pivot.csv
+  pivot_csv: table_7_imagnet.csv

@@ -13,7 +13,7 @@ sys.path.insert(0, str(SRC_ROOT))
 from scripts.article_reproduction.table_4_imagenet import load_subset_samples
 from deepdetector.evaluation.table4_imagenet import (
     DIAGNOSTIC_FIELDS,
-    TABLE4_FIELDS,
+    TABLE4_OUTPUT_HEADER,
     ZERO_ATTACK_SUCCESS_MESSAGE,
     Table4Sample,
     _quantize_for_intervals,
@@ -172,7 +172,12 @@ def test_write_table4_outputs_uses_specified_csv_columns(tmp_path) -> None:
 
     assert csv_path.name == "table_4_imagenet.csv"
     assert diagnostics_path.name == "table_4_imagenet_diagnostics.csv"
-    assert csv_path.read_text(encoding="utf-8").splitlines()[0] == ",".join(TABLE4_FIELDS)
+    csv_lines = csv_path.read_text(encoding="utf-8").splitlines()
+    assert csv_lines[0] == ",".join(TABLE4_OUTPUT_HEADER)
+    assert len(csv_lines) == 4
+    assert csv_lines[1].split(",")[1] == "Recall"
+    assert csv_lines[2].split(",")[1] == "Precision"
+    assert csv_lines[3].split(",")[1] == "F1 Score"
     assert diagnostics_path.read_text(encoding="utf-8").splitlines()[0] == ",".join(
         DIAGNOSTIC_FIELDS
     )

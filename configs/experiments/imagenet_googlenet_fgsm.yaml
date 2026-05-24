@@ -12,7 +12,6 @@ model:
   model_dir: artifacts/models/imagenet/googlenet/
   deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
   caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
-  mean_file: artifacts/models/imagenet/googlenet/ilsvrc_2012_mean.npy
   use_gpu: false
 
 attack:

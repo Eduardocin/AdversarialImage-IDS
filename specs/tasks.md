@@ -16,3 +16,7 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Apply `epsilon_255=1.0` as a raw pixel step and clip to `[0,255]`.
   - [x] Share the same attack helper across Table 4, Table 7, and GoogLeNet FGSM scripts.
   - [x] Add tests covering clean-baseline skip, Caffe-scale epsilon, and no TensorFlow import in the main path.
+- [x] Add FGSM diagnostic guard for mean-subtracted ImageNet tensors
+  - [x] Fail explicitly when the Caffe FGSM helper receives negative preprocessed values before `[0,255]` clipping.
+  - [x] Add a regression test showing that mean-subtracted Caffe tensors are rejected for the article reproduction path.
+- [x] Update Table 7 ImageNet output to pivot-only CSV named `table_7_imagnet.csv`.

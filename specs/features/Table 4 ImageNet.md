@@ -79,11 +79,15 @@ Arquivo principal:
 
 results/imagenet/article_reproduction/table_4_imagenet.csv
 
-Colunas esperadas:
+Formato esperado (igual ao artigo):
 
-intervals,tp,fn,fp,recall,precision,f1,
-n_clean_total,n_clean_correct,n_attack_success,
-disturbed_failure,skipped_wrong_baseline
+Dataset,Metric,2,3,4,5,6,7,8,9,10
+
+Linhas:
+
+- ImageNet,Recall,<valores>
+- ImageNet,Precision,<valores>
+- ImageNet,F1 Score,<valores>
 
 Também gerar um arquivo de diagnóstico:
 
@@ -158,7 +162,7 @@ A implementação da Table 4 é aceita se:
 [ ] O número de clean_correct é maior que zero.
 [ ] O número de attack_success é maior que zero.
 [ ] disturbed_failure não domina 100% das imagens corretamente classificadas.
-[ ] O CSV final tem 9 linhas, uma para cada intervalo de 2 a 10.
+[ ] O CSV final tem 3 linhas (Recall, Precision, F1 Score) e colunas para intervalos 2 a 10.
 [ ] As métricas não são todas zero.
 [ ] O intervalo 6 aparece no resultado.
 [ ] O script gera diagnóstico por imagem.

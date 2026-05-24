@@ -237,27 +237,54 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
         preprocessed Caffe space.
         """
         image_array = np.asarray(image, dtype=np.float32)
-        input_was_nhwc = not (image_array.ndim == 3 and image_array.shape[0] == 3)
+
+        input_was_nhwc = not (
+            image_array.ndim == 3 and image_array.shape[0] == 3
+        )
+
         if image_array.ndim == 3 and image_array.shape[0] == 3:
             preprocessed = image_array.reshape((1,) + image_array.shape)
         else:
             preprocessed = self.preprocess(image_array)
+
         if len(preprocessed) != 1:
             raise ValueError("gradient expects exactly one image.")
 
         self.net.blobs[self.input_blob].reshape(*preprocessed.shape)
         self.net.reshape()
         self.net.blobs[self.input_blob].data[...] = preprocessed
+
         output = self.net.forward()
-        output_blob = self._output_blob_name(output)
-        output_diff = np.zeros_like(self.net.blobs[output_blob].data, dtype=np.float32)
+
+        if "prob" in self.net.blobs:
+            output_blob = "prob"
+        else:
+            output_blob = self._output_blob_name(output)
+
+        output_diff = np.zeros_like(
+            self.net.blobs[output_blob].data,
+            dtype=np.float32,
+        )
         output_diff[0, int(class_id)] = -1.0
-        self.net.backward(**{output_blob: output_diff})
-        gradient = np.asarray(self.net.blobs[self.input_blob].diff[0], dtype=np.float32)
+
+        backward_result = self.net.backward(**{output_blob: output_diff})
+
+        if isinstance(backward_result, dict) and self.input_blob in backward_result:
+            gradient = np.asarray(
+                backward_result[self.input_blob][0],
+                dtype=np.float32,
+            )
+        else:
+            gradient = np.asarray(
+                self.net.blobs[self.input_blob].diff[0],
+                dtype=np.float32,
+            )
+
         if not input_was_nhwc:
-            return gradient
+            return gradient.astype(np.float32)
 
         gradient_hwc = np.transpose(gradient, (1, 2, 0))[:, :, ::-1] * 255.0
+
         if image_array.shape[:2] == gradient_hwc.shape[:2]:
             return gradient_hwc.astype(np.float32)
 
@@ -265,8 +292,12 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
 
         resized_channels = []
         target_size = (int(image_array.shape[1]), int(image_array.shape[0]))
+
         for channel in range(gradient_hwc.shape[2]):
-            channel_image = Image.fromarray(gradient_hwc[:, :, channel].astype(np.float32))
+            channel_image = Image.fromarray(
+                gradient_hwc[:, :, channel].astype(np.float32)
+            )
             resized = channel_image.resize(target_size, Image.BILINEAR)
             resized_channels.append(np.asarray(resized, dtype=np.float32))
+
         return np.stack(resized_channels, axis=2).astype(np.float32)

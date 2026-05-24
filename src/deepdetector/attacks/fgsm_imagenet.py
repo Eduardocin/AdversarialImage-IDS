@@ -12,6 +12,14 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+MEAN_SUBTRACTED_CAFFE_INPUT_MESSAGE = (
+    "ImageNet FGSM reproduction expects Caffe input without mean subtraction "
+    "in CHW/BGR/[0,255] space. Received negative preprocessed values before "
+    "clipping; remove mean_file from the GoogLeNet config or pass uncentered "
+    "Caffe tensors."
+)
+
+
 @dataclass(frozen=True)
 class ImageNetFGSMResult:
     """FGSM outputs and counters for ImageNet/Caffe attacks."""
@@ -68,6 +76,15 @@ def uses_caffe_scale(image: np.ndarray) -> bool:
     return bool(float(np.nanmax(image_array)) > 1.0 or float(np.nanmin(image_array)) < 0.0)
 
 
+def validate_article_caffe_range(image: np.ndarray) -> None:
+    """Reject mean-subtracted tensors before FGSM clipping hides the issue."""
+    image_array = np.asarray(image, dtype=np.float32)
+    if image_array.size == 0:
+        return
+    if float(np.nanmin(image_array)) < 0.0:
+        raise ValueError(MEAN_SUBTRACTED_CAFFE_INPUT_MESSAGE)
+
+
 def preprocess_caffe_inputs(model: Any, images: np.ndarray) -> np.ndarray:
     """Return images in the article's Caffe input space: NCHW/BGR/0-255."""
     image_batch = _as_image_batch(images)
@@ -112,6 +129,7 @@ def generate_fgsm_caffe_image(
         raise ValueError("Gradient shape does not match image shape.")
 
     if uses_caffe_scale(image_array):
+        validate_article_caffe_range(image_array)
         epsilon = float(epsilon_255)
         effective_clip_min = float(clip_min)
         effective_clip_max = float(clip_max)

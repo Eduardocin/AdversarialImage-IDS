@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Any, Iterable, List, Optional, Sequence, Tuple
 
@@ -21,26 +22,22 @@ from deepdetector.evaluation.article_reproduction import interval_size, scalar_f
 from deepdetector.filters.entropy import image_entropy_255_chw, one_d_entropy
 
 
+logger = logging.getLogger(__name__)
+
+
 TABLE4_INTERVALS: Tuple[int, ...] = (2, 3, 4, 5, 6, 7, 8, 9, 10)
 ZERO_ATTACK_SUCCESS_MESSAGE = (
     "FGSM did not generate any successful adversarial example.\n"
     "Check epsilon scale, preprocessing, gradient sign, model wrapper, or labels."
 )
-
-TABLE4_FIELDS: Tuple[str, ...] = (
-    "intervals",
-    "tp",
-    "fn",
-    "fp",
-    "recall",
-    "precision",
-    "f1",
-    "n_clean_total",
-    "n_clean_correct",
-    "n_attack_success",
-    "disturbed_failure",
-    "skipped_wrong_baseline",
+TABLE4_INTERVAL_LABELS: Tuple[str, ...] = tuple(str(value) for value in TABLE4_INTERVALS)
+TABLE4_OUTPUT_HEADER: Tuple[str, ...] = ("Dataset", "Metric") + TABLE4_INTERVAL_LABELS
+TABLE4_METRICS: Tuple[Tuple[str, str], ...] = (
+    ("recall", "Recall"),
+    ("precision", "Precision"),
+    ("f1", "F1 Score"),
 )
+TABLE4_DATASET_LABEL = "ImageNet"
 DIAGNOSTIC_FIELDS: Tuple[str, ...] = (
     "image_id",
     "class_name",
@@ -106,6 +103,13 @@ def _metrics(tp: int, fn: int, fp: int) -> Tuple[float, float, float]:
     precision = tp / float(tp + fp) if tp + fp else 0.0
     f1 = 2.0 * recall * precision / float(recall + precision) if recall + precision else 0.0
     return float(recall), float(precision), float(f1)
+
+
+def _progress_every(total: int) -> int:
+    """Return an interval for progress logging based on total count."""
+    if total <= 0:
+        return 1
+    return 20
 
 
 def _uses_caffe_scale(image: np.ndarray) -> bool:
@@ -210,7 +214,9 @@ def evaluate_table4_imagenet(
     diagnostics: List[dict[str, Any]] = []
     valid_attacks: List[_ValidAttack] = []
 
-    for sample in samples:
+    progress_every = _progress_every(n_clean_total)
+
+    for sample_index, sample in enumerate(samples, start=1):
         clean_image = _article_model_input(model, sample.image)
         clean_pred = _predict_one(model, clean_image)
         clean_correct = clean_pred == int(sample.true_label)
@@ -272,7 +278,26 @@ def evaluate_table4_imagenet(
             }
         )
 
+        if (
+            sample_index == 1
+            or sample_index == n_clean_total
+            or sample_index % progress_every == 0
+        ):
+            logger.info(
+                "Table 4 ImageNet FGSM progress %d/%d | clean_correct=%d attack_success=%d disturbed_failure=%d skipped=%d",
+                sample_index,
+                n_clean_total,
+                n_clean_correct,
+                n_attack_success,
+                disturbed_failure,
+                skipped_wrong_baseline,
+            )
+
     rows: List[dict[str, Any]] = []
+    logger.info(
+        "Table 4 ImageNet evaluating intervals: %s",
+        ", ".join(str(value) for value in interval_values),
+    )
     for interval_count in interval_values:
         interval_size(interval_count)
         tp, fn, fp = _evaluate_interval(
@@ -281,6 +306,16 @@ def evaluate_table4_imagenet(
             intervals=interval_count,
         )
         recall, precision, f1 = _metrics(tp=tp, fn=fn, fp=fp)
+        logger.info(
+            "Table 4 ImageNet interval %d -> tp=%d fn=%d fp=%d recall=%.4f precision=%.4f f1=%.4f",
+            interval_count,
+            tp,
+            fn,
+            fp,
+            recall,
+            precision,
+            f1,
+        )
         rows.append(
             {
                 "intervals": interval_count,
@@ -315,6 +350,18 @@ def validate_attack_success(result: Table4Evaluation) -> None:
         raise RuntimeError(ZERO_ATTACK_SUCCESS_MESSAGE)
 
 
+def _table4_wide_rows(result: Table4Evaluation) -> List[List[Any]]:
+    """Return the article-style Table 4 rows for CSV output."""
+    rows_by_interval = {int(row["intervals"]): row for row in result.rows}
+    wide_rows: List[List[Any]] = []
+    for metric_key, metric_label in TABLE4_METRICS:
+        row: List[Any] = [TABLE4_DATASET_LABEL, metric_label]
+        for interval in TABLE4_INTERVALS:
+            row.append(rows_by_interval.get(int(interval), {}).get(metric_key, ""))
+        wide_rows.append(row)
+    return wide_rows
+
+
 def write_table4_outputs(
     output_dir: Path,
     result: Table4Evaluation,
@@ -327,10 +374,10 @@ def write_table4_outputs(
     diagnostics_path = output_dir / diagnostics_name
 
     with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=TABLE4_FIELDS)
-        writer.writeheader()
-        for row in result.rows:
-            writer.writerow({field: row.get(field, "") for field in TABLE4_FIELDS})
+        writer = csv.writer(handle)
+        writer.writerow(TABLE4_OUTPUT_HEADER)
+        for row in _table4_wide_rows(result):
+            writer.writerow(row)
 
     with diagnostics_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=DIAGNOSTIC_FIELDS)
