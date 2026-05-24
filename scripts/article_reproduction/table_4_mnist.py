@@ -16,7 +16,7 @@ PROJECT_ROOT = next(
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
-DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "mnist_table_4.yaml"
+DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "article_reproduction" / "mnist_table_4.yaml"
 
 from deepdetector.evaluation.article_reproduction import (  # noqa: E402
     ARTICLE_OUTPUT_DIR,

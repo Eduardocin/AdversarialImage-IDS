@@ -17,7 +17,7 @@ PROJECT_ROOT = next(
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
-DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "mnist_table_10_m2.yaml"
+DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "article_reproduction" / "mnist_table_10_m2.yaml"
 
 from deepdetector.data.mnist import load_mnist_data  # noqa: E402
 from deepdetector.evaluation.article_reproduction import (  # noqa: E402

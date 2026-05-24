@@ -82,7 +82,7 @@ def test_evaluate_filter_predictions_can_skip_invalid_table_3_pairs() -> None:
 
 def test_table_3_config_documents_experiment_parameters() -> None:
     """Table 3 should record the parameters needed to reproduce the run."""
-    config_path = PROJECT_ROOT / "configs" / "mnist_table_3.yaml"
+    config_path = PROJECT_ROOT / "configs" / "article_reproduction" / "mnist_table_3.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
     assert config["dataset"] == {
@@ -115,7 +115,7 @@ def test_table_3_config_documents_experiment_parameters() -> None:
 
 def test_table_4_config_documents_experiment_parameters() -> None:
     """Table 4 should record the scalar interval sweep parameters."""
-    config_path = PROJECT_ROOT / "configs" / "mnist_table_4.yaml"
+    config_path = PROJECT_ROOT / "configs" / "article_reproduction" / "mnist_table_4.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
     assert config["dataset"] == {
@@ -143,9 +143,33 @@ def test_table_4_config_documents_experiment_parameters() -> None:
     ]
 
 
+def test_imagenet_table_4_config_documents_spec_parameters() -> None:
+    """ImageNet Table 4 should record the GoogLeNet/FGSM scalar sweep."""
+    config_path = PROJECT_ROOT / "configs" / "article_reproduction" / "imagenet_table_4.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    assert config["dataset"]["name"] == "imagenet"
+    assert config["dataset"]["split"] == "train"
+    assert config["dataset"]["images_dir"] == "data/imagenet/train"
+    assert config["dataset"]["class_indices"] == {
+        "goldfish": 1,
+        "pineapple": 953,
+        "digital_clock": 530,
+    }
+    assert config["model"]["name"] == "googlenet_caffe"
+    assert config["model"]["reference"] == "BVLC GoogLeNet"
+    assert config["model"]["mean_file"] is None
+    assert config["attack"]["name"] == "fgsm"
+    assert config["attack"]["epsilon_255"] == 1.0
+    assert config["quantization"]["intervals"] == [2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert config["quantization"]["interval_sizes"][6] == 43
+    assert config["output"]["csv"] == "table_4_imagenet.csv"
+    assert config["output"]["diagnostics_csv"] == "table_4_imagenet_diagnostics.csv"
+
+
 def test_table_6_config_documents_experiment_parameters() -> None:
     """Table 6 should record adaptive quantization validation parameters."""
-    config_path = PROJECT_ROOT / "configs" / "mnist_table_6.yaml"
+    config_path = PROJECT_ROOT / "configs" / "article_reproduction" / "mnist_table_6.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
     assert config["experiment"]["display_name"] == "Validação da quantização adaptativa"
@@ -183,7 +207,7 @@ def test_table_6_config_documents_experiment_parameters() -> None:
 
 def test_table_10_m2_config_documents_experiment_parameters() -> None:
     """Table 10 M2 should record saved CW adversarial evaluation parameters."""
-    config_path = PROJECT_ROOT / "configs" / "mnist_table_10_m2.yaml"
+    config_path = PROJECT_ROOT / "configs" / "article_reproduction" / "mnist_table_10_m2.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
     assert config["dataset"] == {
