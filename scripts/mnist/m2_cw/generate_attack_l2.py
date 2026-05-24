@@ -64,7 +64,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--max-iterations", type=int, default=1000)
     parser.add_argument("--learning-rate", type=float, default=0.01)
-    parser.add_argument("--binary-search-steps", type=int, default=5)
+    parser.add_argument("--binary-search-steps", type=int, default=9)
+    parser.add_argument("--initial-const", type=float, default=0.001)
+    parser.add_argument("--no-abort-early", action="store_true")
     parser.add_argument(
         "--train-dir",
         default=str(MNIST_M2_CHECKPOINT_DIR),
@@ -195,6 +197,8 @@ def write_summary_md(output_dir: Path, rows: List[Dict[str, Any]], args: argpars
         "- max_iterations: {0}".format(args.max_iterations),
         "- learning_rate: {0}".format(args.learning_rate),
         "- binary_search_steps: {0}".format(args.binary_search_steps),
+        "- initial_const: {0}".format(args.initial_const),
+        "- abort_early: {0}".format(not args.no_abort_early),
         "- train_dir: `{0}`".format(args.train_dir),
         "",
         "| kappa | n_total | clean_accuracy | adversarial_accuracy | attack_success_rate | mean_l2 | median_l2 |",
@@ -313,6 +317,9 @@ def main() -> int:
             binary_search_steps=args.binary_search_steps,
             clip_min=0.0,
             clip_max=1.0,
+            initial_const=args.initial_const,
+            abort_early=not args.no_abort_early,
+            targeted=False,
             progress_callback=on_batch_done,
         )
         adv_path = kappa_dir / "adversarial_examples.npy"

@@ -6,7 +6,6 @@ from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
 
-
 def _one_hot_to_int(labels: np.ndarray) -> np.ndarray:
     """Convert one-hot labels to integer labels."""
     label_array = np.asarray(labels)
@@ -100,6 +99,9 @@ def generate_cw_l2_examples(
     binary_search_steps: int,
     clip_min: float = 0.0,
     clip_max: float = 1.0,
+    initial_const: float = 1e-3,
+    abort_early: bool = True,
+    targeted: bool = False,
     progress_callback: Optional[Callable[[int, int, int], None]] = None,
 ) -> np.ndarray:
     """Generate CW L2 adversarial examples.
@@ -138,12 +140,12 @@ def generate_cw_l2_examples(
         wrapper,
         batch_size,
         float(confidence),
-        False,
+        bool(targeted),
         float(learning_rate),
         int(binary_search_steps),
         int(max_iterations),
-        True,
-        1e-2,
+        bool(abort_early),
+        float(initial_const),
         float(clip_min),
         float(clip_max),
         int(label_array.shape[1]),
