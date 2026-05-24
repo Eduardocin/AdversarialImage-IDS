@@ -20,6 +20,13 @@ class ImageNetModelWrapper(ABC):
     def predict_batch(self, images: np.ndarray) -> np.ndarray:
         """Return logits or probabilities with shape ``(N, num_classes)``."""
 
+    def predict(self, image: np.ndarray) -> np.ndarray:
+        """Return scores for one image."""
+        image_array = np.asarray(image, dtype=np.float32)
+        if image_array.ndim == 3:
+            image_array = image_array.reshape((1,) + image_array.shape)
+        return self.predict_batch(image_array)[0]
+
     def predict_label(self, images: np.ndarray) -> np.ndarray:
         """Return the top-1 class index for every image in a batch."""
         scores = self.predict_batch(images)
@@ -168,11 +175,19 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
 
     def _output_from_forward(self, output: dict) -> np.ndarray:
         """Select the Caffe output blob containing class scores."""
+        output_blob = self._output_blob_name(output)
+        if output_blob in output:
+            return np.asarray(output[output_blob], dtype=np.float32)
+        return np.asarray(self.net.blobs[output_blob].data, dtype=np.float32)
+
+    def _output_blob_name(self, output: Optional[dict] = None) -> str:
+        """Return the Caffe output blob name containing class scores."""
+        output = output or {}
         for name in self.output_candidates:
             if name in output:
-                return np.asarray(output[name], dtype=np.float32)
+                return name
             if name in self.net.blobs:
-                return np.asarray(self.net.blobs[name].data, dtype=np.float32)
+                return name
 
         available = sorted(set(output.keys()) | set(self.net.blobs.keys()))
         raise KeyError(
@@ -184,6 +199,16 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
     def predict_batch(self, images: np.ndarray) -> np.ndarray:
         """Run Caffe forward passes and return class scores."""
         preprocessed = self.preprocess(images)
+        return self.predict_preprocessed_batch(preprocessed)
+
+    def predict_preprocessed_batch(self, preprocessed_images: np.ndarray) -> np.ndarray:
+        """Run Caffe forward passes for NCHW BGR images in Caffe input space."""
+        preprocessed = np.asarray(preprocessed_images, dtype=np.float32)
+        if preprocessed.ndim == 3:
+            preprocessed = preprocessed.reshape((1,) + preprocessed.shape)
+        if preprocessed.ndim != 4 or preprocessed.shape[1] != 3:
+            raise ValueError("Expected preprocessed batch shape (N, 3, H, W).")
+
         outputs = []
 
         for start in range(0, len(preprocessed), self.batch_size):
@@ -198,3 +223,50 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
         if not outputs:
             return np.empty((0, 0), dtype=np.float32)
         return np.concatenate(outputs, axis=0).astype(np.float32)
+
+    def predict_preprocessed_label(self, preprocessed_images: np.ndarray) -> np.ndarray:
+        """Return top-1 labels for NCHW BGR images in Caffe input space."""
+        scores = self.predict_preprocessed_batch(preprocessed_images)
+        return np.asarray(np.argmax(scores, axis=1), dtype=np.int32)
+
+    def gradient(self, image: np.ndarray, class_id: int) -> np.ndarray:
+        """Return the Caffe input gradient for one class id.
+
+        NHWC RGB images are preprocessed with this wrapper. A direct Caffe NCHW
+        tensor can also be passed when the caller is already operating in
+        preprocessed Caffe space.
+        """
+        image_array = np.asarray(image, dtype=np.float32)
+        input_was_nhwc = not (image_array.ndim == 3 and image_array.shape[0] == 3)
+        if image_array.ndim == 3 and image_array.shape[0] == 3:
+            preprocessed = image_array.reshape((1,) + image_array.shape)
+        else:
+            preprocessed = self.preprocess(image_array)
+        if len(preprocessed) != 1:
+            raise ValueError("gradient expects exactly one image.")
+
+        self.net.blobs[self.input_blob].reshape(*preprocessed.shape)
+        self.net.reshape()
+        self.net.blobs[self.input_blob].data[...] = preprocessed
+        output = self.net.forward()
+        output_blob = self._output_blob_name(output)
+        output_diff = np.zeros_like(self.net.blobs[output_blob].data, dtype=np.float32)
+        output_diff[0, int(class_id)] = -1.0
+        self.net.backward(**{output_blob: output_diff})
+        gradient = np.asarray(self.net.blobs[self.input_blob].diff[0], dtype=np.float32)
+        if not input_was_nhwc:
+            return gradient
+
+        gradient_hwc = np.transpose(gradient, (1, 2, 0))[:, :, ::-1] * 255.0
+        if image_array.shape[:2] == gradient_hwc.shape[:2]:
+            return gradient_hwc.astype(np.float32)
+
+        from PIL import Image
+
+        resized_channels = []
+        target_size = (int(image_array.shape[1]), int(image_array.shape[0]))
+        for channel in range(gradient_hwc.shape[2]):
+            channel_image = Image.fromarray(gradient_hwc[:, :, channel].astype(np.float32))
+            resized = channel_image.resize(target_size, Image.BILINEAR)
+            resized_channels.append(np.asarray(resized, dtype=np.float32))
+        return np.stack(resized_channels, axis=2).astype(np.float32)
