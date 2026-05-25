@@ -20,3 +20,11 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Fail explicitly when the Caffe FGSM helper receives negative preprocessed values before `[0,255]` clipping.
   - [x] Add a regression test showing that mean-subtracted Caffe tensors are rejected for the article reproduction path.
 - [x] Update Table 7 ImageNet output to pivot-only CSV named `table_7_imagnet.csv`.
+- [x] Fix Table 7 ImageNet methodological fidelity for high-entropy spatial smoothing.
+  - [x] Apply only the spatial smoothing filter in `table7_filter`, without scalar quantization.
+  - [x] Count FP, TP, and FN over the same valid high-entropy adversarial pairs.
+  - [x] Add regression tests for filter-only behavior and compatible Table 7 populations.
+- [x] Preserve Table 7 spatial smoothing borders.
+  - [x] Apply masked mean values only where the full mask fits inside the image.
+  - [x] Preserve border pixels exactly instead of using reflect padding.
+  - [x] Add a regression test for unchanged spatial borders.

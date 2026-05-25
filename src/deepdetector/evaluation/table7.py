@@ -146,7 +146,6 @@ def _apply_table7_filter_to_model_input(
     image: np.ndarray,
     mask_type: str,
     size: int,
-    quantization_step: int,
 ) -> np.ndarray:
     """Apply the CHW 0-255 Table 7 filter and restore the model input format."""
     chw_255, layout, scale = _image_to_chw_255(image)
@@ -154,7 +153,6 @@ def _apply_table7_filter_to_model_input(
         image=chw_255,
         mask_type=mask_type,
         size=size,
-        quantization_step=quantization_step,
     )
     return _restore_from_chw_255(filtered, layout=layout, scale=scale)
 
@@ -206,7 +204,6 @@ def evaluate_table7_filter(
     size: int,
     epsilon: float,
     entropy_threshold: float = 5.0,
-    quantization_step: int = 43,
 ) -> Table7FilterResult:
     """Evaluate one spatial smoothing candidate for ImageNet Table 7."""
     tp = 0
@@ -224,18 +221,6 @@ def evaluate_table7_filter(
             skipped_wrong_baseline += 1
             continue
 
-        if _entropy_for_image(clean_image) > float(entropy_threshold):
-            n_high_entropy_clean += 1
-            filtered_clean = _apply_table7_filter_to_model_input(
-                image=clean_image,
-                mask_type=mask_type,
-                size=size,
-                quantization_step=quantization_step,
-            )
-            filtered_clean_pred = _predict_one(model, filtered_clean)
-            if filtered_clean_pred != clean_pred:
-                fp += 1
-
         adversarial_image = provided_adversarial
         if adversarial_image is None:
             adversarial_image = _generate_adversarial_image(
@@ -252,12 +237,23 @@ def evaluate_table7_filter(
         if _entropy_for_image(adversarial_image) <= float(entropy_threshold):
             continue
 
+        if _entropy_for_image(clean_image) > float(entropy_threshold):
+            n_high_entropy_clean += 1
+
         n_high_entropy_adversarial += 1
+        filtered_clean = _apply_table7_filter_to_model_input(
+            image=clean_image,
+            mask_type=mask_type,
+            size=size,
+        )
+        filtered_clean_pred = _predict_one(model, filtered_clean)
+        if filtered_clean_pred != clean_pred:
+            fp += 1
+
         filtered_adv = _apply_table7_filter_to_model_input(
             image=adversarial_image,
             mask_type=mask_type,
             size=size,
-            quantization_step=quantization_step,
         )
         filtered_adv_pred = _predict_one(model, filtered_adv)
         if filtered_adv_pred != adv_pred:

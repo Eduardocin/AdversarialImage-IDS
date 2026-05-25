@@ -85,17 +85,24 @@ def _normalized_kernel(mask: np.ndarray) -> np.ndarray:
 def apply_mask_mean_filter(image: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """Apply a per-channel masked mean filter to CxHxW data.
 
-    Borders use SciPy's deterministic ``reflect`` mode. The returned array keeps
-    the input shape and uses ``float32`` values.
+    The original Table 7 smoothing code updates only pixels where the full mask
+    fits inside the image. Border pixels are copied through unchanged.
     """
     image_array = _validate_chw_image(image)
     kernel = _normalized_kernel(mask)
+    radius = kernel.shape[0] // 2
+    height, width = image_array.shape[1], image_array.shape[2]
+    output = np.array(image_array, copy=True, dtype=np.float32)
 
-    filtered_channels = [
-        ndimage.convolve(channel, weights=kernel, mode="reflect")
-        for channel in image_array
-    ]
-    return np.stack(filtered_channels, axis=0).astype(np.float32)
+    if height <= 2 * radius or width <= 2 * radius:
+        return output
+
+    inner_rows = slice(radius, height - radius)
+    inner_cols = slice(radius, width - radius)
+    for channel_index, channel in enumerate(image_array):
+        filtered = ndimage.convolve(channel, weights=kernel, mode="constant", cval=0.0)
+        output[channel_index, inner_rows, inner_cols] = filtered[inner_rows, inner_cols]
+    return output.astype(np.float32)
 
 
 def spatial_smoothing_filter(

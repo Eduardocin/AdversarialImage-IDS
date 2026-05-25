@@ -413,7 +413,6 @@ def main() -> int:
         )
         return 0
 
-    filter_config = config.get("filter", {})
     dataset = (images, labels, adv_images)
     rows = []
     for mask_type, size in configured_masks(config):
@@ -424,8 +423,7 @@ def main() -> int:
             mask_type=mask_type,
             size=size,
             epsilon=_epsilon_normalized(config),
-            entropy_threshold=float(filter_config.get("entropy_threshold", 5.0)),
-            quantization_step=int(filter_config.get("quantization_step", 43)),
+            entropy_threshold=float(config.get("filter", {}).get("entropy_threshold", 5.0)),
         )
         row = asdict(result)
         row["skipped_wrong_baseline"] = clean_summary["skipped_wrong_baseline"]

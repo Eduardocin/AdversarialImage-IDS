@@ -64,6 +64,17 @@ def test_spatial_smoothing_filter_preserves_float32_dtype() -> None:
     assert output.dtype == np.float32
 
 
+def test_spatial_smoothing_filter_preserves_spatial_borders() -> None:
+    image = np.arange(3 * 6 * 7, dtype=np.float32).reshape((3, 6, 7))
+
+    output = spatial_smoothing_filter(image, mask_type="box", size=5)
+
+    np.testing.assert_array_equal(output[:, :2, :], image[:, :2, :])
+    np.testing.assert_array_equal(output[:, -2:, :], image[:, -2:, :])
+    np.testing.assert_array_equal(output[:, :, :2], image[:, :, :2])
+    np.testing.assert_array_equal(output[:, :, -2:], image[:, :, -2:])
+
+
 def test_table7_filter_preserves_shape_and_255_range() -> None:
     image = np.random.RandomState(2).rand(3, 8, 9).astype(np.float32) * 255.0
 
@@ -73,6 +84,14 @@ def test_table7_filter_preserves_shape_and_255_range() -> None:
     assert output.dtype == np.float32
     assert float(output.min()) >= 0.0
     assert float(output.max()) <= 255.0
+
+
+def test_table7_filter_does_not_apply_scalar_quantization() -> None:
+    image = np.full((3, 5, 5), 42.0, dtype=np.float32)
+
+    output = table7_filter(image, mask_type="box", size=3)
+
+    np.testing.assert_array_equal(output, image)
 
 
 def test_spatial_smoothing_filter_rejects_invalid_mask_type() -> None:
