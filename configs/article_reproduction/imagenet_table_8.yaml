@@ -1,0 +1,49 @@
+experiment:
+  name: imagenet_table_8
+  description: Reproduce Table 8 validation performance for five superior spatial smoothing filters.
+  seed: 20170830
+
+model:
+  name: bvlc_googlenet
+  backend: caffe
+  model_dir: artifacts/models/imagenet/googlenet/
+  deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
+  caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+  mean_file: null
+  use_gpu: false
+  batch_size: 32
+
+dataset:
+  name: imagenet
+  split: validation
+  image_size: 224
+  shuffle: false
+  classes:
+    - name: jellyfish
+      label: 107
+      path: data/imagenet/validation/jellyfish
+
+attack:
+  name: fgsm
+  epsilon_255: 1.0
+  clip_min: 0.0
+  clip_max: 1.0
+  batch_size: 32
+  save_adversarial_path: artifacts/adversarial_examples/imagenet/fgsm/validation/adversarial_examples.npy
+
+filter:
+  filters:
+    - mask_type: cross
+      size: 5
+    - mask_type: cross
+      size: 7
+    - mask_type: diamond
+      size: 5
+    - mask_type: diamond
+      size: 7
+    - mask_type: box
+      size: 5
+
+outputs:
+  results_dir: results/imagenet/article_reproduction
+  pivot_csv: table_8_imagenet.csv

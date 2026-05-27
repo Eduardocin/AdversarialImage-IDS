@@ -28,3 +28,10 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Apply masked mean values only where the full mask fits inside the image.
   - [x] Preserve border pixels exactly instead of using reflect padding.
   - [x] Add a regression test for unchanged spatial borders.
+- [ ] Implement Table 8 ImageNet validation spatial smoothing from `specs/features/Table 8 ImageNet.md`
+  - [x] Add config-driven Table 8 ImageNet experiment for the validation split.
+  - [x] Evaluate exactly the five fixed superior spatial smoothing filters.
+  - [x] Write pivot CSV `table_8_imagenet.csv` and Table 8 status JSON.
+  - [x] Preserve clean-baseline filtering and disturbed-failure exclusion.
+  - [x] Add automated tests for filters, pivot output, validation config, and partial statuses.
+  - [x] Run focused pytest validation.
