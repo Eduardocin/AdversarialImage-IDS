@@ -4,6 +4,21 @@ Use this file to track implementation tasks derived from specifications in `spec
 
 ## Backlog
 
+- [ ] Implement Table 9 final FGSM detector from `specs/features/table_9.md`
+  - [ ] Add `configs/article_reproduction/table_9.yaml`.
+  - [ ] Add `src/deepdetector/filters/article_final.py`.
+  - [ ] Register and export `article_final`.
+  - [ ] Add `scripts/article_reproduction/table_9.py`.
+  - [ ] Orchestrate MNIST M1 FGSM and ImageNet GoogLeNet FGSM flows.
+  - [ ] Aggregate TP, FN, and FP by split before calculating metrics.
+  - [ ] Write `table_9.csv`, `table_9.md`, and `status.json`.
+  - [ ] Add automated tests for config, filter behavior, registry, aggregation, CSV shape, and dry-run status.
+- [x] Implement Table 6 ImageNet adaptive quantization from `specs/features/table_6_imagenet.md`
+  - [x] Add `configs/article_reproduction/imagenet_table_6.yaml`.
+  - [x] Add `scripts/article_reproduction/table_6_imagenet.py`.
+  - [x] Reuse the Caffe-scale GoogLeNet FGSM path from Table 4 ImageNet.
+  - [x] Write `table_6_imagenet.csv` and `table_6_imagenet_diagnostics.csv`.
+  - [x] Add automated tests for adaptive steps, metrics, diagnostics, CSV shape, and zero-attack failure.
 - [x] Implement Table 4 ImageNet reproduction from `specs/features/Table 4 ImageNet.md`
   - [x] Add CLI support for `--data-root`, `--limit`, `--epsilon`, and `--output-dir`.
   - [x] Evaluate ImageNet PNGs with GoogLeNet/Caffe predictions and FGSM generated from model gradients.
