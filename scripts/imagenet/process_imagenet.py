@@ -27,11 +27,6 @@ TARGET_CLASSES = {
         },
     },
     "validation": {
-        "zebra": {
-            "synset": "n02391049",
-            "label": 340,
-            "quantity": 503,
-        },
         "jellyfish": {
             "synset": "n01910747",
             "label": 107,
@@ -48,6 +43,11 @@ TARGET_CLASSES = {
             "synset": "n02930766",
             "label": 468,
             "quantity": 485,
+        },
+        "zebra": {
+            "synset": "n02391049",
+            "label": 340,
+            "quantity": 503,
         },
     },
 }
