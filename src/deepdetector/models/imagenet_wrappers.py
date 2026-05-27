@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -52,6 +53,7 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
     ) -> None:
         """Load a Caffe network and optional per-channel mean data."""
         try:
+            os.environ.setdefault("GLOG_minloglevel", "2")
             import caffe
         except ImportError as exc:
             raise ImportError(

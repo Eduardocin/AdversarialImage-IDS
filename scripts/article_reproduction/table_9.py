@@ -459,6 +459,13 @@ def run_mnist_flow(
                 "FN": int(metrics.get("FN", 0)),
                 "FP": int(metrics.get("FP", 0)),
             }
+            logger.info(
+                "Table 9 MNIST %s done | tp=%d fn=%d fp=%d",
+                split,
+                counters_by_split[split]["TP"],
+                counters_by_split[split]["FN"],
+                counters_by_split[split]["FP"],
+            )
     finally:
         close_graph(graph)
 

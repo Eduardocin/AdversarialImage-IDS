@@ -336,18 +336,6 @@ train
 validation
 ```
 
-Diagnostic CSV:
-
-```text
-results/imagenet/article_reproduction/table_6_imagenet_diagnostics.csv
-```
-
-Diagnostic columns:
-
-```csv
-split,image_id,class_name,true_label,clean_pred,filtered_clean_pred,adv_pred,filtered_adv_pred,clean_correct,attack_success,entropy_clean,entropy_adv,clean_quantization_step,adv_quantization_step,is_fp,is_tp,is_fn,skip_reason
-```
-
 Allowed `skip_reason` values:
 
 ```text

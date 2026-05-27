@@ -1,206 +1,104 @@
-# SPEC - Table 9: Final FGSM Detection Filter
+````md
+# Spec — Table 9: Reprodução do Filtro Final contra FGSM
 
-## Objective
+## 1. Objetivo
 
-Define the project-specific reproduction of Table 9 from the DeepDetector article, evaluating the final entropy-aware detection filter against FGSM adversarial examples.
+Implementar a reprodução da **Table 9** do artigo *Detecting Adversarial Image Examples in Deep Neural Networks with Adaptive Noise Reduction*, avaliando o **filtro final de detecção** contra ataques **FGSM**.
 
-The Table 9 reproduction must orchestrate two flows:
+A execução deve orquestrar dois fluxos:
 
-- MNIST M1 with FGSM `epsilon = 0.2`.
-- ImageNet BVLC GoogLeNet/Caffe with FGSM `epsilon_255 = 1.0`.
+1. **MNIST M1 + FGSM**
+2. **ImageNet GoogLeNet/Caffe + FGSM**
 
-The final result must aggregate raw counters from both flows by split and then calculate final metrics. It must not average per-flow metrics.
+O resultado final deve agregar os contadores dos dois fluxos por split:
 
-## Context
+- `Training`
+- `Validation`
 
-The article Table 9 reports the final detector against FGSM for `Training` and `Validation`.
+E gerar a tabela final no formato:
 
-Reference values:
+```csv
+split,TP,FN,FP,recall_percent,precision_percent,f1_percent
+````
 
-| Split | TP | FN | FP | Recall | Precision | F1 |
-|---|---:|---:|---:|---:|---:|---:|
-| Training | 3324 | 266 | 108 | 92.59 | 96.85 | 94.67 |
-| Validation | 1028 | 61 | 35 | 94.40 | 96.71 | 95.54 |
+---
 
-These values are reference-only. The implementation must calculate local results from the configured datasets and must not hardcode article counts as computed output.
+## 2. Estado atual da branch
 
-Related project specs:
+Na branch `fix/table7`, já existem partes importantes que devem ser reutilizadas:
 
-- `specs/features/Table 4 ImageNet.md`
-- `specs/features/table_6_imagenet.md`
-- `specs/features/Table 7 ImageNet.md`
-- `specs/features/imagenet_clean_baseline_filter_spec.md`
+* filtros básicos no `FILTER_REGISTRY`;
+* filtro da Table 7 para suavização espacial;
+* infraestrutura ImageNet/Caffe;
+* infraestrutura de quantização adaptativa da Table 6;
+* scripts de reprodução para outras tabelas.
 
-The Table 9 final filter is conceptually:
-
-```text
-Table 6 adaptive scalar quantization
-+ high-entropy Table 7-style cross smoothing
-+ choose the filtered pixel closest to the original pixel
-```
-
-## Business Rules
-
-- Use only `Training` and `Validation` splits.
-- Do not use the Table 2 `Test` split for this reproduction.
-- Use MNIST test-set slices to reproduce the article's training/validation protocol.
-- Use local ImageNet class folders already present in this project.
-- Use clean-baseline filtering: samples whose clean prediction is wrong are excluded before attack and detection counting.
-- Use FGSM failure filtering: samples where FGSM does not change the clean prediction are excluded from TP/FN counting.
-- Count FP only for clean-correct and attack-successful pairs, matching the valid adversarial population used for TP/FN.
-- Aggregate counters first:
+Porém, para a Table 9 ainda é necessário garantir a existência dos seguintes arquivos:
 
 ```text
-TP_total = sum(TP_i)
-FN_total = sum(FN_i)
-FP_total = sum(FP_i)
-```
-
-- Calculate final recall, precision, and F1 only after aggregation.
-- Do not compare the local result by exact equality with the article values.
-- Do not implement DeepFool, CW, Table 8, or Table 10 behavior as part of Table 9.
-
-## Dataset
-
-Use the Table 2 split definitions relevant to Table 9:
-
-| Dataset | Training | Validation | Test |
-|---|---|---|---|
-| MNIST | indices `0..4499` | indices `4500..5499` | indices `5500..9999` |
-| ImageNet | goldfish, pineapple, digital_clock | jellyfish | zebra, panda, cab |
-
-Only these Table 9 inputs are in scope:
-
-### MNIST
-
-| Split | Source | Start | End |
-|---|---|---:|---:|
-| Training | MNIST test set | 0 | 4500 |
-| Validation | MNIST test set | 4500 | 5500 |
-
-MNIST model and attack:
-
-```text
-model = M1 clean baseline
-attack = FGSM
-epsilon = 0.2
-value range = [0.0, 1.0]
-```
-
-### ImageNet
-
-| Split | Class | Synset | Caffe/GoogLeNet label | Path |
-|---|---|---|---:|---|
-| Training | goldfish | n01443537 | 1 | `data/imagenet/train/goldfish` |
-| Training | pineapple | n07753275 | 953 | `data/imagenet/train/pineapple` |
-| Training | digital_clock | n03196217 | 530 | `data/imagenet/train/digital_clock` |
-| Validation | jellyfish | n01910747 | 107 | `data/imagenet/validation/jellyfish` |
-
-ImageNet model and attack:
-
-```text
-model = BVLC GoogLeNet through Caffe
-attack = FGSM
-epsilon_255 = 1.0
-preprocessed input = CHW/BGR/0..255
-mean_file = null
-```
-
-The ImageNet loader must support JPEG/JPG and PNG files.
-
-## Final Filter
-
-Create:
-
-```text
+configs/article_reproduction/table_9.yaml
+scripts/article_reproduction/table_9.py
 src/deepdetector/filters/article_final.py
 ```
 
-Public function:
-
-```python
-def article_final_detection_filter(image: np.ndarray) -> np.ndarray:
-    ...
-```
-
-The function must preserve the input shape and return `float32`.
-
-Entropy and filtering rules:
-
-| Entropy range | Quantization | Smoothing |
-|---|---:|---|
-| `entropy < 4.0` | 2 intervals, step 128 | none |
-| `4.0 <= entropy < 5.0` | 4 intervals, step 64 | none |
-| `entropy >= 5.0` | 6 intervals, step 43 | cross 7x7 |
-
-For low and medium entropy:
-
-```text
-output = scalar_quantization(image, selected_step)
-```
-
-For high entropy:
-
-```text
-quantized = scalar_quantization(image, step=43)
-smoothed = cross_mean_filter(quantized, radius=3)
-output = choose_closer_to_original_pixelwise(original=image, a=quantized, b=smoothed)
-```
-
-Pixelwise choose-closer rule:
-
-```python
-np.where(
-    np.abs(quantized - original) <= np.abs(smoothed - original),
-    quantized,
-    smoothed,
-)
-```
-
-The implementation must support both project image scales:
-
-- MNIST normalized images in `[0.0, 1.0]`.
-- ImageNet Caffe tensors in `CHW/BGR/0..255`.
-
-For ImageNet Caffe tensors, quantization must operate directly in `0..255` space and entropy must use `image_entropy_255_chw`. The filter must not silently normalize Caffe tensors to `[0,1]` and then return normalized data to the Caffe model path.
-
-Register the filter in:
-
-```text
-src/deepdetector/filters/registry.py
-```
-
-Expected registry key:
+Também é necessário registrar o filtro final no registry como:
 
 ```python
 "article_final"
 ```
 
-Export it from:
+---
 
-```text
-src/deepdetector/filters/__init__.py
-```
+## 3. Dataset correto
 
-## Configuration
+A divisão correta dos datasets, conforme a Table 2 do artigo, é:
 
-Create:
+| Dataset  | Training                                               | Validation        | Test                                          |
+| -------- | ------------------------------------------------------ | ----------------- | --------------------------------------------- |
+| MNIST    | No. `0~4499`                                           | No. `4500~5499`   | No. `5500~9999`                               |
+| ImageNet | Goldfish `(648)`<br>Pineapple `(520)`<br>Clock `(455)` | Jellyfish `(618)` | Zebra `(503)`<br>Panda `(501)`<br>Cab `(485)` |
+
+Para a **Table 9**, esta sessão deve usar apenas:
+
+* `Training`
+* `Validation`
+
+O split `Test` não entra nesta reprodução.
+
+---
+
+## 4. Resultado de referência da Table 9
+
+| Split      |   TP |  FN |  FP | Recall | Precision |     F1 |
+| ---------- | ---: | --: | --: | -----: | --------: | -----: |
+| Training   | 3324 | 266 | 108 | 92.59% |    96.85% | 94.67% |
+| Validation | 1028 |  61 |  35 | 94.40% |    96.71% | 95.54% |
+
+Esses valores devem ser usados apenas como referência no relatório.
+
+O código **não deve hardcodar esses valores como resultado calculado**.
+
+---
+
+## 5. Configuração principal
+
+Criar:
 
 ```text
 configs/article_reproduction/table_9.yaml
 ```
 
-The YAML must be the single source of experiment configuration.
+Esse YAML deve ser a fonte única de configuração da reprodução da Table 9.
 
-Required structure:
+### YAML proposto
 
 ```yaml
 experiment:
   name: table_9
-  type: faithful_reproduction
   article_table: 9
-  seed: 20170830
   objective: Reproduce Table 9 using the final entropy-aware detection filter against FGSM.
+  attack_method: fgsm
+  evaluated_method: article_final_detection_filter
 
 orchestration:
   flows:
@@ -218,10 +116,9 @@ datasets:
     enabled: true
     flow: mnist_m1_fgsm
     model: M1
-    split_source: test
+    checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
     image_shape: [28, 28, 1]
     value_range: [0.0, 1.0]
-    checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
     attack:
       name: fgsm
       epsilon: 0.2
@@ -247,6 +144,7 @@ datasets:
       caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
       mean_file: null
       use_gpu: false
+      batch_size: 32
     attack:
       name: fgsm
       epsilon_255: 1.0
@@ -254,51 +152,36 @@ datasets:
       clip_max: 255.0
     classes:
       Training:
-        - name: goldfish
-          label: 1
+        goldfish:
+          label_id: 1
+          expected_count: 648
           path: data/imagenet/train/goldfish
-        - name: pineapple
-          label: 953
+        pineapple:
+          label_id: 953
+          expected_count: 520
           path: data/imagenet/train/pineapple
-        - name: digital_clock
-          label: 530
+        clock:
+          label_id: 530
+          expected_count: 455
           path: data/imagenet/train/digital_clock
       Validation:
-        - name: jellyfish
-          label: 107
+        jellyfish:
+          label_id: 107
+          expected_count: 618
           path: data/imagenet/validation/jellyfish
 
 detection:
   filter_name: article_final
   method: prediction_change
-  entropy_thresholds:
-    low: 4.0
-    medium: 5.0
-  quantization:
-    low_entropy:
-      intervals: 2
-      interval_size: 128
-    medium_entropy:
-      intervals: 4
-      interval_size: 64
-    high_entropy:
-      intervals: 6
-      interval_size: 43
-  smoothing:
-    enabled_for: high_entropy
-    mask: cross
-    size: 7
-    radius: 3
-  high_entropy_combination:
-    rule: choose_closer_to_original_pixelwise
+  rule: adversarial_if_prediction_changes_after_filtering
 
 evaluation:
   exclude_clean_errors: true
   exclude_failed_attacks: true
-  report_partial_results_by_flow: true
+  dry_run_sample_size: 4
 
 metrics:
-  final_fields:
+  fields:
     - split
     - TP
     - FN
@@ -325,27 +208,211 @@ reference:
 
 output:
   results_dir: results/article_reproduction/table_9
-  final_csv: table_9.csv
+  csv: table_9.csv
   markdown: table_9.md
   status_json: status.json
 ```
 
-## Functional Requirements
+---
 
-### Script
+## 6. Configs de ataques
 
-Create:
+Para a Table 9, **não usar YAML separado em `configs/attacks/`**.
+
+Os ataques devem ficar inline em `table_9.yaml`, porque o ataque é parte do contrato experimental da tabela.
+
+Exemplo MNIST:
+
+```yaml
+attack:
+  name: fgsm
+  epsilon: 0.2
+  clip_min: 0.0
+  clip_max: 1.0
+```
+
+Exemplo ImageNet:
+
+```yaml
+attack:
+  name: fgsm
+  epsilon_255: 1.0
+  clip_min: 0.0
+  clip_max: 255.0
+```
+
+A pasta `configs/attacks/` só deve ser mantida se houver reutilização real por múltiplos experimentos genéricos. Caso contrário, esses YAMLs devem ser removidos ou movidos para:
+
+```text
+configs/archive/attacks/
+```
+
+---
+
+## 7. Filtro final da Table 9
+
+Criar:
+
+```text
+src/deepdetector/filters/article_final.py
+```
+
+Função pública esperada:
+
+```python
+def article_final_detection_filter(image: np.ndarray) -> np.ndarray:
+    ...
+```
+
+O filtro final combina:
+
+1. quantização adaptativa da Table 6;
+2. suavização espacial inspirada na Table 7;
+3. escolha pixel a pixel do valor filtrado mais próximo do valor original.
+
+---
+
+## 8. Regra do filtro final
+
+### 8.1 Por entropia
+
+| Faixa de entropia      |              Quantização | Suavização            |
+| ---------------------- | -----------------------: | --------------------- |
+| `entropy < 4.0`        | 2 intervalos, step `128` | Não                   |
+| `4.0 <= entropy < 5.0` |  4 intervalos, step `64` | Não                   |
+| `entropy >= 5.0`       |  6 intervalos, step `43` | Sim, cross mask `7x7` |
+
+### 8.2 Alta entropia
+
+Para imagens com entropia maior ou igual a `5.0`:
+
+```python
+quantized = scalar_quantization_or_step_quantization(image, step=43)
+smoothed = cross_smoothing_7x7(quantized)
+
+output = np.where(
+    np.abs(quantized - image) <= np.abs(smoothed - image),
+    quantized,
+    smoothed,
+)
+```
+
+O `cross_smoothing_7x7` deve usar máscara cross de raio `3`.
+
+---
+
+## 9. Atenção à escala das imagens
+
+A implementação deve suportar dois espaços de imagem:
+
+1. **MNIST normalizado**
+
+   * formato: `HWC` ou `NHWC`
+   * escala: `[0.0, 1.0]`
+
+2. **ImageNet Caffe**
+
+   * formato: `CHW`
+   * canais: `BGR`
+   * escala: `[0.0, 255.0]`
+
+O filtro final deve preservar a escala de entrada:
+
+* se a imagem entra em `[0.0, 1.0]`, deve sair em `[0.0, 1.0]`;
+* se a imagem entra em `[0.0, 255.0]`, deve sair em `[0.0, 255.0]`.
+
+Para ImageNet, a quantização deve acontecer no espaço Caffe `CHW/BGR/0..255`.
+
+Não aplicar `step=128`, `step=64` ou `step=43` diretamente em imagem normalizada `[0,1]` sem conversão apropriada.
+
+---
+
+## 10. Registro do filtro
+
+Atualizar:
+
+```text
+src/deepdetector/filters/registry.py
+```
+
+Adicionar:
+
+```python
+from deepdetector.filters.article_final import article_final_detection_filter
+```
+
+E registrar:
+
+```python
+("article_final", article_final_detection_filter)
+```
+
+Também atualizar:
+
+```text
+src/deepdetector/filters/__init__.py
+```
+
+Para exportar:
+
+```python
+article_final_detection_filter
+```
+
+---
+
+## 11. Uso da infraestrutura existente
+
+A Table 9 deve reutilizar infraestrutura já existente sempre que possível.
+
+### 11.1 Table 6
+
+Reutilizar a lógica de:
+
+* entropia;
+* quantização adaptativa;
+* step `128`, `64`, `43`;
+* tratamento de escala Caffe quando aplicável.
+
+### 11.2 Table 7
+
+A Table 7 fornece suavização espacial, mas **não substitui o filtro final da Table 9**.
+
+O filtro da Table 9 deve usar suavização cross `7x7` apenas para imagens de alta entropia e depois aplicar a regra de escolha pixel a pixel.
+
+### 11.3 ImageNet/Caffe
+
+Reutilizar o wrapper existente de `GoogLeNetCaffeWrapper`.
+
+O fluxo ImageNet deve usar o mesmo padrão dos scripts ImageNet já existentes:
+
+* carregar imagem local;
+* converter para entrada Caffe;
+* predizer com Caffe;
+* gerar FGSM via gradiente;
+* aplicar filtro;
+* predizer imagem filtrada.
+
+---
+
+## 12. Script principal
+
+Criar:
 
 ```text
 scripts/article_reproduction/table_9.py
 ```
 
-Supported commands:
+Esse script deve ser o ponto único de execução da Table 9.
+
+Ele deve suportar:
 
 ```bash
 python scripts/article_reproduction/table_9.py \
   --config configs/article_reproduction/table_9.yaml
 ```
+
+Também deve suportar:
 
 ```bash
 python scripts/article_reproduction/table_9.py \
@@ -353,101 +420,159 @@ python scripts/article_reproduction/table_9.py \
   --dry-run
 ```
 
+E:
+
 ```bash
 python scripts/article_reproduction/table_9.py \
   --config configs/article_reproduction/table_9.yaml \
   --sample-size 8
 ```
 
-CLI arguments:
+---
 
-| Argument | Default | Description |
-|---|---|---|
-| `--config` | `configs/article_reproduction/table_9.yaml` | Table 9 config |
-| `--dry-run` | false | Validate config, paths, registry, and sample discovery without full evaluation |
-| `--sample-size` | `None` | Optional limit per split for MNIST and per class for ImageNet |
-| `--output-dir` | config value | Optional output directory override |
+## 13. Argumentos do script
 
-### MNIST Flow
+| Argumento       | Obrigatório | Descrição                                                           |
+| --------------- | ----------- | ------------------------------------------------------------------- |
+| `--config`      | Não         | Caminho para `table_9.yaml`                                         |
+| `--dry-run`     | Não         | Valida configuração e dependências sem executar reprodução completa |
+| `--sample-size` | Não         | Executa fluxo real com amostra pequena                              |
+| `--output-dir`  | Não         | Sobrescreve diretório de saída do YAML                              |
 
-For each MNIST split:
+---
 
-```text
-1. Restore M1 clean baseline.
-2. Load the configured MNIST test slice.
-3. Predict clean images.
-4. Generate FGSM with epsilon=0.2.
-5. Predict adversarial images.
-6. Apply article_final to clean and adversarial images.
-7. Predict filtered clean and filtered adversarial images.
-8. Exclude clean errors and failed attacks.
-9. Return TP, FN, FP and diagnostics for aggregation.
-```
+## 14. Dry run
 
-### ImageNet Flow
+O `--dry-run` deve validar:
 
-For each ImageNet split/class:
+* leitura do YAML;
+* existência dos splits `Training` e `Validation`;
+* existência dos fluxos `mnist_m1_fgsm` e `imagenet_googlenet_fgsm`;
+* existência do filtro `article_final` no registry;
+* resolução dos paths principais;
+* capacidade de carregar pequena amostra de MNIST, se disponível;
+* existência ou ausência dos assets ImageNet/Caffe.
 
-```text
-1. Load local class-folder images.
-2. Preprocess images for Caffe/GoogLeNet into CHW/BGR/0..255.
-3. Predict clean images.
-4. Exclude wrong clean predictions before attack generation.
-5. Generate FGSM with epsilon_255=1.0.
-6. Predict adversarial images.
-7. Exclude FGSM failures before TP/FN evaluation.
-8. Apply article_final to clean and adversarial Caffe tensors.
-9. Predict filtered clean and filtered adversarial images.
-10. Return TP, FN, FP and diagnostics for aggregation.
-```
+O `dry-run` **não deve falhar apenas porque Caffe não está instalado**.
 
-### Detection Rule
-
-For a classifier `C`, an image `x`, and filter `T`:
+Se Caffe ou os assets do GoogLeNet estiverem ausentes, o fluxo ImageNet deve ser marcado como:
 
 ```text
-C(x) == C(T(x)) -> benign
-C(x) != C(T(x)) -> adversarial
+blocked_imagenet_caffe
 ```
 
-Counts:
+ou status equivalente em `status.json`.
+
+O dry-run deve gerar:
 
 ```text
-TP: C(x_adv) != C(T(x_adv))
-FN: C(x_adv) == C(T(x_adv))
-FP: C(x_clean) != C(T(x_clean))
+results/article_reproduction/table_9/status.json
 ```
 
-### Aggregation
+---
 
-The aggregator must sum counters by split across enabled flows:
+## 15. Sample size
+
+O argumento `--sample-size` deve executar o fluxo real com poucas amostras.
+
+Comportamento esperado:
+
+```bash
+python scripts/article_reproduction/table_9.py \
+  --config configs/article_reproduction/table_9.yaml \
+  --sample-size 8
+```
+
+Deve:
+
+* usar no máximo 8 amostras por split no MNIST;
+* usar no máximo 8 amostras por classe no ImageNet;
+* aplicar ataque FGSM;
+* aplicar filtro final;
+* calcular métricas;
+* gerar `table_9.csv`;
+* gerar `table_9.md`;
+* gerar `status.json`.
+
+Se ImageNet estiver bloqueado por falta de Caffe/assets, o script deve registrar isso no `status.json` e não fabricar métricas para ImageNet.
+
+---
+
+## 16. Regra de detecção
+
+Para uma imagem `x` e seu filtro `T(x)`:
+
+```text
+C(x) == C(T(x))  -> benigno
+C(x) != C(T(x))  -> adversarial
+```
+
+Para exemplos adversariais:
+
+* `TP`: `C(x_adv) != C(T(x_adv))`
+* `FN`: `C(x_adv) == C(T(x_adv))`
+
+Para imagens limpas:
+
+* `FP`: `C(x_clean) != C(T(x_clean))`
+
+---
+
+## 17. Exclusões
+
+A Table 9 deve excluir:
+
+1. imagens limpas que o modelo original classifica errado;
+2. ataques FGSM que não alteram a predição original.
+
+Essas exclusões devem ser controladas por:
+
+```yaml
+evaluation:
+  exclude_clean_errors: true
+  exclude_failed_attacks: true
+```
+
+---
+
+## 18. Agregação correta
+
+A Table 9 combina resultados MNIST e ImageNet.
+
+A agregação deve ser feita por split:
 
 ```text
 Training = MNIST Training + ImageNet Training
 Validation = MNIST Validation + ImageNet Validation
 ```
 
-Then calculate:
+A métrica deve ser calculada **após somar os contadores**.
 
-```python
-recall = TP / (TP + FN)
-precision = TP / (TP + FP)
-f1 = 2 * recall * precision / (recall + precision)
+Correto:
+
+```text
+TP_total = sum(TP_i)
+FN_total = sum(FN_i)
+FP_total = sum(FP_i)
+
+Recall = TP_total / (TP_total + FN_total)
+Precision = TP_total / (TP_total + FP_total)
+F1 = 2 * Recall * Precision / (Recall + Precision)
 ```
 
-Final CSV values must use percentages:
+Incorreto:
 
-```python
-recall_percent = 100.0 * recall
-precision_percent = 100.0 * precision
-f1_percent = 100.0 * f1
+```text
+F1_final = média(F1_mnist, F1_imagenet)
 ```
 
-If a denominator is zero, the metric must be `0.0`, and `status.json` must describe the missing valid population.
+Não calcular média simples de métricas por fluxo.
 
-## Output
+---
 
-Generate:
+## 19. Saídas esperadas
+
+A execução padrão deve gerar apenas:
 
 ```text
 results/article_reproduction/table_9/table_9.csv
@@ -455,117 +580,278 @@ results/article_reproduction/table_9/table_9.md
 results/article_reproduction/table_9/status.json
 ```
 
-Final CSV columns must be exactly:
+Não gerar por padrão:
+
+```text
+table_9_diagnostics.csv
+```
+
+Se diagnóstico for útil durante desenvolvimento, ele deve ser opcional, por exemplo via:
+
+```bash
+--debug
+```
+
+Mas não deve fazer parte do fluxo padrão nem dos critérios de aceite.
+
+---
+
+## 20. CSV final
+
+O CSV final deve ter exatamente as colunas:
 
 ```csv
 split,TP,FN,FP,recall_percent,precision_percent,f1_percent
 ```
 
-Rows must be exactly:
+E exatamente duas linhas:
 
 ```text
 Training
 Validation
 ```
 
-The Markdown report must include:
+Exemplo:
 
-- final aggregated table;
-- reference Table 9 values;
-- local minus reference deltas for recall, precision, and F1;
-- notes about partial execution when `--sample-size` is used;
-- notes about skipped flows when optional dependencies or assets are missing.
-
-The status JSON must include:
-
-```text
-status
-config_path
-results_csv
-markdown
-enabled_flows
-completed_flows
-skipped_flows
-sample_size
-per_flow_counters
-aggregate_counters
-warnings
+```csv
+split,TP,FN,FP,recall_percent,precision_percent,f1_percent
+Training,3324,266,108,92.59,96.85,94.67
+Validation,1028,61,35,94.40,96.71,95.54
 ```
 
-## Dry Run
+Os valores acima são exemplo de referência do artigo. Os valores gerados localmente podem variar conforme assets, modelo, ambiente e subset disponível.
 
-`--dry-run` must validate:
+---
 
-- YAML can be loaded.
-- Required flows are configured.
-- Required splits are present.
-- `article_final` is registered in `FILTER_REGISTRY`.
-- MNIST config has checkpoint path and valid slices.
-- A small MNIST sample can be loaded.
-- ImageNet class directories are discoverable.
-- ImageNet model asset paths are resolved, but Caffe model loading may be reported as blocked instead of failing the dry run.
+## 21. Markdown final
 
-`--dry-run` must write `status.json` and must not write a misleading final metrics CSV.
+O arquivo:
 
-## Non-Functional Requirements
+```text
+results/article_reproduction/table_9/table_9.md
+```
 
-- Keep flow orchestration simple and explicit.
-- Reuse existing helpers where practical:
-  - MNIST article reproduction helpers from `deepdetector.evaluation.article_reproduction`.
-  - ImageNet FGSM helpers from `deepdetector.attacks.fgsm_imagenet`.
-  - Table 4/6 ImageNet loading and evaluation patterns.
-  - Table 7 smoothing semantics where compatible.
-- Do not introduce heavy experiment tracking tools.
-- Output must be deterministic for the same config, data, and `--sample-size`.
-- CSV files must use UTF-8 encoding and comma delimiters.
-- Do not write generated datasets, model weights, adversarial dumps, or large artifacts to git-tracked paths.
+Deve conter:
 
-## Acceptance Criteria
+* descrição curta do experimento;
+* tabela final obtida;
+* tabela de referência do artigo;
+* observações sobre execução parcial, se houver;
+* indicação de fluxos bloqueados, se houver;
+* path do CSV gerado.
 
-- `configs/article_reproduction/table_9.yaml` exists and declares `mnist_m1_fgsm` and `imagenet_googlenet_fgsm`.
-- The YAML uses the Table 2 `Training` and `Validation` splits defined in this spec.
-- `src/deepdetector/filters/article_final.py` exists.
-- `article_final_detection_filter` implements the entropy-dependent final filter.
-- The filter preserves normalized MNIST scale and Caffe ImageNet scale.
-- `article_final` is registered in `FILTER_REGISTRY`.
-- `article_final_detection_filter` is exported from `deepdetector.filters`.
-- `scripts/article_reproduction/table_9.py` exists.
-- The script supports `--config`, `--dry-run`, `--sample-size`, and `--output-dir`.
-- `--dry-run` writes `status.json`.
-- A small `--sample-size 8` run writes `table_9.csv`, `table_9.md`, and `status.json` when required model assets are available.
-- The final CSV has exactly the columns `split,TP,FN,FP,recall_percent,precision_percent,f1_percent`.
-- The final CSV has exactly two rows: `Training` and `Validation`.
-- Metrics are calculated after summing counters, not by averaging per-flow metrics.
-- The Markdown report compares local results with Table 9 reference values.
-- Missing optional assets, such as Caffe/GoogLeNet assets, are reported in `status.json` without fabricating metrics.
-- Automated tests cover:
-  - YAML structure;
-  - filter threshold behavior;
-  - high-entropy choose-closer behavior;
-  - filter registry entry;
-  - aggregation by summed counters;
-  - final CSV shape;
-  - dry-run status behavior.
+Não incluir diagnóstico detalhado por imagem.
 
-## Error Cases
+---
 
-- Missing config file: fail with the missing path.
-- Invalid YAML: fail before running flows.
-- Missing required split: fail with the split name.
-- Missing MNIST checkpoint: write blocked/partial status and do not report complete metrics.
-- Missing ImageNet class directory: fail in full run; report path in dry run.
-- Missing Caffe or GoogLeNet assets: write blocked/partial status for the ImageNet flow.
-- No clean-correct samples for a flow: report blocked/partial flow status.
-- No successful FGSM examples for a flow: report blocked/partial flow status with the same FGSM diagnostic message used by ImageNet Table 4/6.
-- No valid adversarial examples in any enabled flow: fail without writing a misleading final CSV.
+## 22. Status JSON
 
-## Out Of Scope
+O arquivo:
 
-- Reproducing exact article counts as hardcoded outputs.
-- Using the Table 2 `Test` split.
-- Implementing Table 8 or Table 10.
-- Implementing DeepFool or CW attacks.
-- Training new classifiers.
-- Changing the physical dataset layout.
-- Downloading ImageNet data.
-- Saving generated adversarial images as part of the default Table 9 run.
+```text
+results/article_reproduction/table_9/status.json
+```
+
+Deve conter, no mínimo:
+
+```json
+{
+  "status": "completed | partial | blocked | failed",
+  "config_path": "configs/article_reproduction/table_9.yaml",
+  "results_csv": "results/article_reproduction/table_9/table_9.csv",
+  "markdown": "results/article_reproduction/table_9/table_9.md",
+  "enabled_flows": ["mnist_m1_fgsm", "imagenet_googlenet_fgsm"],
+  "completed_flows": [],
+  "skipped_flows": [],
+  "sample_size": null,
+  "warnings": []
+}
+```
+
+Campos opcionais:
+
+```json
+{
+  "aggregate_counters": {},
+  "per_flow_counters": {}
+}
+```
+
+Esses campos opcionais não devem ser requisito rígido.
+
+---
+
+## 23. Validação mínima
+
+Não é necessário criar uma suíte extensa de testes automatizados para esta sessão.
+
+A validação mínima deve ser:
+
+1. `--dry-run` executa e escreve `status.json`;
+2. `--sample-size 8` executa quando os assets necessários estão disponíveis;
+3. `table_9.csv` tem o schema correto;
+4. `table_9.csv` tem as linhas `Training` e `Validation`;
+5. `article_final` existe no `FILTER_REGISTRY`;
+6. métricas são calculadas após somar contadores.
+
+Testes automatizados opcionais:
+
+```text
+test_article_final_filter_is_registered
+test_table_9_aggregation_sums_counts_before_metrics
+test_table_9_csv_schema
+```
+
+---
+
+## 24. Critérios de aceite
+
+A implementação será considerada pronta quando:
+
+1. existir:
+
+```text
+configs/article_reproduction/table_9.yaml
+```
+
+2. existir:
+
+```text
+scripts/article_reproduction/table_9.py
+```
+
+3. existir:
+
+```text
+src/deepdetector/filters/article_final.py
+```
+
+4. `article_final` estiver registrado em:
+
+```text
+src/deepdetector/filters/registry.py
+```
+
+5. `article_final_detection_filter` estiver exportado em:
+
+```text
+src/deepdetector/filters/__init__.py
+```
+
+6. o comando abaixo executar:
+
+```bash
+python scripts/article_reproduction/table_9.py \
+  --config configs/article_reproduction/table_9.yaml \
+  --dry-run
+```
+
+7. o comando abaixo executar com assets disponíveis:
+
+```bash
+python scripts/article_reproduction/table_9.py \
+  --config configs/article_reproduction/table_9.yaml \
+  --sample-size 8
+```
+
+8. a execução gerar:
+
+```text
+table_9.csv
+table_9.md
+status.json
+```
+
+9. o CSV final tiver exatamente:
+
+```csv
+split,TP,FN,FP,recall_percent,precision_percent,f1_percent
+```
+
+10. o CSV final tiver exatamente os splits:
+
+```text
+Training
+Validation
+```
+
+11. o fluxo não gerar `table_9_diagnostics.csv` por padrão;
+
+12. a ausência de Caffe/GoogLeNet não causar falha fatal em `--dry-run`;
+
+13. métricas forem calculadas por soma de contadores antes de `Recall`, `Precision` e `F1`.
+
+---
+
+## 25. Diagrama do fluxo
+
+```mermaid
+flowchart TD
+    A[configs/article_reproduction/table_9.yaml] --> B[scripts/article_reproduction/table_9.py]
+
+    B --> C[Carregar YAML]
+    C --> D[Resolver filtro article_final no FILTER_REGISTRY]
+
+    D --> E{Modo de execução}
+
+    E -->|dry-run| F[Validar config, splits, filtro e assets]
+    F --> G[status.json]
+
+    E -->|execução| H[Fluxo MNIST M1 + FGSM]
+    E -->|execução| I[Fluxo ImageNet GoogLeNet + FGSM]
+
+    H --> H1[Training MNIST 0-4499]
+    H --> H2[Validation MNIST 4500-5499]
+
+    I --> I1[Training Goldfish, Pineapple, Clock]
+    I --> I2[Validation Jellyfish]
+
+    H1 --> J[Gerar FGSM]
+    H2 --> J
+    I1 --> K[Gerar FGSM Caffe]
+    I2 --> K
+
+    J --> L[Aplicar filtro article_final]
+    K --> L
+
+    L --> M[Comparar C(x) com C(T(x))]
+    M --> N[Computar TP, FN, FP]
+
+    N --> O[Agregar por split]
+    O --> P[Somar contadores]
+    P --> Q[Calcular Recall, Precision, F1]
+
+    Q --> R[table_9.csv]
+    Q --> S[table_9.md]
+    Q --> T[status.json]
+```
+
+---
+
+## 26. Comandos finais
+
+Dry run:
+
+```bash
+python scripts/article_reproduction/table_9.py \
+  --config configs/article_reproduction/table_9.yaml \
+  --dry-run
+```
+
+Execução pequena:
+
+```bash
+python scripts/article_reproduction/table_9.py \
+  --config configs/article_reproduction/table_9.yaml \
+  --sample-size 8
+```
+
+Execução completa:
+
+```bash
+python scripts/article_reproduction/table_9.py \
+  --config configs/article_reproduction/table_9.yaml
+```
+
+```
+```

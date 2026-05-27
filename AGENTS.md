@@ -17,6 +17,7 @@ Specifications in `specs` are the source of truth for new features and behavior 
 - Keep changes small, explicit, and aligned with the existing project structure.
 - Prefer simple, readable Python with type hints where useful.
 - Use `rg` for searching when available.
+- For local validation, run Python commands from WSL with the conda environment `adversarialimage-ids-legacy`.
 - Do not invent requirements that are not described in `specs`.
 - Do not change behavior without updating or creating the relevant specification first.
 - Keep generated datasets, model weights, large artifacts, and local experiment outputs out of git.
