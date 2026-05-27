@@ -21,6 +21,7 @@ EXPECTED_FILTER_NAMES = [
     "box_5",
     "cross_3",
     "diamond_3",
+    "article_final",
 ]
 
 

@@ -6,6 +6,7 @@ from collections import OrderedDict
 from functools import partial
 
 from deepdetector.filters.adaptive_quantization import entropy_based_quantization
+from deepdetector.filters.article_final import article_final_detection_filter
 from deepdetector.filters.mean_filters import (
     box_mean_filter,
     cross_mean_filter,
@@ -25,5 +26,6 @@ FILTER_REGISTRY = OrderedDict(
         ("box_5", partial(box_mean_filter, kernel_size=5)),
         ("cross_3", partial(cross_mean_filter, radius=1)),
         ("diamond_3", partial(diamond_mean_filter, radius=1)),
+        ("article_final", article_final_detection_filter),
     ]
 )

@@ -1,0 +1,120 @@
+experiment:
+  name: table_9
+  article_table: 9
+  objective: Reproduce Table 9 using the final entropy-aware detection filter against FGSM.
+  attack_method: fgsm
+  evaluated_method: article_final_detection_filter
+  type: faithful_reproduction
+
+orchestration:
+  flows:
+    - mnist_m1_fgsm
+    - imagenet_googlenet_fgsm
+  aggregate_by: split
+  aggregate_counts_before_metrics: true
+
+splits:
+  - Training
+  - Validation
+
+datasets:
+  mnist:
+    enabled: true
+    flow: mnist_m1_fgsm
+    model: M1
+    checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
+    image_shape: [28, 28, 1]
+    value_range: [0.0, 1.0]
+    attack:
+      name: fgsm
+      epsilon: 0.2
+      clip_min: 0.0
+      clip_max: 1.0
+    slices:
+      Training:
+        start: 0
+        end: 4500
+      Validation:
+        start: 4500
+        end: 5500
+
+  imagenet:
+    enabled: true
+    flow: imagenet_googlenet_fgsm
+    model: googlenet_caffe
+    image_shape: [224, 224, 3]
+    value_range: [0.0, 1.0]
+    image_size: 224
+    model_assets:
+      model_dir: artifacts/models/imagenet/googlenet
+      deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
+      caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+      mean_file: null
+      use_gpu: false
+      batch_size: 32
+    attack:
+      name: fgsm
+      epsilon_255: 1.0
+      clip_min: 0.0
+      clip_max: 255.0
+    classes:
+      Training:
+        goldfish:
+          label_id: 1
+          expected_count: 648
+          path: data/imagenet/train/goldfish
+        pineapple:
+          label_id: 953
+          expected_count: 520
+          path: data/imagenet/train/pineapple
+        clock:
+          label_id: 530
+          expected_count: 455
+          path: data/imagenet/train/digital_clock
+      Validation:
+        jellyfish:
+          label_id: 107
+          expected_count: 618
+          path: data/imagenet/validation/jellyfish
+
+detection:
+  filter_name: article_final
+  method: prediction_change
+  rule: adversarial_if_prediction_changes_after_filtering
+
+evaluation:
+  exclude_clean_errors: true
+  exclude_failed_attacks: true
+  dry_run_sample_size: 4
+
+metrics:
+  fields:
+    - split
+    - TP
+    - FN
+    - FP
+    - recall_percent
+    - precision_percent
+    - f1_percent
+
+reference:
+  Training:
+    TP: 3324
+    FN: 266
+    FP: 108
+    recall_percent: 92.59
+    precision_percent: 96.85
+    f1_percent: 94.67
+  Validation:
+    TP: 1028
+    FN: 61
+    FP: 35
+    recall_percent: 94.40
+    precision_percent: 96.71
+    f1_percent: 95.54
+
+output:
+  results_dir: results/article_reproduction/table_9
+  csv: table_9.csv
+  markdown: table_9.md
+  status_json: status.json

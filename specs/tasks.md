@@ -4,15 +4,15 @@ Use this file to track implementation tasks derived from specifications in `spec
 
 ## Backlog
 
-- [ ] Implement Table 9 final FGSM detector from `specs/features/table_9.md`
-  - [ ] Add `configs/article_reproduction/table_9.yaml`.
-  - [ ] Add `src/deepdetector/filters/article_final.py`.
-  - [ ] Register and export `article_final`.
-  - [ ] Add `scripts/article_reproduction/table_9.py`.
-  - [ ] Orchestrate MNIST M1 FGSM and ImageNet GoogLeNet FGSM flows.
-  - [ ] Aggregate TP, FN, and FP by split before calculating metrics.
-  - [ ] Write `table_9.csv`, `table_9.md`, and `status.json`.
-  - [ ] Add automated tests for config, filter behavior, registry, aggregation, CSV shape, and dry-run status.
+- [x] Implement Table 9 final FGSM detector from `specs/features/table_9.md`
+  - [x] Add `configs/article_reproduction/table_9.yaml`.
+  - [x] Add `src/deepdetector/filters/article_final.py`.
+  - [x] Register and export `article_final`.
+  - [x] Add `scripts/article_reproduction/table_9.py`.
+  - [x] Orchestrate MNIST M1 FGSM and ImageNet GoogLeNet FGSM flows.
+  - [x] Aggregate TP, FN, and FP by split before calculating metrics.
+  - [x] Write `table_9.csv`, `table_9.md`, and `status.json`.
+  - [x] Add automated tests for config, filter behavior, registry, aggregation, CSV shape, and dry-run status.
 - [x] Implement Table 6 ImageNet adaptive quantization from `specs/features/table_6_imagenet.md`
   - [x] Add `configs/article_reproduction/imagenet_table_6.yaml`.
   - [x] Add `scripts/article_reproduction/table_6_imagenet.py`.
