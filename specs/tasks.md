@@ -13,6 +13,7 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Aggregate TP, FN, and FP by split before calculating metrics.
   - [x] Write `table_9.csv`, `table_9.md`, and `status.json`.
   - [x] Add automated tests for config, filter behavior, registry, aggregation, CSV shape, and dry-run status.
+  - [x] Suppress the known legacy CleverHans MNIST deprecation warning without changing loader behavior.
 - [x] Implement Table 6 ImageNet adaptive quantization from `specs/features/table_6_imagenet.md`
   - [x] Add `configs/article_reproduction/imagenet_table_6.yaml`.
   - [x] Add `scripts/article_reproduction/table_6_imagenet.py`.

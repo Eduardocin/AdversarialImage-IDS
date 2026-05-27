@@ -3,12 +3,16 @@
 from __future__ import print_function
 
 import inspect
+import warnings
 from typing import Any, Tuple
 
 import numpy as np
 
 
 MnistArrays = Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+_CLEVERHANS_MNIST_DEPRECATION = (
+    r"cleverhans\.utils_mnist is deprecrated.*"
+)
 
 
 def load_mnist_data(
@@ -33,7 +37,13 @@ def load_mnist_data(
         "test_end": test_end,
     }
     try:
-        from cleverhans.utils_mnist import data_mnist
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=_CLEVERHANS_MNIST_DEPRECATION,
+                category=UserWarning,
+            )
+            from cleverhans.utils_mnist import data_mnist
 
         signature = inspect.signature(data_mnist)
         accepts_kwargs = any(
@@ -43,7 +53,13 @@ def load_mnist_data(
         if rng is not None and ("rng" in signature.parameters or accepts_kwargs):
             kwargs["rng"] = rng
 
-        return data_mnist(**kwargs)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=_CLEVERHANS_MNIST_DEPRECATION,
+                category=UserWarning,
+            )
+            return data_mnist(**kwargs)
     except (ImportError, IOError, OSError):
         return _load_mnist_data_keras(
             train_start=train_start,
