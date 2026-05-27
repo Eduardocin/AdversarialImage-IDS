@@ -1,0 +1,76 @@
+experiment:
+  name: imagenet_table_6_adaptive_quantization
+  type: faithful_reproduction
+  seed: 20170830
+  deterministic_slice: true
+  objective: Evaluate entropy-defined adaptive quantization on local ImageNet splits.
+
+dataset:
+  name: imagenet
+  image_size: 224
+  image_shape: [224, 224, 3]
+  value_range: [0.0, 1.0]
+  shuffle: false
+  n_samples: null
+  splits:
+    train:
+      - name: goldfish
+        label: 1
+        path: data/imagenet/train/goldfish
+      - name: pineapple
+        label: 953
+        path: data/imagenet/train/pineapple
+      - name: digital_clock
+        label: 530
+        path: data/imagenet/train/digital_clock
+    validation:
+      - name: jellyfish
+        label: 107
+        path: data/imagenet/validation/jellyfish
+
+model:
+  name: googlenet_caffe
+  family: caffe
+  reference: BVLC GoogLeNet
+  model_dir: artifacts/models/imagenet/googlenet/
+  deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
+  caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+  mean_file: null
+  use_gpu: false
+  batch_size: 32
+
+attack:
+  name: fgsm
+  epsilon_255: 1.0
+  clip_min: 0.0
+  clip_max: 255.0
+  batch_size: 32
+
+quantization:
+  method: entropy_defined_adaptive_quantization
+  entropy_thresholds:
+    low: 4.0
+    medium: 5.0
+  intervals:
+    low_entropy: 2
+    medium_entropy: 4
+    high_entropy: 6
+  interval_sizes:
+    low_entropy: 128
+    medium_entropy: 64
+    high_entropy: 43
+
+metrics:
+  columns:
+    - split
+    - TP
+    - FN
+    - FP
+    - recall_percent
+    - precision_percent
+    - f1_percent
+
+output:
+  results_dir: results/imagenet/article_reproduction
+  csv: table_6_imagenet.csv
+  diagnostics_csv: table_6_imagenet_diagnostics.csv
