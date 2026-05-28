@@ -4,6 +4,35 @@ Use this file to track implementation tasks derived from specifications in `spec
 
 ## Backlog
 
+- [x] Refactor shared experiment infrastructure from `specs/refactor/refactor01.md`
+  - [x] Add central path helpers in `src/deepdetector/io/paths.py`.
+  - [x] Add central YAML config helpers in `src/deepdetector/io/config.py`.
+  - [x] Add standard CSV/JSON result writers in `src/deepdetector/io/result_writers.py`.
+  - [x] Add standard experiment payload metadata helper in `src/deepdetector/experiments/metadata.py`.
+  - [x] Migrate `scripts/article_reproduction/table_6.py` away from local path/config/output helpers.
+  - [x] Add automated tests for the refactor acceptance criteria.
+- [x] Refactor Table 7 and Table 8 filter-candidate workflow from `specs/refactor/refactor02.md`
+  - [x] Add filter factory for cross, diamond, and box mean filters.
+  - [x] Add reusable FGSM evaluation context with high-entropy filtering support.
+  - [x] Add generic filter-candidate experiment runner.
+  - [x] Add Table 7 and Table 8 experiment YAML configs.
+  - [x] Add thin Table 7 and Table 8 experiment scripts.
+  - [x] Add automated tests for factory, context reuse, outputs, and no Markdown artifacts.
+- [x] Refactor Table 6 and Table 9 FGSM split workflow from `specs/refactor/refactor03.md`
+  - [x] Add factory support for adaptive quantization and proposed detection filters.
+  - [x] Add a generic FGSM split experiment runner.
+  - [x] Add Table 6 and Table 9 experiment YAML configs.
+  - [x] Add thin Table 6 and Table 9 experiment scripts.
+  - [x] Delegate legacy Table 6 and Table 9 scripts to the new runner path.
+  - [x] Add automated tests for split runner, configs, wrappers, outputs, and no Markdown artifacts.
+- [x] Simplify experiment runtime from `specs/refactor/refactor04.md`
+  - [x] Add consolidated `configs/experiments.yaml`.
+  - [x] Add one active entry point at `scripts/run_experiment.py`.
+  - [x] Add central experiment selector/runner.
+  - [x] Remove redundant per-table experiment YAMLs and wrappers.
+  - [x] Remove legacy Table 6 and Table 9 wrappers.
+  - [x] Update operational documentation to the new flow.
+  - [x] Add tests for consolidated config, single entry point, output contracts, and forbidden runtime strings.
 - [x] Implement Table 9 final FGSM detector from `specs/features/table_9.md`
   - [x] Add `configs/article_reproduction/table_9.yaml`.
   - [x] Add `src/deepdetector/filters/article_final.py`.

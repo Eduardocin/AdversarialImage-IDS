@@ -1,0 +1,74 @@
+defaults:
+  dataset: mnist
+  model: mnist_m1
+  checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
+  attack: fgsm
+  epsilon: 0.2
+  clip_min: 0.0
+  clip_max: 1.0
+  batch_size: 256
+  exclude_invalid_pairs: false
+
+experiments:
+  table_6:
+    kind: split_eval
+    output_dir: results/experiments/table_6
+    filter: adaptive_quantization
+    slices:
+      - name: Training
+        start: 0
+        end: 4500
+      - name: Validation
+        start: 4500
+        end: 5500
+
+  table_7:
+    kind: filter_grid
+    output_dir: results/experiments/table_7
+    slice:
+      name: Training
+      start: 0
+      end: 4500
+    high_entropy_only: true
+    entropy_min: 5.0
+    filters:
+      - cross_3x3
+      - cross_5x5
+      - cross_7x7
+      - cross_9x9
+      - diamond_3x3
+      - diamond_5x5
+      - diamond_7x7
+      - diamond_9x9
+      - box_3x3
+      - box_5x5
+      - box_7x7
+      - box_9x9
+
+  table_8:
+    kind: filter_grid
+    output_dir: results/experiments/table_8
+    slice:
+      name: Validation
+      start: 4500
+      end: 5500
+    high_entropy_only: true
+    entropy_min: 5.0
+    filters:
+      - cross_5x5
+      - cross_7x7
+      - diamond_5x5
+      - diamond_7x7
+      - box_5x5
+
+  table_9:
+    kind: split_eval
+    output_dir: results/experiments/table_9
+    filter: proposed_filter
+    slices:
+      - name: Training
+        start: 0
+        end: 4500
+      - name: Validation
+        start: 4500
+        end: 5500

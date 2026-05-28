@@ -3,6 +3,7 @@
 from deepdetector.filters.adaptive_quantization import entropy_based_quantization
 from deepdetector.filters.article_final import article_final_detection_filter
 from deepdetector.filters.entropy import image_entropy_255_chw, one_d_entropy
+from deepdetector.filters.factory import build_filter_from_config
 from deepdetector.filters.mean_filters import (
     box_mean_filter,
     cross_mean_filter,
@@ -29,6 +30,7 @@ __all__ = [
     "apply_mask_mean_filter",
     "article_final_detection_filter",
     "box_mean_filter",
+    "build_filter_from_config",
     "build_box_mask",
     "build_cross_mask",
     "build_diamond_mask",

@@ -1,72 +1,37 @@
 # Scripts
 
-Indice operacional dos scripts do projeto. A pasta esta organizada por fluxo e
-os imports funcionam com o pacote instalado em modo editavel (`pip install -e .`).
+Indice operacional dos scripts do projeto. A pasta `scripts/` e uma interface
+de execucao; a logica experimental comum fica em `src/deepdetector`.
 
-## Fluxo MNIST M1 + FGSM
+## Experimentos Principais
 
-| Script | Papel | Saidas principais |
-| --- | --- | --- |
-| `mnist/m1_fgsm/train.py` | Treina ou restaura o baseline MNIST M1 | modelo em `artifacts/models/mnist/m1/`; resumo em `results/mnist/clean_baseline/` |
-| `mnist/m1_fgsm/generate_attack.py` | Gera adversariais FGSM | imagens em `artifacts/adversarial_examples/mnist/m1/fgsm/`; resumo em `results/mnist/fgsm/` |
-| `mnist/m1_fgsm/evaluate_detector.py` | Avalia detectores por mudanca de predicao | `results/mnist/detector/` |
-| `mnist/m1_fgsm/evaluate_entropy.py` | Avalia detector com filtro por entropia | `results/mnist/entropy/` |
-| `mnist/m1_fgsm/run_comparison.py` | Orquestra comparacao de filtros MNIST | `results/mnist/final_mnist_results.csv` |
-
-Ordem usual:
+As Tabelas 6-9 usam um unico ponto de entrada e a configuracao consolidada em
+`configs/experiments.yaml`.
 
 ```bash
-python scripts/mnist/m1_fgsm/train.py --load-model
-python scripts/mnist/m1_fgsm/generate_attack.py --load-model
-python scripts/mnist/m1_fgsm/run_comparison.py
+python scripts/run_experiment.py --experiment table_6
+python scripts/run_experiment.py --experiment table_7
+python scripts/run_experiment.py --experiment table_8
+python scripts/run_experiment.py --experiment table_9
 ```
 
-## Comparacoes MNIST com valores de referencia
+Cada execucao escreve apenas:
 
-| Script | Objetivo | Saidas principais |
-| --- | --- | --- |
-| `article_reproduction/table_3.py` | Quantizacao uniforme vs nao uniforme | `results/mnist/article_reproduction/table_3_*` |
-| `article_reproduction/table_4_mnist.py` | Intervalos de quantizacao escalar | `results/mnist/article_reproduction/table_4_*` |
-| `article_reproduction/table_6.py` | Quantizacao adaptativa | `results/mnist/article_reproduction/table_6_*` |
-| `article_reproduction/table_10.py` | Detector MNIST FGSM | `results/mnist/article_reproduction/table_10_mnist_fgsm_test.*` |
-
-`article_reproduction/table_4.py` permanece como entrada de compatibilidade para a Tabela 4 MNIST.
-
-## Comparacoes ImageNet com valores de referencia
-
-| Script | Objetivo | Saidas principais |
-| --- | --- | --- |
-| `article_reproduction/table_4_imagenet.py` | Intervalos de quantizacao escalar em ImageNet/GoogLeNet | `results/imagenet/article_reproduction/table_4_imagenet_*` |
-
-## Fluxo MNIST M2 + CW
-
-| Script | Papel | Saidas principais |
-| --- | --- | --- |
-| `mnist/m2_cw/train.py` | Treina ou restaura o baseline M2 | modelo em `artifacts/models/mnist/m2/`; resumo em `results/mnist/m2_cw/clean_baseline/` |
-| `mnist/m2_cw/generate_attack_l2.py` | Gera CW L2 para kappas configurados | imagens em `artifacts/adversarial_examples/mnist/m2/cw_l2/`; resumo em `results/mnist/m2_cw/cw_l2/` |
-| `mnist/m2_cw/generate_attack_linf.py` | Gera CW Linf com implementacao local TF1 | imagens em `artifacts/adversarial_examples/mnist/m2/cw_linf/`; resumo em `results/mnist/m2_cw/cw_linf/` |
-| `mnist/m2_cw/evaluate_detector.py` | Avalia detector em CW L2/Linf | `results/mnist/m2_cw/detector/` |
-| `mnist/m2_cw/run_experiments.py` | Orquestra o fluxo M2 + CW | `results/mnist/m2_cw/` |
-
-Ordem usual:
-
-```bash
-python scripts/mnist/m2_cw/run_experiments.py --kappas 0.0,0.5,1.0,2.0,4.0 --samples 1000 --start-index 9000
+```text
+results/experiments/<experiment_id>/metrics.csv
+results/experiments/<experiment_id>/metrics.json
 ```
 
-## Utilitarios
+## Fluxos Auxiliares
 
 | Script | Papel |
 | --- | --- |
-| `dev/smoke_test.py` | Verifica rapidamente imports/dependencias principais |
+| `dev/smoke_test.py` | Verifica rapidamente imports/dependencias principais. |
+| `imagenet/download_caffe_imagenet_assets.py` | Baixa ativos Caffe para a trilha ImageNet. |
+| `imagenet/googlenet_fgsm.py` | Utilitario FGSM ImageNet/GoogLeNet. |
+| `imagenet/process_imagenet.py` | Prepara subconjuntos ImageNet locais. |
 
-## Estrutura
-
-```text
-scripts/
-  mnist/
-    m1_fgsm/
-    m2_cw/
-  article_reproduction/
-  dev/
-```
+Os fluxos MNIST legados em `scripts/mnist/` continuam disponiveis para treino,
+geracao de ataques e analises especificas. Scripts historicos em
+`scripts/article_reproduction/` nao fazem parte do caminho operacional
+principal das Tabelas 6-9.

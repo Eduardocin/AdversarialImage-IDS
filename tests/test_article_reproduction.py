@@ -169,40 +169,23 @@ def test_imagenet_table_4_config_documents_spec_parameters() -> None:
 
 def test_table_6_config_documents_experiment_parameters() -> None:
     """Table 6 should record adaptive quantization validation parameters."""
-    config_path = PROJECT_ROOT / "configs" / "article_reproduction" / "mnist_table_6.yaml"
+    config_path = PROJECT_ROOT / "configs" / "experiments.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    table6 = config["experiments"]["table_6"]
 
-    assert config["experiment"]["display_name"] == "Validação da quantização adaptativa"
-    assert config["experiment"]["dataset_used"] == "training_and_validation_slices"
-    assert config["experiment"]["attack_method"] == "fgsm"
-    assert config["experiment"]["evaluated_method"] == "entropy_defined_adaptive_quantization"
-    assert config["dataset"]["name"] == "mnist"
-    assert config["dataset"]["slices"] == [
+    assert config["defaults"]["dataset"] == "mnist"
+    assert table6["kind"] == "split_eval"
+    assert table6["slices"] == [
         {"name": "Training", "start": 0, "end": 4500},
         {"name": "Validation", "start": 4500, "end": 5500},
     ]
-    assert config["attack"]["name"] == "fgsm"
-    assert config["attack"]["epsilon"] == 0.2
-    assert (
-        config["model"]["checkpoint_dir"]
-        == "artifacts/models/mnist/m1/clean_baseline/checkpoints"
+    assert config["defaults"]["attack"] == "fgsm"
+    assert config["defaults"]["epsilon"] == 0.2
+    assert config["defaults"]["checkpoint_dir"] == (
+        "artifacts/models/mnist/m1/clean_baseline/checkpoints"
     )
-    assert config["quantization"]["method"] == "entropy_defined_adaptive_quantization"
-    assert config["quantization"]["entropy_thresholds"] == {"low": 4.0, "medium": 5.0}
-    assert config["quantization"]["intervals"] == {
-        "low_entropy": 2,
-        "medium_entropy": 4,
-        "high_entropy": 6,
-    }
-    assert config["metrics"]["columns"] == [
-        "Split",
-        "TP",
-        "FN",
-        "FP",
-        "Recall",
-        "Precision",
-        "F1",
-    ]
+    assert table6["filter"] == "adaptive_quantization"
+    assert table6["output_dir"] == "results/experiments/table_6"
 
 
 def test_table_10_m2_config_documents_experiment_parameters() -> None:

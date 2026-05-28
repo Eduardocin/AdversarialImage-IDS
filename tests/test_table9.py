@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -16,30 +15,22 @@ from deepdetector.filters.article_final import article_final_detection_filter  #
 from deepdetector.filters.registry import FILTER_REGISTRY  # noqa: E402
 from deepdetector.data import mnist as mnist_data  # noqa: E402
 from deepdetector.models import mnist_cnn  # noqa: E402
-from scripts.article_reproduction import table_9 as table9_script  # noqa: E402
 
 
 def test_table9_config_documents_spec_contract() -> None:
-    """The Table 9 config should contain the required flows and outputs."""
-    config_path = PROJECT_ROOT / "configs" / "article_reproduction" / "table_9.yaml"
+    """The refactored Table 9 config should use the shared split-runner contract."""
+    config_path = PROJECT_ROOT / "configs" / "experiments.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    table9 = config["experiments"]["table_9"]
 
-    assert config["experiment"]["name"] == "table_9"
-    assert config["orchestration"]["flows"] == [
-        "mnist_m1_fgsm",
-        "imagenet_googlenet_fgsm",
+    assert table9["kind"] == "split_eval"
+    assert table9["slices"] == [
+        {"name": "Training", "start": 0, "end": 4500},
+        {"name": "Validation", "start": 4500, "end": 5500},
     ]
-    assert config["orchestration"]["aggregate_counts_before_metrics"] is True
-    assert config["splits"] == ["Training", "Validation"]
-    assert config["detection"]["filter_name"] == "article_final"
-    assert config["datasets"]["mnist"]["attack"]["epsilon"] == 0.2
-    assert config["datasets"]["imagenet"]["attack"]["epsilon_255"] == 1.0
-    assert config["output"] == {
-        "results_dir": "results/article_reproduction/table_9",
-        "csv": "table_9.csv",
-        "markdown": "table_9.md",
-        "status_json": "status.json",
-    }
+    assert table9["filter"] == "proposed_filter"
+    assert table9["output_dir"] == "results/experiments/table_9"
+    assert config["defaults"]["epsilon"] == 0.2
 
 
 def test_article_final_filter_is_registered_and_preserves_scales() -> None:
@@ -61,110 +52,9 @@ def test_article_final_filter_is_registered_and_preserves_scales() -> None:
     assert float(caffe_output.max()) <= 255.0
 
 
-def test_table9_aggregation_sums_counts_before_metrics() -> None:
-    """Table 9 metrics must be computed after summing counters by split."""
-    per_flow = {
-        "mnist_m1_fgsm": {
-            "Training": {"TP": 1, "FN": 9, "FP": 0},
-            "Validation": {"TP": 0, "FN": 0, "FP": 0},
-        },
-        "imagenet_googlenet_fgsm": {
-            "Training": {"TP": 9, "FN": 0, "FP": 9},
-            "Validation": {"TP": 2, "FN": 1, "FP": 1},
-        },
-    }
-
-    aggregate = table9_script.aggregate_counters(per_flow)
-    rows = table9_script.rows_from_counters(aggregate)
-    training = rows[0]
-
-    assert training["TP"] == 10
-    assert training["FN"] == 9
-    assert training["FP"] == 9
-    assert training["recall_percent"] == 52.63
-    assert training["precision_percent"] == 52.63
-    assert training["f1_percent"] == 52.63
-
-
-def test_table9_csv_uses_exact_schema_and_splits(tmp_path) -> None:
-    """The final CSV should have exactly the Table 9 fields and rows."""
-    rows = table9_script.rows_from_counters(
-        {
-            "Training": {"TP": 1, "FN": 2, "FP": 3},
-            "Validation": {"TP": 4, "FN": 5, "FP": 6},
-        }
-    )
-
-    path = table9_script.write_table9_csv(tmp_path / "table_9.csv", rows)
-
-    lines = path.read_text(encoding="utf-8").splitlines()
-    assert lines[0] == "split,TP,FN,FP,recall_percent,precision_percent,f1_percent"
-    assert [line.split(",")[0] for line in lines[1:]] == ["Training", "Validation"]
-    assert len(lines) == 3
-
-
-def test_table9_dry_run_writes_status_json(monkeypatch, tmp_path) -> None:
-    """Dry-run should write status.json without requiring Caffe assets."""
-    config = table9_script.load_config(table9_script.DEFAULT_CONFIG)
-    monkeypatch.setattr(
-        table9_script,
-        "_check_mnist_dry_run",
-        lambda config: ("available", "mnist available"),
-    )
-    monkeypatch.setattr(
-        table9_script,
-        "_check_imagenet_dry_run",
-        lambda config: ("blocked", "blocked_imagenet_caffe"),
-    )
-
-    payload = table9_script.run_dry_run(
-        config,
-        config_path=table9_script.DEFAULT_CONFIG,
-        output_dir=tmp_path,
-    )
-
-    status = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
-    assert payload["status"] == "partial"
-    assert status["status"] == "partial"
-    assert status["completed_flows"] == ["mnist_m1_fgsm"]
-    assert status["skipped_flows"] == ["imagenet_googlenet_fgsm"]
-    assert status["warnings"] == ["blocked_imagenet_caffe"]
-    assert not (tmp_path / "table_9.csv").exists()
-
-
-def test_table9_run_writes_outputs_without_diagnostics(monkeypatch, tmp_path) -> None:
-    """A real run should emit only CSV, Markdown, and status by default."""
-    config = table9_script.load_config(table9_script.DEFAULT_CONFIG)
-    monkeypatch.setattr(
-        table9_script,
-        "run_mnist_flow",
-        lambda config, filter_fn, sample_size: {
-            "Training": {"TP": 1, "FN": 1, "FP": 0},
-            "Validation": {"TP": 2, "FN": 0, "FP": 1},
-        },
-    )
-    monkeypatch.setattr(
-        table9_script,
-        "run_imagenet_flow",
-        lambda config, filter_fn, sample_size: {
-            "Training": {"TP": 3, "FN": 0, "FP": 1},
-            "Validation": {"TP": 4, "FN": 1, "FP": 0},
-        },
-    )
-
-    payload = table9_script.run_table9(
-        config,
-        config_path=table9_script.DEFAULT_CONFIG,
-        output_dir=tmp_path,
-        sample_size=8,
-    )
-
-    assert payload["status"] == "completed"
-    assert payload["sample_size"] == 8
-    assert (tmp_path / "table_9.csv").is_file()
-    assert (tmp_path / "table_9.md").is_file()
-    assert (tmp_path / "status.json").is_file()
-    assert not (tmp_path / "table_9_diagnostics.csv").exists()
+def test_table9_legacy_script_was_removed() -> None:
+    """The old Table 9 entry point should no longer be an active runtime path."""
+    assert not (PROJECT_ROOT / "scripts/article_reproduction/table_9.py").exists()
 
 
 def test_mnist_latest_checkpoint_falls_back_to_local_base(monkeypatch, tmp_path) -> None:
