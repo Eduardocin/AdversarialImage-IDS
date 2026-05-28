@@ -72,6 +72,11 @@ def prepare_fgsm_context(config: Dict[str, Any]) -> FGSMEvaluationContext:
     model_config = config.get("model", {})
     attack_config = config.get("attack", {})
     evaluation_config = config.get("evaluation", {})
+    dataset_name = str(dataset_config.get("name", "")).strip()
+    if dataset_name != "mnist":
+        raise ValueError(
+            "filter_grid currently supports MNIST configs, got {0}.".format(dataset_name)
+        )
 
     start = int(dataset_config.get("start", 0))
     end = int(dataset_config.get("end", start))

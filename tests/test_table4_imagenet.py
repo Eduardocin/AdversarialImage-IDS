@@ -12,7 +12,6 @@ sys.path.insert(0, str(SRC_ROOT))
 
 from scripts.article_reproduction.table_4_imagenet import load_subset_samples
 from deepdetector.evaluation.table4_imagenet import (
-    DIAGNOSTIC_FIELDS,
     TABLE4_OUTPUT_HEADER,
     ZERO_ATTACK_SUCCESS_MESSAGE,
     Table4Sample,
@@ -98,8 +97,8 @@ def test_table4_fgsm_uses_article_caffe_scale_for_preprocessed_images() -> None:
     np.testing.assert_array_equal(adv, np.full((3, 2, 2), 129.0, dtype=np.float32))
 
 
-def test_evaluate_table4_imagenet_records_diagnostics_and_skips_wrong_baseline() -> None:
-    """Wrong clean predictions should be diagnosed and skipped before FGSM."""
+def test_evaluate_table4_imagenet_counts_wrong_baseline_skips() -> None:
+    """Wrong clean predictions should be skipped before FGSM."""
     result = evaluate_table4_imagenet(
         model=ThresholdModel(),
         samples=[
@@ -114,22 +113,6 @@ def test_evaluate_table4_imagenet_records_diagnostics_and_skips_wrong_baseline()
     assert result.n_attack_success == 1
     assert result.skipped_wrong_baseline == 1
     assert result.disturbed_failure == 0
-
-    correct_diagnostic = result.diagnostics[0]
-    assert correct_diagnostic["fgsm_linf_255"] == pytest.approx(60.0)
-    assert correct_diagnostic["fgsm_changed_pixels"] == 12
-
-    wrong_diagnostic = result.diagnostics[1]
-    assert wrong_diagnostic["image_id"] == "wrong"
-    assert wrong_diagnostic["clean_correct"] is False
-    assert wrong_diagnostic["was_skipped"] is True
-    assert wrong_diagnostic["skip_reason"] == "wrong_clean_prediction"
-    assert wrong_diagnostic["attack_success"] is False
-    assert wrong_diagnostic["disturbed_failure"] is False
-    assert wrong_diagnostic["adv_pred"] == ""
-    assert wrong_diagnostic["entropy_adv"] == ""
-    assert wrong_diagnostic["fgsm_linf_255"] == ""
-    assert wrong_diagnostic["fgsm_changed_pixels"] == ""
 
 
 def test_table4_quantization_preserves_caffe_scale_for_preprocessed_images() -> None:
@@ -161,26 +144,23 @@ def test_table4_validation_fails_when_fgsm_has_zero_successes() -> None:
 
 
 def test_write_table4_outputs_uses_specified_csv_columns(tmp_path) -> None:
-    """The output CSV files should keep the spec field order."""
+    """The output CSV file should keep the spec field order."""
     result = evaluate_table4_imagenet(
         model=ThresholdModel(),
         samples=[_sample(0.49)],
         epsilon_255=60.0,
     )
 
-    csv_path, diagnostics_path = write_table4_outputs(tmp_path, result)
+    csv_path = write_table4_outputs(tmp_path, result)
 
     assert csv_path.name == "table_4_imagenet.csv"
-    assert diagnostics_path.name == "table_4_imagenet_diagnostics.csv"
     csv_lines = csv_path.read_text(encoding="utf-8").splitlines()
     assert csv_lines[0] == ",".join(TABLE4_OUTPUT_HEADER)
     assert len(csv_lines) == 4
     assert csv_lines[1].split(",")[1] == "Recall"
     assert csv_lines[2].split(",")[1] == "Precision"
     assert csv_lines[3].split(",")[1] == "F1 Score"
-    assert diagnostics_path.read_text(encoding="utf-8").splitlines()[0] == ",".join(
-        DIAGNOSTIC_FIELDS
-    )
+    assert not (tmp_path / "table_4_imagenet_diagnostics.csv").exists()
 
 
 def test_table4_script_loads_local_png_class_folders(tmp_path) -> None:

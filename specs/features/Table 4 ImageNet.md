@@ -1,184 +1,138 @@
-SPEC — Table 4 ImageNet
-1. Objetivo
+SPEC - Table 4 ImageNet
 
-Implementar e validar a reprodução da Table 4 — ImageNet do artigo.
+## Objective
 
-A Table 4 avalia o desempenho da detecção usando quantização escalar uniforme com diferentes números de intervalos. Para ImageNet, o objetivo é verificar se a quantização consegue detectar exemplos adversariais FGSM ao comparar a predição da imagem adversarial antes e depois do filtro.
+Implement and validate the ImageNet portion of Table 4 from the article.
 
-Essa SPEC também serve como sanity check obrigatório antes da Table 7.
+Table 4 evaluates scalar uniform quantization with interval counts from 2 to
+10. For ImageNet, the experiment checks whether quantization detects FGSM
+adversarial examples by comparing the adversarial prediction before and after
+the filter.
 
-2. Motivação
+## Experimental Reference
 
-A Table 7 apresentou resultado inválido:
+- Dataset: local ImageNet subset.
+- Split: training.
+- Classes: goldfish, pineapple, digital clock.
+- Model: BVLC GoogLeNet through Caffe.
+- Attack: FGSM.
+- Epsilon: `epsilon_255 = 1.0` in Caffe `0..255` input scale.
+- Preprocess: RGB to CHW/BGR, raw scale 255, no mean subtraction.
+- Filter: scalar uniform quantization.
+- Intervals: 2, 3, 4, 5, 6, 7, 8, 9, 10.
+- Metrics: recall, precision, F1.
 
-tp = 0
-fn = 0
-n_high_entropy_adversarial = 0
-disturbed_failure alto
+## Inputs
 
-Isso indica que a geração de adversariais, o modelo, o preprocessamento ou o dataset podem estar incorretos.
+The official runner is:
 
-Portanto, antes da Table 7, a Table 4 deve responder:
+```bash
+python scripts/run_experiment.py --experiment table_4_imagenet
+```
 
-O pipeline ImageNet + GoogLeNet + FGSM está funcionando?
-3. Referência experimental
+The deprecated wrapper may still be used for targeted local runs:
 
-Segundo o artigo, a Table 4 usa ImageNet na fase de escolha de parâmetros do detector. O split de treino do ImageNet é composto pelas classes Goldfish, Pineapple e Clock.
-
-Item	Valor esperado
-Dataset	ImageNet local
-Split	Training
-Classes	Goldfish, Pineapple, Clock
-Modelo	BVLC GoogLeNet / Caffe
-Ataque	FGSM
-Epsilon	1/255
-Escala Caffe	epsilon_255 = 1.0
-Preprocess Caffe	transpose RGB->CHW, raw_scale=255, channel_swap RGB->BGR, sem mean subtraction
-Filtro	Quantização escalar uniforme
-Intervalos	2, 3, 4, 5, 6, 7, 8, 9, 10
-Métricas	Recall, Precision, F1
-
-No projeto atual, a trilha ImageNet já prevê wrappers e utilitários para Caffe/GoogLeNet, além de scripts de reprodução para tabelas do artigo.
-
-4. Dados esperados
-
-Estrutura local recomendada:
-
-data/imagenet/train/
-├── goldfish/
-├── pineapple/
-└── digital_clock/
-
-Labels esperados:
-
-Classe	Label ImageNet
-Goldfish	1
-Pineapple	953
-Digital clock	530
-
-Esses labels aparecem também no código original da trilha ImageNet, onde as classes são chamadas separadamente para Goldfish, Pineapple e Clock. No layout local atual, a classe Clock deve usar o diretório `digital_clock`, alinhado ao synset ImageNet `n03196217`.
-
-5. Entradas
-
-O script deve aceitar:
-
+```bash
 python scripts/article_reproduction/table_4_imagenet.py \
   --data-root data/imagenet/train \
   --limit 50
+```
 
-Argumentos mínimos:
+## Expected Data
 
-Argumento	Descrição
---data-root	Raiz das imagens locais
---limit	Número opcional de imagens para teste rápido
---epsilon	Default 1.0 em escala [0,255]
---output-dir	Default results/imagenet/article_reproduction/
-6. Saídas
+Recommended local layout:
 
-Arquivo principal:
+```text
+data/imagenet/train/
+  goldfish/
+  pineapple/
+  digital_clock/
+```
 
-results/imagenet/article_reproduction/table_4_imagenet.csv
+Expected labels:
 
-Formato esperado (igual ao artigo):
+| Class | ImageNet label |
+| --- | --- |
+| Goldfish | 1 |
+| Pineapple | 953 |
+| Digital clock | 530 |
 
+## Outputs
+
+Official outputs go to:
+
+```text
+results/experiments/table_4/imagenet/
+```
+
+The runtime writes:
+
+```text
+table_4_imagenet.csv
+table_4_status.json
+```
+
+It must not write `table_4_imagenet_diagnostics.csv`.
+
+The CSV format is:
+
+```text
 Dataset,Metric,2,3,4,5,6,7,8,9,10
+ImageNet,Recall,<values>
+ImageNet,Precision,<values>
+ImageNet,F1 Score,<values>
+```
 
-Linhas:
+## Business Rules
 
-- ImageNet,Recall,<valores>
-- ImageNet,Precision,<valores>
-- ImageNet,F1 Score,<valores>
+For each image:
 
-Também gerar um arquivo de diagnóstico:
+1. Load local PNG/JPEG data.
+2. Apply Caffe/GoogLeNet preprocessing: CHW, BGR, raw scale 255, no mean file.
+3. Predict the clean image.
+4. If `clean_pred != true_label`, increment `skipped_wrong_baseline` and skip
+   the attack for that image.
+5. Generate FGSM using Caffe gradients with `epsilon_255 = 1.0`.
+6. Predict the adversarial image.
+7. If `adv_pred == clean_pred`, increment `disturbed_failure` and skip detection
+   evaluation for that image.
+8. For each interval count `k` from 2 to 10:
+   - quantize the clean image;
+   - quantize the adversarial image;
+   - if `C(x_clean) != C(Q(x_clean))`, increment FP;
+   - if `C(x_adv) != C(Q(x_adv))`, increment TP;
+   - otherwise increment FN.
+9. Compute recall, precision, and F1 with zero-safe division.
 
-results/imagenet/article_reproduction/table_4_imagenet_diagnostics.csv
+## GPU Rule
 
-Colunas:
+`model.use_gpu: true` means the Caffe wrapper calls `caffe.set_mode_gpu()`.
+There is no PyTorch-style `.to("cuda")` path for this model. GPU execution also
+requires a Caffe build with CUDA support and a working CUDA runtime.
 
-image_id,class_name,true_label,clean_pred,adv_pred,
-clean_correct,attack_success,disturbed_failure,
-entropy_clean,entropy_adv,fgsm_linf_255,fgsm_changed_pixels
-7. Regras de negócio
+## Acceptance Criteria
 
-Para cada imagem:
+- The official config lives in `configs/experiments.yaml`.
+- The legacy `configs/article_reproduction/imagenet_table_4.yaml` file is not
+  required.
+- The model loads through the Caffe wrapper when Caffe/assets are available.
+- The runner reads local ImageNet class folders.
+- The result CSV has 3 metric rows and interval columns from 2 to 10.
+- Interval 6 appears in the result.
+- The runtime writes `table_4_status.json`.
+- The runtime does not write `table_4_imagenet_diagnostics.csv`.
+- If `attack_success = 0`, the run fails with a clear message.
 
-1. Carregar PNG local.
-2. Aplicar preprocess do Caffe/GoogLeNet.
-   O preprocess deve seguir o script original da trilha ImageNet:
-   transpose para CHW, raw_scale=255 e channel_swap RGB->BGR.
-   Não aplicar subtração de mean file para a Table 4.
-3. Predizer imagem limpa.
-4. Se clean_pred != true_label:
-      skipped_wrong_baseline += 1
-      pular ataque.
-5. Gerar FGSM com epsilon_255 = 1.0.
-   A geração ImageNet deve seguir o script base `Train_FGSM_ImageNet.py`:
-   usar Caffe diretamente, calcular o gradiente com `net.backward`, aplicar
-   `adversarial_data = original_data + 1.0 * sign(gradient)` no tensor
-   preprocessado `CHW/BGR/0..255` e clipar em `[0, 255]`.
-   Não usar TensorFlow, CleverHans ou logits de grafo TF para a reprodução ImageNet.
-6. Predizer imagem adversarial.
-7. Se adv_pred == clean_pred:
-      disturbed_failure += 1
-      pular avaliação da detecção.
-8. Para cada número de intervalos k de 2 a 10:
-      aplicar quantização na imagem limpa;
-      aplicar quantização na imagem adversarial;
-      se C(x_clean) != C(Q(x_clean)): FP += 1
-      se C(x_adv) != C(Q(x_adv)): TP += 1
-      senão: FN += 1
-9. Calcular Recall, Precision e F1.
-8. Fórmulas
-recall = TP / (TP + FN)
-precision = TP / (TP + FP)
-f1 = 2 * recall * precision / (recall + precision)
+Expected zero-attack message:
 
-Se o denominador for zero:
-
-metric = 0.0
-9. Quantização esperada
-
-Para imagem em escala [0,255], a quantização deve usar o número de intervalos k.
-
-A implementação precisa ser consistente com o código original. No código original, a quantização usa um interval, ou seja, um step de intensidade. Para reproduzir os intervalos da Table 4, a conversão prática pode ser:
-
-step = 256 // k
-
-Exemplos:
-
-Intervalos	Step aproximado
-2	128
-4	64
-6	43
-
-O step 43 é importante porque aparece depois na lógica de alta entropia: 6 intervalos para imagens com entropia maior que 5.
-
-10. Critérios de aceitação
-
-A implementação da Table 4 é aceita se:
-
-[ ] O modelo GoogLeNet carrega corretamente.
-[ ] O script lê imagens locais PNG.
-[ ] O número de clean_correct é maior que zero.
-[ ] O número de attack_success é maior que zero.
-[ ] disturbed_failure não domina 100% das imagens corretamente classificadas.
-[ ] O CSV final tem 3 linhas (Recall, Precision, F1 Score) e colunas para intervalos 2 a 10.
-[ ] As métricas não são todas zero.
-[ ] O intervalo 6 aparece no resultado.
-[ ] O script gera diagnóstico por imagem.
-
-Critério específico de sanidade:
-
-Se attack_success = 0, a Table 4 deve falhar explicitamente com mensagem de diagnóstico.
-
-Mensagem esperada:
-
+```text
 FGSM did not generate any successful adversarial example.
 Check epsilon scale, preprocessing, gradient sign, model wrapper, or labels.
-11. Principais riscos
-Sintoma	Causa provável
-skipped_wrong_baseline muito alto	Labels errados, preprocess errado, modelo errado
-disturbed_failure muito alto	FGSM com escala errada, gradiente errado, epsilon pequeno demais
-tp=0 e fn=0	Nenhum adversarial válido foi avaliado
-fp alto demais	Quantização agressiva ou preprocess inconsistente
-Todas as métricas zero	Pipeline de ataque falhou antes da detecção
+```
+
+## Out of Scope
+
+- Changing FGSM math.
+- Changing scalar quantization math.
+- Generating per-image diagnostics by default.
+- Changing Table 10.

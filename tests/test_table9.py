@@ -24,13 +24,16 @@ def test_table9_config_documents_spec_contract() -> None:
     table9 = config["experiments"]["table_9"]
 
     assert table9["kind"] == "split_eval"
-    assert table9["slices"] == [
+    assert table9["dataset"]["slices"] == [
         {"name": "Training", "start": 0, "end": 4500},
         {"name": "Validation", "start": 4500, "end": 5500},
     ]
-    assert table9["filter"] == "proposed_filter"
+    assert table9["filter"] == {
+        "name": "proposed_detection_filter",
+        "type": "proposed_detection_filter",
+    }
     assert table9["output_dir"] == "results/experiments/table_9"
-    assert config["defaults"]["epsilon"] == 0.2
+    assert table9["attack"]["epsilon"] == 0.2
 
 
 def test_article_final_filter_is_registered_and_preserves_scales() -> None:

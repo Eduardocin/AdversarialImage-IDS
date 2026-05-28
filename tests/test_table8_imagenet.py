@@ -177,7 +177,7 @@ def test_table8_main_writes_partial_status_when_no_validation_images(
         "\n".join(
             [
                 "outputs:",
-                "  results_dir: results/imagenet/article_reproduction",
+                "  results_dir: results/experiments/table_8_imagenet",
                 "  pivot_csv: table_8_imagenet.csv",
             ]
         ),
@@ -214,7 +214,7 @@ def test_table8_main_does_not_complete_when_no_attack_succeeds(
         "\n".join(
             [
                 "outputs:",
-                "  results_dir: results/imagenet/article_reproduction",
+                "  results_dir: results/experiments/table_8_imagenet",
                 "  pivot_csv: table_8_imagenet.csv",
             ]
         ),

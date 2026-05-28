@@ -15,13 +15,7 @@ from deepdetector.io.paths import resolve_project_path
 from deepdetector.io.result_writers import write_experiment_outputs
 
 
-METRIC_FIELDS = (
-    "filter_name",
-    "filter_type",
-    "mask_type",
-    "mask_size",
-    "radius",
-    "kernel_size",
+COUNT_FIELDS = (
     "TP",
     "FN",
     "FP",
@@ -65,6 +59,8 @@ def _best_filter_by_f1(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     fields = (
         "filter_name",
         "filter_type",
+        "intervals",
+        "interval_size",
         "mask_type",
         "mask_size",
         "radius",
@@ -72,6 +68,30 @@ def _best_filter_by_f1(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "f1_percent",
     )
     return {field: best.get(field) for field in fields}
+
+
+def _csv_fields_for_rows(rows: Sequence[Dict[str, Any]]) -> Sequence[str]:
+    """Return output columns based on filter metadata present in result rows."""
+    if rows and all("intervals" in row and "interval_size" in row for row in rows):
+        return (
+            "filter_name",
+            "filter_type",
+            "intervals",
+            "interval_size",
+        ) + COUNT_FIELDS
+
+    mask_fields = ("mask_type", "mask_size", "radius", "kernel_size")
+    if rows and any(any(field in row for field in mask_fields) for row in rows):
+        return (
+            "filter_name",
+            "filter_type",
+            "mask_type",
+            "mask_size",
+            "radius",
+            "kernel_size",
+        ) + COUNT_FIELDS
+
+    return ("filter_name", "filter_type") + COUNT_FIELDS
 
 
 def run_filter_candidate_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -131,7 +151,7 @@ def run_filter_candidate_experiment(config: Dict[str, Any]) -> List[Dict[str, An
     write_experiment_outputs(
         output_dir=output_dir,
         rows=rows,
-        csv_fields=METRIC_FIELDS,
+        csv_fields=_csv_fields_for_rows(rows),
         metadata=payload,
         csv_name=_output_name(config, "csv", "metrics.csv"),
         json_name=_output_name(config, "json", "metrics.json"),

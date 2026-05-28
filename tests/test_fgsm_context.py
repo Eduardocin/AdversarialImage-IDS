@@ -65,6 +65,7 @@ def test_prepare_fgsm_context_filters_high_entropy_and_generates_once(monkeypatc
             "dataset": {
                 "start": 0,
                 "end": 3,
+                "name": "mnist",
                 "high_entropy_only": True,
                 "entropy_threshold": {"min": 5.0},
             },

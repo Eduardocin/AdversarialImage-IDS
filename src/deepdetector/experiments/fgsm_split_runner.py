@@ -70,6 +70,11 @@ def _checkpoint_dir(config: Dict[str, Any]) -> str:
 def run_fgsm_split_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Run an FGSM filter evaluation experiment over configured dataset splits."""
     experiment_id = _experiment_id(config)
+    dataset_name = str(config.get("dataset", {}).get("name", "")).strip()
+    if dataset_name != "mnist":
+        raise ValueError(
+            "split_eval currently supports MNIST configs, got {0}.".format(dataset_name)
+        )
     split_configs = list(_configured_slices(config))
     filter_name, filter_fn, filter_metadata = build_filter_from_config(config.get("filter", {}))
     attack_config = config.get("attack", {})

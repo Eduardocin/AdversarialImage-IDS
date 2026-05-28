@@ -20,6 +20,7 @@ def _config(tmp_path) -> dict:
         "experiment_id": "split_test",
         "kind": "split_eval",
         "dataset": {
+            "name": "mnist",
             "slices": [
                 {"name": "Training", "start": 0, "end": 1},
                 {"name": "Validation", "start": 1, "end": 2},
@@ -116,7 +117,7 @@ def test_fgsm_split_runner_uses_one_graph_and_writes_standard_outputs(
 def test_fgsm_split_runner_rejects_missing_slices(tmp_path) -> None:
     """Missing dataset.slices should fail before model restoration."""
     config = _config(tmp_path)
-    config["dataset"] = {}
+    config["dataset"] = {"name": "mnist"}
 
     with pytest.raises(ValueError, match="dataset.slices"):
         fgsm_split_runner.run_fgsm_split_experiment(config)
@@ -132,13 +133,15 @@ def test_fgsm_split_configs_match_except_filter_identity_and_output() -> None:
 
     assert table6["kind"] == "split_eval"
     assert table9["kind"] == "split_eval"
-    assert table6["filter"] == "adaptive_quantization"
-    assert table9["filter"] == "proposed_filter"
-    assert table6["slices"] == table9["slices"]
+    assert table6["filter"]["type"] == "adaptive_quantization"
+    assert table9["filter"]["type"] == "proposed_detection_filter"
+    assert table6["dataset"]["slices"] == table9["dataset"]["slices"]
     assert table6["output_dir"] == "results/experiments/table_6"
     assert table9["output_dir"] == "results/experiments/table_9"
-    assert config["defaults"]["epsilon"] == 0.2
-    assert config["defaults"]["batch_size"] == 256
+    assert table6["attack"]["epsilon"] == 0.2
+    assert table9["attack"]["epsilon"] == 0.2
+    assert table6["evaluation"]["batch_size"] == 256
+    assert table9["evaluation"]["batch_size"] == 256
 
 
 def test_table6_and_table9_per_table_scripts_were_removed() -> None:

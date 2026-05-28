@@ -94,7 +94,13 @@ def _load_mnist_data_keras(
     """Load MNIST through Keras when the legacy CleverHans URL is unavailable."""
     from keras.datasets import mnist as keras_mnist
 
-    (x_train, y_train), (x_test, y_test) = keras_mnist.load_data()
+    try:
+        (x_train, y_train), (x_test, y_test) = keras_mnist.load_data()
+    except Exception as exc:
+        raise IOError(
+            "MNIST dataset is unavailable locally and could not be loaded. "
+            "Prepare the dataset cache before running MNIST experiments."
+        ) from exc
     return (
         _images_to_nhwc(x_train[train_start:train_end]),
         _one_hot(y_train[train_start:train_end]),

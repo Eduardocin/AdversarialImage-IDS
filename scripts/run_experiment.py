@@ -3,6 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import logging
+import sys
+from pathlib import Path
+
+
+PROJECT_ROOT = next(
+    parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file()
+)
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.experiments.runner import run_experiment
 from deepdetector.io.config import load_yaml_config
@@ -22,11 +33,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     """Load the consolidated config and run one experiment."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
     args = build_parser().parse_args()
     config_path = resolve_project_path(args.config) or DEFAULT_CONFIG
     if config_path is None:
         raise ValueError("An experiment config path is required.")
-    run_experiment(args.experiment, load_yaml_config(config_path))
+    try:
+        logging.info("Starting experiment: %s", args.experiment)
+        run_experiment(args.experiment, load_yaml_config(config_path))
+        logging.info("Finished experiment: %s", args.experiment)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc))
     return 0
 
 

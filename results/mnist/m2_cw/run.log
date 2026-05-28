@@ -1,4 +1,0 @@
-[2026-05-17 17:11:41] MNIST M2 + CW pipeline started
-[2026-05-17 17:11:41] log_file=C:\Users\Eduar\OneDrive\Documentos\GitHub\AdversarialImage-IDS\results\mnist\m2_cw\run.log
-[2026-05-17 17:11:41] kappas=0.0,0.5,1.0,2.0,4.0 samples=1000 start_index=9000
-[2026-05-17 17:11:41] MNIST M2 + CW pipeline finished

@@ -1,36 +1,195 @@
 defaults:
-  dataset: mnist
-  model: mnist_m1
-  checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
-  attack: fgsm
-  epsilon: 0.2
-  clip_min: 0.0
-  clip_max: 1.0
-  batch_size: 256
-  exclude_invalid_pairs: false
+  output:
+    csv: metrics.csv
+    json: metrics.json
 
 experiments:
+  table_3:
+    kind: filter_grid
+    output_dir: results/experiments/table_3
+    dataset:
+      name: mnist
+      split: test
+      start: 0
+      end: 100
+    model:
+      name: mnist_m1
+      checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
+    attack:
+      name: fgsm
+      epsilon: 0.2
+      clip_min: 0.0
+      clip_max: 1.0
+    evaluation:
+      batch_size: 256
+      exclude_invalid_pairs: true
+    filters:
+      - name: scalar_quantization_2
+        type: scalar_quantization
+        intervals: 2
+      - name: nonuniform_quantization
+        type: nonuniform_quantization
+      - name: nonuniform_quantization_legacy
+        type: nonuniform_quantization_legacy
+
+  table_4:
+    kind: composite
+    output_dir: results/experiments/table_4
+    components:
+      - table_4_mnist
+      - table_4_imagenet
+
+  table_4_mnist:
+    kind: filter_grid
+    output_dir: results/experiments/table_4/mnist
+    dataset:
+      name: mnist
+      split: test
+      start: 0
+      end: 4500
+    model:
+      name: mnist_m1
+      checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
+    attack:
+      name: fgsm
+      epsilon: 0.2
+      clip_min: 0.0
+      clip_max: 1.0
+    evaluation:
+      batch_size: 256
+      exclude_invalid_pairs: false
+    filters:
+      - name: scalar_quantization_2
+        type: scalar_quantization
+        intervals: 2
+      - name: scalar_quantization_3
+        type: scalar_quantization
+        intervals: 3
+      - name: scalar_quantization_4
+        type: scalar_quantization
+        intervals: 4
+      - name: scalar_quantization_5
+        type: scalar_quantization
+        intervals: 5
+      - name: scalar_quantization_6
+        type: scalar_quantization
+        intervals: 6
+      - name: scalar_quantization_7
+        type: scalar_quantization
+        intervals: 7
+      - name: scalar_quantization_8
+        type: scalar_quantization
+        intervals: 8
+      - name: scalar_quantization_9
+        type: scalar_quantization
+        intervals: 9
+      - name: scalar_quantization_10
+        type: scalar_quantization
+        intervals: 10
+
+  table_4_imagenet:
+    kind: imagenet_table_4
+    output_dir: results/experiments/table_4/imagenet
+    dataset:
+      name: imagenet
+      split: train
+      images_dir: data/imagenet/train
+      n_samples: null
+      image_size: 224
+      image_shape: [224, 224, 3]
+      value_range: [0.0, 1.0]
+      shuffle: false
+      class_indices:
+        goldfish: 1
+        pineapple: 953
+        digital_clock: 530
+    model:
+      name: googlenet_caffe
+      family: caffe
+      reference: BVLC GoogLeNet
+      model_dir: artifacts/models/imagenet/googlenet/
+      deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
+      caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+      mean_file: null
+      use_gpu: false
+      batch_size: 32
+    attack:
+      name: fgsm
+      epsilon_255: 1.0
+      clip_min: 0.0
+      clip_max: 1.0
+      batch_size: 32
+    evaluation:
+      exclude_invalid_pairs: false
+    quantization:
+      method: scalar_quantization
+      intervals: [2, 3, 4, 5, 6, 7, 8, 9, 10]
+      interval_sizes:
+        2: 128
+        3: 85
+        4: 64
+        5: 51
+        6: 43
+        7: 37
+        8: 32
+        9: 28
+        10: 26
+      left: true
+    output:
+      csv: table_4_imagenet.csv
+      status_json: table_4_status.json
+
   table_6:
     kind: split_eval
     output_dir: results/experiments/table_6
-    filter: adaptive_quantization
-    slices:
-      - name: Training
-        start: 0
-        end: 4500
-      - name: Validation
-        start: 4500
-        end: 5500
+    dataset:
+      name: mnist
+      split: test
+      slices:
+        - name: Training
+          start: 0
+          end: 4500
+        - name: Validation
+          start: 4500
+          end: 5500
+    model:
+      name: mnist_m1
+      checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
+    attack:
+      name: fgsm
+      epsilon: 0.2
+      clip_min: 0.0
+      clip_max: 1.0
+    evaluation:
+      batch_size: 256
+      exclude_invalid_pairs: false
+    filter:
+      name: adaptive_quantization
+      type: adaptive_quantization
 
   table_7:
     kind: filter_grid
     output_dir: results/experiments/table_7
-    slice:
-      name: Training
+    dataset:
+      name: mnist
+      split: test
+      slice_name: Training
       start: 0
       end: 4500
-    high_entropy_only: true
-    entropy_min: 5.0
+      high_entropy_only: true
+      entropy_threshold:
+        min: 5.0
+    model:
+      name: mnist_m1
+      checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
+    attack:
+      name: fgsm
+      epsilon: 0.2
+      clip_min: 0.0
+      clip_max: 1.0
+    evaluation:
+      batch_size: 256
+      exclude_invalid_pairs: false
     filters:
       - cross_3x3
       - cross_5x5
@@ -48,12 +207,26 @@ experiments:
   table_8:
     kind: filter_grid
     output_dir: results/experiments/table_8
-    slice:
-      name: Validation
+    dataset:
+      name: mnist
+      split: test
+      slice_name: Validation
       start: 4500
       end: 5500
-    high_entropy_only: true
-    entropy_min: 5.0
+      high_entropy_only: true
+      entropy_threshold:
+        min: 5.0
+    model:
+      name: mnist_m1
+      checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
+    attack:
+      name: fgsm
+      epsilon: 0.2
+      clip_min: 0.0
+      clip_max: 1.0
+    evaluation:
+      batch_size: 256
+      exclude_invalid_pairs: false
     filters:
       - cross_5x5
       - cross_7x7
@@ -64,11 +237,27 @@ experiments:
   table_9:
     kind: split_eval
     output_dir: results/experiments/table_9
-    filter: proposed_filter
-    slices:
-      - name: Training
-        start: 0
-        end: 4500
-      - name: Validation
-        start: 4500
-        end: 5500
+    dataset:
+      name: mnist
+      split: test
+      slices:
+        - name: Training
+          start: 0
+          end: 4500
+        - name: Validation
+          start: 4500
+          end: 5500
+    model:
+      name: mnist_m1
+      checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
+    attack:
+      name: fgsm
+      epsilon: 0.2
+      clip_min: 0.0
+      clip_max: 1.0
+    evaluation:
+      batch_size: 256
+      exclude_invalid_pairs: false
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter

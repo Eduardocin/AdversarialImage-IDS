@@ -71,6 +71,6 @@ metrics:
     - f1_percent
 
 output:
-  results_dir: results/imagenet/article_reproduction
+  results_dir: results/experiments/table_6_imagenet
   csv: table_6_imagenet.csv
   diagnostics_csv: table_6_imagenet_diagnostics.csv

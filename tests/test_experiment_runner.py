@@ -23,11 +23,25 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
     config = _consolidated_config()
 
     assert "defaults" in config
-    assert set(config["experiments"]) == {"table_6", "table_7", "table_8", "table_9"}
-    assert config["defaults"]["checkpoint_dir"] == (
-        "artifacts/models/mnist/m1/clean_baseline/checkpoints"
-    )
-    assert config["defaults"]["epsilon"] == 0.2
+    assert set(config["experiments"]) == {
+        "table_3",
+        "table_4",
+        "table_4_mnist",
+        "table_4_imagenet",
+        "table_6",
+        "table_7",
+        "table_8",
+        "table_9",
+    }
+    assert config["defaults"] == {
+        "output": {"csv": "metrics.csv", "json": "metrics.json"}
+    }
+    for experiment in config["experiments"].values():
+        if experiment["kind"] == "composite":
+            continue
+        assert "dataset" in experiment
+        assert "model" in experiment
+        assert "attack" in experiment
 
 
 @pytest.mark.parametrize(
@@ -37,6 +51,10 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
         ("table_7", "filter_grid"),
         ("table_8", "filter_grid"),
         ("table_9", "split_eval"),
+        ("table_3", "filter_grid"),
+        ("table_4", "composite"),
+        ("table_4_mnist", "filter_grid"),
+        ("table_4_imagenet", "imagenet_table_4"),
     ],
 )
 def test_run_experiment_entrypoint_resolves_requested_experiment(
@@ -77,6 +95,47 @@ def test_run_experiment_rejects_unknown_kind(monkeypatch) -> None:
         experiment_runner.run_experiment("table_6", config)
 
 
+def test_table_4_composite_runs_components_in_order(monkeypatch, tmp_path) -> None:
+    """The article Table 4 entry should run MNIST and ImageNet under one root."""
+    config = _consolidated_config()
+    config["experiments"]["table_4"]["output_dir"] = str(tmp_path)
+    config["experiments"]["table_4_mnist"]["output_dir"] = str(tmp_path / "mnist")
+    config["experiments"]["table_4_imagenet"]["output_dir"] = str(tmp_path / "imagenet")
+    calls = []
+
+    def fake_filter_grid(component_config):
+        calls.append(component_config["experiment_id"])
+        return [{"row": 1}]
+
+    def fake_imagenet(component_config):
+        calls.append(component_config["experiment_id"])
+        return {
+            "status": "completo",
+            "csv": str(tmp_path / "imagenet" / "table_4_imagenet.csv"),
+        }
+
+    monkeypatch.setattr(
+        experiment_runner,
+        "run_filter_candidate_experiment",
+        fake_filter_grid,
+    )
+    monkeypatch.setattr(
+        experiment_runner,
+        "run_table4_imagenet_experiment",
+        fake_imagenet,
+    )
+
+    result = experiment_runner.run_experiment("table_4", config)
+
+    assert calls == ["table_4_mnist", "table_4_imagenet"]
+    assert [entry["experiment_id"] for entry in result] == [
+        "table_4_mnist",
+        "table_4_imagenet",
+    ]
+    manifest = tmp_path / "manifest.json"
+    assert manifest.exists()
+
+
 def test_runtime_entrypoints_do_not_contain_forbidden_report_strings() -> None:
     """The active runtime should not generate Markdown, diagnostics, or comparisons."""
     forbidden = (
@@ -103,5 +162,7 @@ def test_runtime_entrypoints_do_not_contain_forbidden_report_strings() -> None:
 
 
 def test_results_tree_has_no_markdown_outputs() -> None:
-    """Versioned experiment outputs should not include Markdown reports."""
-    assert list((PROJECT_ROOT / "results").glob("**/*.md")) == []
+    """Unified experiment outputs should not include Markdown reports."""
+    experiments_dir = PROJECT_ROOT / "results" / "experiments"
+    if experiments_dir.exists():
+        assert list(experiments_dir.glob("**/*.md")) == []

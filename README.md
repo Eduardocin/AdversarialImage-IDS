@@ -111,14 +111,10 @@ Detalhes de versao e decisoes ficam em
 
 ## Configuracoes
 
-Os arquivos em `configs/` documentam parametros experimentais e ajudam a manter
-os fluxos rastreaveis:
-
-- `configs/article_reproduction/`: contratos das tabelas do artigo.
-- `configs/attacks/`: contratos isolados de FGSM, DeepFool e CW.
-- `configs/experiments/`: pipelines operacionais ou exploratorios.
-- `configs/filters/`: filtros/detector reutilizaveis.
-- `configs/training/`: treino e restauracao dos modelos baseline.
+O fluxo oficial usa `configs/experiments.yaml`. Cada experimento declara
+explicitamente dataset, modelo, ataque, amostras/splits e filtros. Configs
+antigas de treino, ataque e filtros foram removidas para evitar caminhos
+paralelos.
 
 ## Fluxos Operacionais
 
@@ -128,52 +124,6 @@ os fluxos rastreaveis:
 python scripts/dev/smoke_test.py
 pytest
 ```
-
-### MNIST M1 + FGSM
-
-```bash
-python scripts/mnist/m1_fgsm/train.py --load-model
-python scripts/mnist/m1_fgsm/generate_attack.py --load-model
-python scripts/mnist/m1_fgsm/run_comparison.py
-```
-
-Scripts relacionados:
-
-- `scripts/mnist/m1_fgsm/train.py`
-- `scripts/mnist/m1_fgsm/generate_attack.py`
-- `scripts/mnist/m1_fgsm/evaluate_detector.py`
-- `scripts/mnist/m1_fgsm/evaluate_entropy.py`
-- `scripts/mnist/m1_fgsm/run_comparison.py`
-
-Saidas principais:
-
-- `artifacts/models/mnist/m1/`
-- `artifacts/adversarial_examples/mnist/m1/fgsm/`
-- `results/mnist/clean_baseline/`
-- `results/mnist/fgsm/`
-- `results/mnist/detector/`
-- `results/mnist/final_mnist_results.csv`
-
-### MNIST M2 + CW
-
-```bash
-python scripts/mnist/m2_cw/run_experiments.py --kappas 0.0,0.5,1.0,2.0,4.0 --samples 1000 --start-index 9000
-```
-
-Scripts relacionados:
-
-- `scripts/mnist/m2_cw/train.py`
-- `scripts/mnist/m2_cw/generate_attack_l2.py`
-- `scripts/mnist/m2_cw/generate_attack_linf.py`
-- `scripts/mnist/m2_cw/evaluate_detector.py`
-- `scripts/mnist/m2_cw/run_experiments.py`
-
-Saidas principais:
-
-- `artifacts/models/mnist/m2/`
-- `artifacts/adversarial_examples/mnist/m2/cw_l2/`
-- `artifacts/adversarial_examples/mnist/m2/cw_linf/`
-- `results/mnist/m2_cw/`
 
 ### ImageNet / Caffe
 
@@ -190,11 +140,6 @@ python scripts/imagenet/download_caffe_imagenet_assets.py --list-models
 python scripts/imagenet/download_caffe_imagenet_assets.py --model alexnet
 ```
 
-Outros scripts:
-
-- `scripts/imagenet/process_imagenet_subset.py`
-- `scripts/imagenet/googlenet_fgsm.py`
-
 Detalhes de fontes, espelhos e limitacoes ficam em
 `reproduction_notes/caffe_model_downloads.md` e
 `reproduction_notes/caffe_setup.md`.
@@ -202,32 +147,42 @@ Detalhes de fontes, espelhos e limitacoes ficam em
 ### Reproducao das tabelas do artigo
 
 ```bash
-python scripts/article_reproduction/table_3.py
-python scripts/article_reproduction/table_4_mnist.py
-python scripts/article_reproduction/table_6.py
+python scripts/run_experiment.py --experiment table_3
+python scripts/run_experiment.py --experiment table_4
+python scripts/run_experiment.py --experiment table_6
+python scripts/run_experiment.py --experiment table_7
+python scripts/run_experiment.py --experiment table_8
+python scripts/run_experiment.py --experiment table_9
+```
+
+As Tabelas 3-9 usam `configs/experiments.yaml`. A Table 4 e composta: por
+padrao `table_4` executa `table_4_mnist` e `table_4_imagenet` em sequencia.
+Tambem e possivel executar apenas um lado:
+
+```bash
+python scripts/run_experiment.py --experiment table_4_mnist
+python scripts/run_experiment.py --experiment table_4_imagenet
+```
+
+Os resultados da Table 4 ficam sob `results/experiments/table_4/`, separados em
+`mnist/` e `imagenet/` porque os CSVs tem schemas diferentes. Table 5 nao
+aparece nesse arquivo porque nao ha fluxo correspondente no inventario atual.
+
+Table 10 permanece fora do fluxo oficial desta limpeza e conserva seus scripts
+historicos:
+
+```bash
 python scripts/article_reproduction/table_10.py
 python scripts/article_reproduction/table_10_m2.py
 ```
-
-ImageNet:
-
-```bash
-python scripts/article_reproduction/table_4_imagenet.py
-python scripts/article_reproduction/table_7_imagenet.py --config configs/article_reproduction/imagenet_table_7.yaml
-```
-
-As comparacoes ficam em `results/mnist/article_reproduction/`,
-`results/mnist/m2_cw/article_comparison/` e
-`results/imagenet/article_reproduction/`.
 
 ## Dados, Artefatos e Resultados
 
 - `data/` e ignorado pelo Git e deve conter datasets locais.
 - `artifacts/` armazena modelos, checkpoints, assets Caffe e adversariais
   gerados. Modelos grandes e binarios nao devem ser versionados.
-- `results/` guarda relatorios, CSVs e notas de execucao que documentam a
-  reproducao. A politica atual permite versionar resultados MNIST selecionados
-  e mantem a trilha ImageNet restrita a arquivos explicitamente liberados.
+- `results/` nao e fonte de verdade. Outputs oficiais sao regenerados em
+  `results/experiments/<experiment_id>/metrics.csv` e `metrics.json`.
 
 ## Notas de Reproducao
 
@@ -236,8 +191,6 @@ Use `reproduction_notes/` para decisoes tecnicas que precisam ser versionadas:
 - `environment_setup.md`
 - `caffe_setup.md`
 - `caffe_model_downloads.md`
-- `mnist_reproduction_notes.md`
-- `experiment_plans/`
 
 Documentos locais de trabalho que nao devem entrar no Git, como o guia de
 Spec-Driven Development, ficam ignorados pelo `.gitignore`.

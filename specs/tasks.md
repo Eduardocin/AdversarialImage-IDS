@@ -33,6 +33,24 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Remove legacy Table 6 and Table 9 wrappers.
   - [x] Update operational documentation to the new flow.
   - [x] Add tests for consolidated config, single entry point, output contracts, and forbidden runtime strings.
+- [x] Simplify and unify Table 3-6 experiments from `specs/refactor/refactor05.md`
+  - [x] Inventory current Table 3-6 scripts, configs, and results.
+  - [x] Add Table 3 and Table 4 to `configs/experiments.yaml`.
+  - [x] Extend the filter factory for scalar and non-uniform quantization filters.
+  - [x] Reuse the filter grid runner for Table 3 and Table 4.
+  - [x] Keep Table 6 on the unified split runner.
+  - [x] Remove legacy Table 3/4 scripts, YAMLs, and obsolete MNIST outputs.
+  - [x] Update operational documentation to the unified entry point.
+  - [x] Add automated tests for explicit config, factory, derived runner fields, and removed legacy paths.
+- [x] Clean unnecessary files from `specs/refactor/refactor07.md`
+  - [x] Inventory configs, scripts, results, source files, tests, and reproduction notes.
+  - [x] Remove obsolete non-official configs while preserving Table 10 assets.
+  - [x] Remove redundant scripts outside the official runner while preserving Table 10 scripts.
+  - [x] Remove regenerated legacy outputs and Markdown outputs.
+  - [x] Remove dead Markdown/report helpers from non-Table 10 runtime.
+  - [x] Update README and scripts README to the official flow only.
+  - [x] Update tests away from removed legacy paths.
+  - [x] Run forbidden-string/file checks and focused tests.
 - [x] Implement Table 9 final FGSM detector from `specs/features/table_9.md`
   - [x] Add `configs/article_reproduction/table_9.yaml`.
   - [x] Add `src/deepdetector/filters/article_final.py`.
@@ -73,6 +91,16 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Apply masked mean values only where the full mask fits inside the image.
   - [x] Preserve border pixels exactly instead of using reflect padding.
   - [x] Add a regression test for unchanged spatial borders.
+- [x] Combine Table 4 MNIST and ImageNet execution from `specs/features/table_4_combined.md`
+  - [x] Add composite `table_4` with explicit `table_4_mnist` and `table_4_imagenet` components.
+  - [x] Route ImageNet Table 4 through the consolidated experiment runner.
+  - [x] Write MNIST and ImageNet outputs under `results/experiments/table_4/`.
+  - [x] Add tests for config fidelity and composite dispatch.
+- [x] Remove Table 4 ImageNet diagnostics output from `specs/features/table_4_combined.md`
+  - [x] Remove legacy `configs/article_reproduction/imagenet_table_4.yaml`.
+  - [x] Remove `diagnostics_csv` from the official Table 4 ImageNet config.
+  - [x] Stop writing `table_4_imagenet_diagnostics.csv`.
+  - [x] Update tests for the simplified output contract.
 - [ ] Implement Table 8 ImageNet validation spatial smoothing from `specs/features/Table 8 ImageNet.md`
   - [x] Add config-driven Table 8 ImageNet experiment for the validation split.
   - [x] Evaluate exactly the five fixed superior spatial smoothing filters.

@@ -1,0 +1,13 @@
+{
+  "clean_correct": 1322,
+  "config_path": "/mnt/c/Users/Eduar/OneDrive/Documentos/GitHub/AdversarialImage-IDS/configs/article_reproduction/imagenet_table_7.yaml",
+  "epsilon": 0.00392156862745098,
+  "epsilon_255": 1.0,
+  "images_dir": "/mnt/c/Users/Eduar/OneDrive/Documentos/GitHub/AdversarialImage-IDS/data/imagenet/train",
+  "images_root": "/mnt/c/Users/Eduar/OneDrive/Documentos/GitHub/AdversarialImage-IDS/data/imagenet",
+  "n_loaded": 1623,
+  "n_samples_requested": 1623,
+  "output_path": "/mnt/c/Users/Eduar/OneDrive/Documentos/GitHub/AdversarialImage-IDS/artifacts/adversarial_examples/imagenet/fgsm/train/adversarial_examples.npy",
+  "skipped_wrong_baseline": 301,
+  "split": "train"
+}

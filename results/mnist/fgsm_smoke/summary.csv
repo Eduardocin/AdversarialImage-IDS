@@ -1,2 +1,0 @@
-epsilon,total_examples,clean_accuracy,adversarial_accuracy,original_classified_wrong_number,disturbed_failure_number,successful_attacks,valid_attack_candidates,attack_success_rate,adv_min,adv_max,adversarial_examples_path
-0.2,10,1.0,0.6,0,6,4,10,0.4,0.0,1.0,results\mnist\fgsm_smoke\eps_0p2\adversarial_examples.npy

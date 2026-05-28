@@ -1,14 +1,31 @@
-"""Single experiment runner for configured Table 6-9 workflows."""
+"""Single experiment runner for configured Table 3-9 workflows."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict
 
 from deepdetector.experiments.fgsm_split_runner import run_fgsm_split_experiment
 from deepdetector.experiments.filter_candidate_runner import run_filter_candidate_experiment
+from deepdetector.experiments.table4_imagenet_runner import run_table4_imagenet_experiment
+from deepdetector.io.paths import resolve_project_path
+from deepdetector.io.result_writers import write_metrics_json
 
 
 FILTER_ALIASES: Dict[str, Dict[str, Any]] = {
+    "scalar_quantization_2": {
+        "name": "scalar_quantization_2",
+        "type": "scalar_quantization",
+        "intervals": 2,
+    },
+    "nonuniform_quantization": {
+        "name": "nonuniform_quantization",
+        "type": "nonuniform_quantization",
+    },
+    "nonuniform_quantization_legacy": {
+        "name": "nonuniform_quantization_legacy",
+        "type": "nonuniform_quantization_legacy",
+    },
     "adaptive_quantization": {
         "name": "adaptive_quantization",
         "type": "adaptive_quantization",
@@ -67,64 +84,141 @@ def build_experiment_config(
     if name not in experiments:
         raise ValueError("Unknown experiment: {0}".format(name))
 
-    defaults = consolidated_config.get("defaults", {})
     experiment = dict(experiments[name])
     kind = str(experiment.get("kind", "")).strip()
     if not kind:
         raise ValueError("Experiment must define kind: {0}".format(name))
 
+    output_defaults = dict(consolidated_config.get("defaults", {}).get("output", {}))
+
+    if kind == "composite":
+        components = list(experiment.get("components", []))
+        if not components:
+            raise ValueError("Composite experiment must define components: {0}".format(name))
+        return {
+            "experiment_id": name,
+            "kind": kind,
+            "components": components,
+            "output": {
+                "dir": experiment.get("output_dir", "results/experiments/{0}".format(name)),
+                "json": "manifest.json",
+            },
+        }
+
     base_config: Dict[str, Any] = {
         "experiment_id": name,
         "kind": kind,
-        "dataset": {
-            "name": defaults.get("dataset", "mnist"),
-            "split": experiment.get("split", "test"),
-        },
-        "model": {
-            "name": defaults.get("model", "mnist_m1"),
-            "checkpoint_dir": defaults.get("checkpoint_dir"),
-        },
-        "attack": {
-            "name": defaults.get("attack", "fgsm"),
-            "epsilon": defaults.get("epsilon", 0.2),
-            "clip_min": defaults.get("clip_min", 0.0),
-            "clip_max": defaults.get("clip_max", 1.0),
-        },
-        "evaluation": {
-            "exclude_invalid_pairs": defaults.get("exclude_invalid_pairs", False),
-            "batch_size": defaults.get("batch_size", 256),
-        },
+        "dataset": dict(experiment.get("dataset", {})),
+        "model": dict(experiment.get("model", {})),
+        "attack": dict(experiment.get("attack", {})),
+        "evaluation": dict(experiment.get("evaluation", {})),
         "output": {
             "dir": experiment.get("output_dir", "results/experiments/{0}".format(name)),
-            "csv": "metrics.csv",
-            "json": "metrics.json",
+            "csv": output_defaults.get("csv", "metrics.csv"),
+            "json": output_defaults.get("json", "metrics.json"),
         },
     }
 
     if kind == "split_eval":
-        base_config["dataset"]["slices"] = list(experiment.get("slices", []))
+        if "slices" in experiment:
+            base_config["dataset"]["slices"] = list(experiment.get("slices", []))
         base_config["filter"] = filter_config_from_alias(experiment.get("filter"))
         return base_config
 
+    if kind == "imagenet_table_4":
+        base_config["quantization"] = dict(experiment.get("quantization", {}))
+        base_config["output"].update(dict(experiment.get("output", {})))
+        return base_config
+
     if kind == "filter_grid":
+        dataset_override = dict(experiment.get("dataset", {}))
         slice_config = dict(experiment.get("slice", {}))
+        if dataset_override:
+            slice_config = dataset_override
         base_config["dataset"].update(
             {
+                "name": slice_config.get("name"),
+                "split": slice_config.get("split"),
                 "start": slice_config.get("start"),
                 "end": slice_config.get("end"),
-                "slice_name": slice_config.get("name"),
-                "high_entropy_only": bool(experiment.get("high_entropy_only", False)),
-                "entropy_threshold": {"min": experiment.get("entropy_min", 5.0)},
+                "slice_name": slice_config.get("slice_name") or slice_config.get("label"),
+                "high_entropy_only": bool(
+                    slice_config.get(
+                        "high_entropy_only",
+                        experiment.get("high_entropy_only", False),
+                    )
+                ),
+                "entropy_threshold": slice_config.get(
+                    "entropy_threshold",
+                    {"min": experiment.get("entropy_min", 5.0)},
+                ),
             }
         )
         base_config["filters"] = [
             filter_config_from_alias(filter_name)
             for filter_name in experiment.get("filters", [])
         ]
-        base_config["selection_stage"] = str(slice_config.get("name", name)).lower()
+        if not base_config["filters"]:
+            raise ValueError("Experiment must define at least one filter: {0}".format(name))
+        selection_stage = (
+            base_config["dataset"].get("slice_name")
+            or slice_config.get("label")
+            or name
+        )
+        base_config["selection_stage"] = str(selection_stage).lower()
         return base_config
 
     raise ValueError("Unknown experiment kind: {0}".format(kind))
+
+
+def _component_manifest_entry(
+    component_name: str,
+    component_config: Dict[str, Any],
+    result: Any,
+) -> Dict[str, Any]:
+    """Return a compact manifest entry for one composite component."""
+    entry: Dict[str, Any] = {
+        "experiment_id": component_name,
+        "kind": component_config["kind"],
+        "output_dir": component_config["output"]["dir"],
+    }
+    if isinstance(result, dict):
+        entry.update(result)
+        return entry
+    if isinstance(result, list):
+        entry["status"] = "completed"
+        entry["n_rows"] = len(result)
+        return entry
+    entry["status"] = "completed"
+    return entry
+
+
+def _run_composite_experiment(
+    config: Dict[str, Any],
+    consolidated_config: Dict[str, Any],
+) -> list[Dict[str, Any]]:
+    """Run component experiments in declared order and write a manifest."""
+    experiment_id = config["experiment_id"]
+    component_entries: list[Dict[str, Any]] = []
+    for component_name in config["components"]:
+        if component_name == experiment_id:
+            raise ValueError("Composite experiment cannot include itself: {0}".format(experiment_id))
+        component_config = build_experiment_config(component_name, consolidated_config)
+        result = run_experiment(component_name, consolidated_config)
+        component_entries.append(
+            _component_manifest_entry(component_name, component_config, result)
+        )
+
+    output_dir = resolve_project_path(config["output"]["dir"]) or Path(config["output"]["dir"])
+    write_metrics_json(
+        output_dir / config["output"].get("json", "manifest.json"),
+        {
+            "experiment_id": experiment_id,
+            "kind": config["kind"],
+            "components": component_entries,
+        },
+    )
+    return component_entries
 
 
 def run_experiment(name: str, consolidated_config: Dict[str, Any]):
@@ -132,8 +226,12 @@ def run_experiment(name: str, consolidated_config: Dict[str, Any]):
     config = build_experiment_config(name, consolidated_config)
     kind = config["kind"]
 
+    if kind == "composite":
+        return _run_composite_experiment(config, consolidated_config)
     if kind == "split_eval":
         return run_fgsm_split_experiment(config)
     if kind == "filter_grid":
         return run_filter_candidate_experiment(config)
+    if kind == "imagenet_table_4":
+        return run_table4_imagenet_experiment(config)
     raise ValueError("Unknown experiment kind: {0}".format(kind))

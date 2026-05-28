@@ -61,6 +61,56 @@ def test_factory_builds_box_mean_filter() -> None:
     assert filter_fn(np.ones((5, 5, 1), dtype=np.float32)).shape == (5, 5, 1)
 
 
+def test_factory_builds_scalar_quantization_filter() -> None:
+    """Scalar quantization should expose interval metadata."""
+    name, filter_fn, metadata = build_filter_from_config(
+        {"name": "scalar_quantization_6", "type": "scalar_quantization", "intervals": 6}
+    )
+
+    assert name == "scalar_quantization_6"
+    assert metadata == {
+        "filter_name": "scalar_quantization_6",
+        "filter_type": "scalar_quantization",
+        "intervals": 6,
+        "interval_size": 43,
+    }
+    output = filter_fn(np.asarray([0.0, 0.5, 1.0], dtype=np.float32))
+    assert output.shape == (3,)
+
+
+def test_factory_builds_nonuniform_quantization_filter() -> None:
+    """Current non-uniform quantization should be available to filter grids."""
+    name, filter_fn, metadata = build_filter_from_config(
+        {"name": "nonuniform_quantization", "type": "nonuniform_quantization"}
+    )
+
+    assert name == "nonuniform_quantization"
+    assert metadata == {
+        "filter_name": "nonuniform_quantization",
+        "filter_type": "nonuniform_quantization",
+    }
+    output = filter_fn(np.zeros((4, 4, 1), dtype=np.float32))
+    assert output.shape == (4, 4, 1)
+
+
+def test_factory_builds_legacy_nonuniform_quantization_filter() -> None:
+    """The legacy DeepDetector non-uniform rule should remain selectable."""
+    name, filter_fn, metadata = build_filter_from_config(
+        {
+            "name": "nonuniform_quantization_legacy",
+            "type": "nonuniform_quantization_legacy",
+        }
+    )
+
+    assert name == "nonuniform_quantization_legacy"
+    assert metadata == {
+        "filter_name": "nonuniform_quantization_legacy",
+        "filter_type": "nonuniform_quantization_legacy",
+    }
+    output = filter_fn(np.zeros((4, 4, 1), dtype=np.float32))
+    assert output.shape == (4, 4, 1)
+
+
 def test_factory_rejects_unknown_filter_type() -> None:
     """Unknown filter types should fail explicitly."""
     with pytest.raises(ValueError, match="Unknown filter type"):

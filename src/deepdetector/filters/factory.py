@@ -11,6 +11,10 @@ from deepdetector.filters.mean_filters import (
     cross_mean_filter,
     diamond_mean_filter,
 )
+from deepdetector.filters.quantization import (
+    nonuniform_quantization,
+    nonuniform_quantization_legacy,
+)
 
 
 FilterFn = Callable[[np.ndarray], np.ndarray]
@@ -62,6 +66,36 @@ def build_filter_from_config(config: Dict[str, Any]) -> Tuple[str, FilterFn, Dic
     filter_name = _require_name(config)
     filter_type = str(config.get("type", "")).strip()
 
+    if filter_type == "scalar_quantization":
+        from deepdetector.evaluation.article_reproduction import (
+            interval_size,
+            scalar_filter_for_intervals,
+        )
+
+        intervals = _require_positive_int(config, "intervals")
+        quantization_interval = interval_size(intervals)
+        metadata = {
+            "filter_name": filter_name,
+            "filter_type": filter_type,
+            "intervals": intervals,
+            "interval_size": quantization_interval,
+        }
+        return filter_name, scalar_filter_for_intervals(intervals), metadata
+
+    if filter_type == "nonuniform_quantization":
+        metadata = {
+            "filter_name": filter_name,
+            "filter_type": filter_type,
+        }
+        return filter_name, nonuniform_quantization, metadata
+
+    if filter_type == "nonuniform_quantization_legacy":
+        metadata = {
+            "filter_name": filter_name,
+            "filter_type": filter_type,
+        }
+        return filter_name, nonuniform_quantization_legacy, metadata
+
     if filter_type == "cross_mean":
         radius = _require_positive_int(config, "radius")
         metadata = _metadata(
@@ -109,12 +143,12 @@ def build_filter_from_config(config: Dict[str, Any]) -> Tuple[str, FilterFn, Dic
         }
         return filter_name, adaptive_quantization_filter, metadata
 
-    if filter_type == "proposed_detection_filter":
+    if filter_type in {"proposed_detection_filter", "proposed_filter"}:
         from deepdetector.evaluation.article_reproduction import proposed_detection_filter
 
         metadata = {
             "filter_name": filter_name,
-            "filter_type": filter_type,
+            "filter_type": "proposed_detection_filter",
         }
         return filter_name, proposed_detection_filter, metadata
 

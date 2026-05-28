@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import re
 import sys
 
 import pytest
@@ -53,12 +54,12 @@ def test_load_yaml_config_requires_mapping_root(tmp_path) -> None:
 
     empty_path = tmp_path / "empty.yaml"
     empty_path.write_text("", encoding="utf-8")
-    with pytest.raises(ValueError, match=str(empty_path)):
+    with pytest.raises(ValueError, match=re.escape(str(empty_path))):
         load_yaml_config(empty_path)
 
     list_path = tmp_path / "list.yaml"
     list_path.write_text("- not\n- a\n- mapping\n", encoding="utf-8")
-    with pytest.raises(ValueError, match=str(list_path)):
+    with pytest.raises(ValueError, match=re.escape(str(list_path))):
         load_yaml_config(list_path)
 
 

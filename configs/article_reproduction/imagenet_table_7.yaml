@@ -49,5 +49,5 @@ filter:
     - 9
 
 outputs:
-  results_dir: results/imagenet/article_reproduction
+  results_dir: results/experiments/table_7_imagenet
   pivot_csv: table_7_imagnet.csv

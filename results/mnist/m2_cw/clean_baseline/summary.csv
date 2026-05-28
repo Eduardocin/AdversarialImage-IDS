@@ -1,2 +1,0 @@
-experiment,dataset,model,epochs,batch_size,learning_rate,test_accuracy_clean,checkpoint_path,seed_tf,seed_numpy,notes
-mnist_m2_clean_baseline,mnist,M2,10,128,0.001,0.9938,C:\Users\Eduar\OneDrive\Documentos\GitHub\AdversarialImage-IDS\results\mnist\m2_cw\clean_baseline\checkpoints\mnist_m2.ckpt,1234,20170830,Separate M2 CNN checkpoint for MNIST CW reproduction; architecture aligned to the base M2 definition.

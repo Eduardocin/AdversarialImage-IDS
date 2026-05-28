@@ -110,21 +110,82 @@ def test_filter_candidate_runner_reuses_context_and_writes_standard_outputs(
     assert payload["extra"]["best_filter_by_f1"]["filter_name"] == "box_5x5"
 
 
+def test_filter_candidate_runner_derives_quantization_csv_schema(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Table 4 filter grids should emit interval columns without YAML field lists."""
+    monkeypatch.setattr(filter_candidate_runner, "prepare_fgsm_context", lambda config: _context())
+    monkeypatch.setattr(
+        filter_candidate_runner,
+        "evaluate_filter_on_existing_adversarial",
+        lambda **kwargs: {
+            "TP": 1,
+            "FN": 2,
+            "FP": 3,
+            "recall_percent": 25.0,
+            "precision_percent": 50.0,
+            "f1_percent": 33.33,
+        },
+    )
+    monkeypatch.setattr(filter_candidate_runner, "close_graph", lambda graph: None)
+
+    filter_candidate_runner.run_filter_candidate_experiment(
+        {
+            "experiment_id": "table_4",
+            "filters": [
+                {
+                    "name": "scalar_quantization_2",
+                    "type": "scalar_quantization",
+                    "intervals": 2,
+                }
+            ],
+            "output": {"dir": str(tmp_path), "csv": "metrics.csv", "json": "metrics.json"},
+        }
+    )
+
+    assert (tmp_path / "metrics.csv").read_text(encoding="utf-8").splitlines() == [
+        (
+            "filter_name,filter_type,intervals,interval_size,TP,FN,FP,"
+            "recall_percent,precision_percent,f1_percent"
+        ),
+        "scalar_quantization_2,scalar_quantization,2,128,1,2,3,25.0,50.0,33.33",
+    ]
+
+
 def test_filter_candidate_configs_define_expected_candidates() -> None:
-    """Table 7 and 8 configs should declare candidates only in YAML."""
+    """Table 3, 4, 7, and 8 configs should declare candidates only in YAML."""
     config = yaml.safe_load(
         (PROJECT_ROOT / "configs" / "experiments.yaml").read_text(encoding="utf-8")
     )
+    table3 = config["experiments"]["table_3"]
+    table4 = config["experiments"]["table_4"]
+    table4_mnist = config["experiments"]["table_4_mnist"]
     table7 = config["experiments"]["table_7"]
     table8 = config["experiments"]["table_8"]
 
+    assert table3["kind"] == "filter_grid"
+    assert table4["kind"] == "composite"
+    assert table4["components"] == ["table_4_mnist", "table_4_imagenet"]
+    assert table4_mnist["kind"] == "filter_grid"
     assert table7["kind"] == "filter_grid"
     assert table8["kind"] == "filter_grid"
+    assert len(table3["filters"]) == 3
+    assert len(table4_mnist["filters"]) == 9
     assert len(table7["filters"]) == 12
     assert len(table8["filters"]) == 5
+    assert table3["output_dir"] == "results/experiments/table_3"
+    assert table4["output_dir"] == "results/experiments/table_4"
+    assert table4_mnist["output_dir"] == "results/experiments/table_4/mnist"
     assert table7["output_dir"] == "results/experiments/table_7"
     assert table8["output_dir"] == "results/experiments/table_8"
 
+    assert [row["type"] for row in table3["filters"]] == [
+        "scalar_quantization",
+        "nonuniform_quantization",
+        "nonuniform_quantization_legacy",
+    ]
+    assert [row["intervals"] for row in table4_mnist["filters"]] == list(range(2, 11))
     assert table7["filters"] == [
         "cross_3x3",
         "cross_5x5",
@@ -156,3 +217,18 @@ def test_table7_and_table8_per_table_scripts_were_removed() -> None:
     assert "run_experiment" in source
     assert "evaluate_filter_on_existing_adversarial" not in source
     assert "markdown" not in source.lower()
+
+
+def test_table3_and_table4_legacy_assets_were_removed() -> None:
+    """Tables 3 and 4 should use only the consolidated experiment path."""
+    for relative_path in (
+        "scripts/article_reproduction/table_3.py",
+        "scripts/article_reproduction/table_4.py",
+        "scripts/article_reproduction/table_4_mnist.py",
+        "configs/article_reproduction/mnist_table_3.yaml",
+        "configs/article_reproduction/mnist_table_4.yaml",
+        "results/mnist/article_reproduction/table_3_uniform_vs_nonuniform.csv",
+        "results/mnist/article_reproduction/table_4_scalar_quantization_intervals.csv",
+        "results/mnist/article_reproduction/table_6_adaptive_quantization.csv",
+    ):
+        assert not (PROJECT_ROOT / relative_path).exists()

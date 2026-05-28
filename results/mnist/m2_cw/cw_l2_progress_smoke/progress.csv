@@ -1,3 +1,0 @@
-timestamp,kappa,batch_start,batch_end,n_done,n_total,percent_done,elapsed_seconds
-2026-05-17 17:47:03,0.0,0,1,1,2,50.0,0.27161288261413574
-2026-05-17 17:47:03,0.0,1,2,2,2,100.0,0.27484798431396484

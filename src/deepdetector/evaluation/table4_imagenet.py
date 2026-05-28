@@ -6,20 +6,17 @@ import csv
 from dataclasses import dataclass
 import logging
 from pathlib import Path
-from typing import Any, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Iterable, List, Sequence, Tuple
 
 import numpy as np
 
 from deepdetector.attacks.fgsm_imagenet import (
-    fgsm_changed_pixels,
-    fgsm_linf_255,
     generate_fgsm_caffe_image,
     predict_caffe_label,
     preprocess_caffe_inputs,
     uses_caffe_scale,
 )
 from deepdetector.evaluation.article_reproduction import interval_size, scalar_filter_for_intervals
-from deepdetector.filters.entropy import image_entropy_255_chw, one_d_entropy
 
 
 logger = logging.getLogger(__name__)
@@ -38,22 +35,6 @@ TABLE4_METRICS: Tuple[Tuple[str, str], ...] = (
     ("f1", "F1 Score"),
 )
 TABLE4_DATASET_LABEL = "ImageNet"
-DIAGNOSTIC_FIELDS: Tuple[str, ...] = (
-    "image_id",
-    "class_name",
-    "true_label",
-    "clean_pred",
-    "adv_pred",
-    "clean_correct",
-    "was_skipped",
-    "skip_reason",
-    "attack_success",
-    "disturbed_failure",
-    "entropy_clean",
-    "entropy_adv",
-    "fgsm_linf_255",
-    "fgsm_changed_pixels",
-)
 
 
 @dataclass(frozen=True)
@@ -76,10 +57,9 @@ class _ValidAttack:
 
 @dataclass(frozen=True)
 class Table4Evaluation:
-    """Rows and diagnostics produced by the Table 4 evaluation."""
+    """Rows produced by the Table 4 evaluation."""
 
     rows: List[dict[str, Any]]
-    diagnostics: List[dict[str, Any]]
     n_clean_total: int
     n_clean_correct: int
     n_attack_success: int
@@ -117,17 +97,6 @@ def _uses_caffe_scale(image: np.ndarray) -> bool:
     return uses_caffe_scale(image)
 
 
-def _entropy_for_image(image: np.ndarray) -> float:
-    """Compute entropy using the correct scale for normalized or Caffe images."""
-    image_array = np.asarray(image, dtype=np.float32)
-    if _uses_caffe_scale(image_array):
-        if image_array.ndim == 3 and image_array.shape[0] == 3:
-            return image_entropy_255_chw(image_array)
-        if image_array.ndim == 3 and image_array.shape[-1] == 3:
-            return image_entropy_255_chw(np.transpose(image_array, (2, 0, 1)))
-    return one_d_entropy(image_array)
-
-
 def _quantize_for_intervals(image: np.ndarray, intervals: int) -> np.ndarray:
     """Apply scalar quantization in the image's native scale."""
     step = interval_size(intervals)
@@ -138,16 +107,6 @@ def _quantize_for_intervals(image: np.ndarray, intervals: int) -> np.ndarray:
         quantized *= step
         return quantized.astype(np.float32)
     return scalar_filter_for_intervals(intervals)(image_array)
-
-
-def _fgsm_linf_255(clean_image: np.ndarray, adversarial_image: np.ndarray) -> float:
-    """Return Linf perturbation size in 0-255 pixel units."""
-    return fgsm_linf_255(clean_image, adversarial_image)
-
-
-def _fgsm_changed_pixels(clean_image: np.ndarray, adversarial_image: np.ndarray) -> int:
-    """Return number of elements changed by FGSM."""
-    return fgsm_changed_pixels(clean_image, adversarial_image)
 
 
 def generate_fgsm_from_gradient(
@@ -211,7 +170,6 @@ def evaluate_table4_imagenet(
     n_attack_success = 0
     disturbed_failure = 0
     skipped_wrong_baseline = 0
-    diagnostics: List[dict[str, Any]] = []
     valid_attacks: List[_ValidAttack] = []
 
     progress_every = _progress_every(n_clean_total)
@@ -220,12 +178,6 @@ def evaluate_table4_imagenet(
         clean_image = _article_model_input(model, sample.image)
         clean_pred = _predict_one(model, clean_image)
         clean_correct = clean_pred == int(sample.true_label)
-        adv_pred: Optional[int] = None
-        entropy_adv: Optional[float] = None
-        fgsm_linf_255: Optional[float] = None
-        fgsm_changed_pixels: Optional[int] = None
-        attack_success = False
-        is_disturbed_failure = False
 
         if not clean_correct:
             skipped_wrong_baseline += 1
@@ -239,17 +191,12 @@ def evaluate_table4_imagenet(
                 clip_min=clip_min,
                 clip_max=clip_max,
             )
-            fgsm_linf_255 = _fgsm_linf_255(clean_image, adversarial_image)
-            fgsm_changed_pixels = _fgsm_changed_pixels(clean_image, adversarial_image)
             adv_pred = _predict_one(model, adversarial_image)
-            entropy_adv = _entropy_for_image(adversarial_image)
 
             if adv_pred == clean_pred:
                 disturbed_failure += 1
-                is_disturbed_failure = True
             else:
                 n_attack_success += 1
-                attack_success = True
                 valid_attacks.append(
                     _ValidAttack(
                         clean_image=clean_image,
@@ -258,25 +205,6 @@ def evaluate_table4_imagenet(
                         adv_pred=adv_pred,
                     )
                 )
-
-        diagnostics.append(
-            {
-                "image_id": sample.image_id,
-                "class_name": sample.class_name,
-                "true_label": int(sample.true_label),
-                "clean_pred": int(clean_pred),
-                "adv_pred": "" if adv_pred is None else int(adv_pred),
-                "clean_correct": bool(clean_correct),
-                "was_skipped": bool(not clean_correct),
-                "skip_reason": "none" if clean_correct else "wrong_clean_prediction",
-                "attack_success": bool(attack_success),
-                "disturbed_failure": bool(is_disturbed_failure),
-                "entropy_clean": float(_entropy_for_image(clean_image)),
-                "entropy_adv": "" if entropy_adv is None else float(entropy_adv),
-                "fgsm_linf_255": "" if fgsm_linf_255 is None else float(fgsm_linf_255),
-                "fgsm_changed_pixels": "" if fgsm_changed_pixels is None else int(fgsm_changed_pixels),
-            }
-        )
 
         if (
             sample_index == 1
@@ -335,7 +263,6 @@ def evaluate_table4_imagenet(
 
     return Table4Evaluation(
         rows=rows,
-        diagnostics=diagnostics,
         n_clean_total=int(n_clean_total),
         n_clean_correct=int(n_clean_correct),
         n_attack_success=int(n_attack_success),
@@ -366,12 +293,10 @@ def write_table4_outputs(
     output_dir: Path,
     result: Table4Evaluation,
     csv_name: str = "table_4_imagenet.csv",
-    diagnostics_name: str = "table_4_imagenet_diagnostics.csv",
-) -> Tuple[Path, Path]:
-    """Write Table 4 result and diagnostic CSV files."""
+) -> Path:
+    """Write the Table 4 ImageNet result CSV file."""
     output_dir.mkdir(parents=True, exist_ok=True)
     csv_path = output_dir / csv_name
-    diagnostics_path = output_dir / diagnostics_name
 
     with csv_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
@@ -379,10 +304,4 @@ def write_table4_outputs(
         for row in _table4_wide_rows(result):
             writer.writerow(row)
 
-    with diagnostics_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=DIAGNOSTIC_FIELDS)
-        writer.writeheader()
-        for row in result.diagnostics:
-            writer.writerow({field: row.get(field, "") for field in DIAGNOSTIC_FIELDS})
-
-    return csv_path, diagnostics_path
+    return csv_path

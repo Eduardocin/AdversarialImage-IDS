@@ -45,5 +45,5 @@ filter:
       size: 5
 
 outputs:
-  results_dir: results/imagenet/article_reproduction
+  results_dir: results/experiments/table_8_imagenet
   pivot_csv: table_8_imagenet.csv
