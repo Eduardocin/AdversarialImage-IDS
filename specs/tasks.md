@@ -119,6 +119,7 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Fail explicitly when the Caffe FGSM helper receives negative preprocessed values before `[0,255]` clipping.
   - [x] Add a regression test showing that mean-subtracted Caffe tensors are rejected for the article reproduction path.
 - [x] Update Table 7 ImageNet output to pivot-only CSV named `table_7_imagnet.csv`.
+  - [x] Route the official `table_7` experiment to the ImageNet/Caffe runner.
 - [x] Fix Table 7 ImageNet methodological fidelity for high-entropy spatial smoothing.
   - [x] Apply only the spatial smoothing filter in `table7_filter`, without scalar quantization.
   - [x] Count FP, TP, and FN over the same valid high-entropy adversarial pairs.
@@ -145,6 +146,8 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [ ] Update imports, tests, and docs when needed.
 - [ ] Implement Table 8 ImageNet validation spatial smoothing from `specs/features/Table 8 ImageNet.md`
   - [x] Add config-driven Table 8 ImageNet experiment for the validation split.
+  - [x] Route the official `table_8` experiment to the ImageNet/Caffe runner.
+  - [x] Reuse Table 7 ImageNet loading, clean-baseline, FGSM, and pivot helpers.
   - [x] Evaluate exactly the five fixed superior spatial smoothing filters.
   - [x] Write pivot CSV `table_8_imagenet.csv` and Table 8 status JSON.
   - [x] Preserve clean-baseline filtering and disturbed-failure exclusion.

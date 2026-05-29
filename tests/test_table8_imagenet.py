@@ -4,6 +4,7 @@ import sys
 
 import numpy as np
 import pytest
+import yaml
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -12,7 +13,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.evaluation import table8 as table8_module
-from scripts.article_reproduction import table_8_imagenet as table8_script
+from deepdetector.evaluation.table8 import Table8FilterResult
+from deepdetector.experiments import table8_imagenet_runner
 
 
 class MarkerModel:
@@ -52,7 +54,7 @@ def test_table8_configured_filters_are_the_five_fixed_article_filters() -> None:
         }
     }
 
-    assert list(table8_script.configured_filters(config)) == [
+    assert list(table8_imagenet_runner.configured_filters(config)) == [
         ("cross", 5),
         ("cross", 7),
         ("diamond", 5),
@@ -66,7 +68,7 @@ def test_table8_rejects_non_fixed_filter_sets() -> None:
     config = {"filter": {"filters": [{"mask_type": "box", "size": 3}]}}
 
     with pytest.raises(ValueError, match="Table 8 must evaluate exactly"):
-        list(table8_script.configured_filters(config))
+        list(table8_imagenet_runner.configured_filters(config))
 
 
 def test_table8_write_pivot_csv_uses_fixed_columns_and_metric_rows(tmp_path) -> None:
@@ -79,10 +81,14 @@ def test_table8_write_pivot_csv_uses_fixed_columns_and_metric_rows(tmp_path) -> 
             "precision": 0.5,
             "f1": 2.0 / 3.0,
         }
-        for mask_type, size in table8_script.TABLE8_FILTERS
+        for mask_type, size in table8_imagenet_runner.TABLE8_FILTERS
     ]
 
-    path = table8_script.write_pivot_csv(tmp_path / "table_8_imagenet.csv", rows)
+    path = table8_imagenet_runner.write_pivot_csv(
+        tmp_path / "table_8_imagenet.csv",
+        rows,
+        columns=table8_imagenet_runner.TABLE8_COLUMNS,
+    )
 
     assert path.name == "table_8_imagenet.csv"
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -136,15 +142,20 @@ def test_table8_evaluation_filters_clean_baseline_and_disturbed_failures(monkeyp
 
 def test_table8_default_config_uses_validation_split() -> None:
     """The checked-in Table 8 config must point at validation, not training."""
-    config_text = table8_script.DEFAULT_CONFIG.read_text(encoding="utf-8")
+    config = yaml.safe_load(
+        (PROJECT_ROOT / "configs" / "experiments.yaml").read_text(encoding="utf-8")
+    )
+    table8 = config["experiments"]["table_8"]
 
-    assert "split: validation" in config_text
-    assert "name: zebra" not in config_text
-    assert "data/imagenet/imagenet/test/zebra" not in config_text
-    assert "data/imagenet/validation/jellyfish" in config_text
+    assert table8["kind"] == "imagenet_table_8"
+    assert table8["dataset"]["split"] == "validation"
+    assert table8["dataset"]["classes"] == [
+        {"name": "jellyfish", "label": 107, "path": "data/imagenet/validation/jellyfish"}
+    ]
+    assert "test" not in table8["dataset"]["classes"][0]["path"]
     assert (
-        "artifacts/adversarial_examples/imagenet/fgsm/validation/adversarial_examples.npy"
-        in config_text
+        table8["attack"]["adversarial_path"]
+        == "artifacts/adversarial_examples/imagenet/fgsm/validation/adversarial_examples.npy"
     )
 
 
@@ -164,39 +175,35 @@ def test_table8_rejects_validation_config_pointing_to_test_split() -> None:
     }
 
     with pytest.raises(ValueError, match="validation split cannot use test path"):
-        table8_script._validate_dataset_split(config)
+        table8_imagenet_runner.load_imagenet_table7_subset(config)
 
 
-def test_table8_main_writes_partial_status_when_no_validation_images(
+def test_table8_runner_writes_partial_status_when_no_validation_images(
     monkeypatch,
     tmp_path,
 ) -> None:
     """Missing validation data should produce partial status instead of metrics."""
-    config_path = tmp_path / "table8.yaml"
-    config_path.write_text(
-        "\n".join(
-            [
-                "outputs:",
-                "  results_dir: results/experiments/table_8_imagenet",
-                "  pivot_csv: table_8_imagenet.csv",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(sys, "argv", ["table_8_imagenet", "--config", str(config_path), "--output-dir", str(tmp_path)])
-    monkeypatch.setattr(table8_script, "load_config", lambda path: {})
-    monkeypatch.setattr(table8_script, "build_model", lambda config: object())
+    monkeypatch.setattr(table8_imagenet_runner, "build_imagenet_table7_model", lambda config: object())
     monkeypatch.setattr(
-        table8_script,
-        "load_subset_images",
+        table8_imagenet_runner,
+        "load_imagenet_table7_subset",
         lambda config: (
             np.empty((0,), dtype=np.float32),
             np.empty((0,), dtype=np.int32),
         ),
     )
 
-    assert table8_script.main() == 0
+    result = table8_imagenet_runner.run_table8_imagenet_experiment(
+        {
+            "output": {"dir": str(tmp_path), "status_json": "table_8_status.json"},
+            "dataset": {"name": "imagenet", "split": "validation"},
+            "model": {},
+            "attack": {},
+            "filter": {},
+        }
+    )
 
+    assert result["status"] == "parcial"
     status = json.loads((tmp_path / "table_8_status.json").read_text(encoding="utf-8"))
     assert status["status"] == "parcial"
     assert status["limitation"] == "nenhuma_imagem_carregada"
@@ -204,42 +211,124 @@ def test_table8_main_writes_partial_status_when_no_validation_images(
     assert not (tmp_path / "table_8_imagenet.csv").exists()
 
 
-def test_table8_main_does_not_complete_when_no_attack_succeeds(
+def test_table8_runner_does_not_complete_when_no_attack_succeeds(
     monkeypatch,
     tmp_path,
 ) -> None:
     """Zero successful adversarial examples should not produce completed metrics."""
-    config_path = tmp_path / "table8.yaml"
-    config_path.write_text(
-        "\n".join(
-            [
-                "outputs:",
-                "  results_dir: results/experiments/table_8_imagenet",
-                "  pivot_csv: table_8_imagenet.csv",
-            ]
-        ),
-        encoding="utf-8",
-    )
     clean_images = np.asarray([_marker_image(10), _marker_image(11)], dtype=np.float32)
     labels = np.asarray([1, 1], dtype=np.int32)
     adversarial_images = np.asarray([_marker_image(10), _marker_image(11)], dtype=np.float32)
 
-    monkeypatch.setattr(sys, "argv", ["table_8_imagenet", "--config", str(config_path), "--output-dir", str(tmp_path)])
-    monkeypatch.setattr(table8_script, "load_config", lambda path: {})
-    monkeypatch.setattr(table8_script, "build_model", lambda config: MarkerModel())
-    monkeypatch.setattr(table8_script, "load_subset_images", lambda config: (clean_images, labels))
-    monkeypatch.setattr(table8_script, "_article_model_inputs", lambda model, images: images)
+    monkeypatch.setattr(table8_imagenet_runner, "build_imagenet_table7_model", lambda config: MarkerModel())
     monkeypatch.setattr(
-        table8_script,
+        table8_imagenet_runner,
+        "load_imagenet_table7_subset",
+        lambda config: (clean_images, labels),
+    )
+    monkeypatch.setattr(table8_imagenet_runner, "_article_model_inputs", lambda model, images: images)
+    monkeypatch.setattr(
+        table8_imagenet_runner,
         "adversarial_images_for_run",
-        lambda config, model, images, override_path, selected_indices=None: adversarial_images,
+        lambda config, model, images, selected_indices=None: adversarial_images,
     )
 
-    assert table8_script.main() == 0
+    result = table8_imagenet_runner.run_table8_imagenet_experiment(
+        {
+            "output": {"dir": str(tmp_path), "status_json": "table_8_status.json"},
+            "dataset": {"name": "imagenet", "split": "validation"},
+            "model": {},
+            "attack": {},
+            "filter": {},
+        }
+    )
 
+    assert result["status"] == "parcial"
     status = json.loads((tmp_path / "table_8_status.json").read_text(encoding="utf-8"))
     assert status["status"] == "parcial"
     assert status["limitation"] == "nenhum_adversarial_bem_sucedido"
     assert status["attack_success"] == 0
     assert status["disturbed_failure"] == 2
     assert not (tmp_path / "table_8_imagenet.csv").exists()
+
+
+def test_run_table8_experiment_writes_pivot_and_status(monkeypatch, tmp_path) -> None:
+    """The official Table 8 experiment should reuse the ImageNet pivot flow."""
+    calls = []
+    clean_images = np.asarray([_marker_image(10)], dtype=np.float32)
+    labels = np.asarray([1], dtype=np.int32)
+    adversarial_images = np.asarray([_marker_image(20)], dtype=np.float32)
+    (tmp_path / "metrics.csv").write_text("stale", encoding="utf-8")
+    (tmp_path / "metrics.json").write_text("stale", encoding="utf-8")
+
+    monkeypatch.setattr(table8_imagenet_runner, "build_imagenet_table7_model", lambda config: MarkerModel())
+    monkeypatch.setattr(
+        table8_imagenet_runner,
+        "load_imagenet_table7_subset",
+        lambda config: (clean_images, labels),
+    )
+    monkeypatch.setattr(table8_imagenet_runner, "_article_model_inputs", lambda model, images: images)
+    monkeypatch.setattr(
+        table8_imagenet_runner,
+        "adversarial_images_for_run",
+        lambda config, model, images, selected_indices=None: adversarial_images,
+    )
+
+    def fake_evaluate(**kwargs):
+        calls.append((kwargs["mask_type"], kwargs["size"]))
+        return Table8FilterResult(
+            mask_type=kwargs["mask_type"],
+            size=kwargs["size"],
+            tp=1,
+            fn=1,
+            fp=0,
+            recall=0.5,
+            precision=1.0,
+            f1=2.0 / 3.0,
+            attack_success=1,
+            disturbed_failure=0,
+            skipped_wrong_baseline=0,
+        )
+
+    monkeypatch.setattr(table8_imagenet_runner, "evaluate_table8_filter", fake_evaluate)
+
+    result = table8_imagenet_runner.run_table8_imagenet_experiment(
+        {
+            "output": {
+                "dir": str(tmp_path),
+                "pivot_csv": "table_8_imagenet.csv",
+                "status_json": "table_8_status.json",
+            },
+            "dataset": {"name": "imagenet", "split": "validation"},
+            "model": {},
+            "attack": {},
+            "filter": {
+                "filters": [
+                    {"mask_type": "cross", "size": 5},
+                    {"mask_type": "cross", "size": 7},
+                    {"mask_type": "diamond", "size": 5},
+                    {"mask_type": "diamond", "size": 7},
+                    {"mask_type": "box", "size": 5},
+                ]
+            },
+        }
+    )
+
+    assert result["status"] == "completo"
+    assert calls == [
+        ("cross", 5),
+        ("cross", 7),
+        ("diamond", 5),
+        ("diamond", 7),
+        ("box", 5),
+    ]
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "table_8_imagenet.csv",
+        "table_8_status.json",
+    ]
+    assert (tmp_path / "table_8_imagenet.csv").read_text(encoding="utf-8").splitlines() == [
+        "metric,cross_5x5,cross_7x7,diamond_5x5,diamond_7x7,box_5x5",
+        "Recall,0.500000,0.500000,0.500000,0.500000,0.500000",
+        "Precision,1.000000,1.000000,1.000000,1.000000,1.000000",
+        "F1 Score,0.666667,0.666667,0.666667,0.666667,0.666667",
+    ]

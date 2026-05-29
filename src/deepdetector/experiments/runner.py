@@ -8,6 +8,8 @@ from typing import Any, Dict
 from deepdetector.experiments.fgsm_split_runner import run_fgsm_split_experiment
 from deepdetector.experiments.filter_candidate_runner import run_filter_candidate_experiment
 from deepdetector.experiments.table6_runner import run_table6_experiment
+from deepdetector.experiments.table7_imagenet_runner import run_table7_imagenet_experiment
+from deepdetector.experiments.table8_imagenet_runner import run_table8_imagenet_experiment
 from deepdetector.experiments.table9_runner import run_table9_experiment
 from deepdetector.experiments.table4_imagenet_runner import run_table4_imagenet_experiment
 from deepdetector.experiments.table10_runner import run_table10_group_experiment
@@ -147,6 +149,14 @@ def build_experiment_config(
         base_config["quantization"] = dict(experiment.get("quantization", {}))
         return base_config
 
+    if kind == "imagenet_table_7":
+        base_config["filter"] = dict(experiment.get("filter", {}))
+        return base_config
+
+    if kind == "imagenet_table_8":
+        base_config["filter"] = dict(experiment.get("filter", {}))
+        return base_config
+
     if kind == "table_10_group":
         base_config["model_group"] = str(experiment.get("model_group", ""))
         base_config["dataset_label"] = str(experiment.get("dataset_label", ""))
@@ -261,6 +271,10 @@ def run_experiment(name: str, consolidated_config: Dict[str, Any]):
         return run_filter_candidate_experiment(config)
     if kind == "imagenet_table_4":
         return run_table4_imagenet_experiment(config)
+    if kind == "imagenet_table_7":
+        return run_table7_imagenet_experiment(config)
+    if kind == "imagenet_table_8":
+        return run_table8_imagenet_experiment(config)
     if kind == "table_10_group":
         return run_table10_group_experiment(config)
     raise ValueError("Unknown experiment kind: {0}".format(kind))

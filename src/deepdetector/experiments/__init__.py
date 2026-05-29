@@ -9,6 +9,8 @@ from deepdetector.experiments.filter_candidate_runner import (
 )
 from deepdetector.experiments.fgsm_split_runner import run_fgsm_split_experiment
 from deepdetector.experiments.table6_runner import run_table6_experiment
+from deepdetector.experiments.table7_imagenet_runner import run_table7_imagenet_experiment
+from deepdetector.experiments.table8_imagenet_runner import run_table8_imagenet_experiment
 from deepdetector.experiments.table9_runner import run_table9_experiment
 from deepdetector.experiments.runner import (
     build_experiment_config,
@@ -22,6 +24,8 @@ __all__ = [
     "prepare_mnist_fgsm_adversarial_set",
     "run_experiment",
     "run_table6_experiment",
+    "run_table7_imagenet_experiment",
+    "run_table8_imagenet_experiment",
     "run_table9_experiment",
     "run_fgsm_split_experiment",
     "run_filter_candidate_experiment",

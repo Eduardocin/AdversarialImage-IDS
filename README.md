@@ -159,6 +159,7 @@ python scripts/run_experiment.py --experiment table_10_inception_v3
 
 As Tabelas 3-9 usam `configs/experiments.yaml`. A Table 4 e composta: por
 padrao `table_4` executa `table_4_mnist` e `table_4_imagenet` em sequencia.
+Tables 7 e 8 usam o fluxo ImageNet/Caffe e gravam pivots CSV.
 As Tables 6 e 9 tambem combinam MNIST e ImageNet internamente e gravam metricas
 agregadas por split. Tambem e possivel executar apenas um lado da Table 4:
 
@@ -181,7 +182,8 @@ Table 10 e executada por grupo de modelo. Cada grupo escreve
 - `artifacts/` armazena modelos, checkpoints, assets Caffe e adversariais
   gerados. Modelos grandes e binarios nao devem ser versionados.
 - `results/` nao e fonte de verdade. Outputs oficiais sao regenerados em
-  `results/experiments/<experiment_id>/metrics.csv` e `metrics.json`.
+  `results/experiments/<experiment_id>/`; a maioria usa `metrics.csv` e
+  `metrics.json`, enquanto Tables 7 e 8 usam pivots CSV.
 
 ## Notas de Reproducao
 
