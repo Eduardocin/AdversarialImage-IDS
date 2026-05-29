@@ -250,7 +250,7 @@ experiments:
       deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
       caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
       mean_file: null
-      use_gpu: false
+      use_gpu: true
       batch_size: 32
     attack:
       name: fgsm
@@ -452,7 +452,7 @@ experiments:
       attack_deploy_proto: artifacts/models/imagenet/googlenet/deploy_removeSoftmax.prototxt
       caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
       mean_file: null
-      use_gpu: false
+      use_gpu: true
       batch_size: 32
     attack: {}
     evaluation:
@@ -576,60 +576,64 @@ experiments:
       name: imagenet
       split: test
       images_dir: data/imagenet/test
-      image_size: 224
+      image_size: 299
       n_samples: all
-      image_shape: [224, 224, 3]
-      value_range: [0.0, 1.0]
+      image_shape: [299, 299, 3]
+      value_range: [-0.5, 0.5]
       shuffle: false
       class_indices:
-        cab: 468
-        panda: 388
-        zebra: 340
+        cab: 267
+        panda: 169
+        zebra: 80
     model:
       name: inception_v3
+      family: tensorflow
+      graph_path: artifacts/models/imagenet/inceptionv3/classify_image_graph_def.pb
+      input_map_name: "ResizeBilinear:0"
+      output_tensor: "softmax/logits:0"
+      batch_size: 1
     attack: {}
-    evaluation: {}
+    evaluation:
+      n_samples: all
+      seed: 20170830
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
     model_group: inception_v3
     dataset_label: ImageNet
     rows:
       - "no": 14
         attack_model: "CW L2 (κ=0.0)/Inception v3"
-        status: blocked
-        blocked_reason: "Inception v3 ainda não está implementado."
+        status: implemented
         attack:
           name: cw_l2
           kappa: 0.0
       - "no": 15
         attack_model: "CW L2 (κ=0.5)/Inception v3"
-        status: blocked
-        blocked_reason: "Inception v3 ainda não está implementado."
+        status: implemented
         attack:
           name: cw_l2
           kappa: 0.5
       - "no": 16
         attack_model: "CW L2 (κ=1.0)/Inception v3"
-        status: blocked
-        blocked_reason: "Inception v3 ainda não está implementado."
+        status: implemented
         attack:
           name: cw_l2
           kappa: 1.0
       - "no": 17
         attack_model: "CW L2 (κ=2.0)/Inception v3"
-        status: blocked
-        blocked_reason: "Inception v3 ainda não está implementado."
+        status: implemented
         attack:
           name: cw_l2
           kappa: 2.0
       - "no": 18
         attack_model: "CW L2 (κ=4.0)/Inception v3"
-        status: blocked
-        blocked_reason: "Inception v3 ainda não está implementado."
+        status: implemented
         attack:
           name: cw_l2
           kappa: 4.0
       - "no": 20
         attack_model: "CW L∞/Inception v3"
-        status: blocked
-        blocked_reason: "Inception v3 ainda não está implementado."
+        status: implemented
         attack:
           name: cw_linf

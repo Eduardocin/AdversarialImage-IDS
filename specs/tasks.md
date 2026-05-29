@@ -170,3 +170,10 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Add full class-folder dataset/evaluation config for table_10_googlenet.
   - [x] Switch row 7 to `implemented` when metrics are computed.
   - [x] Keep outputs limited to `metrics.csv` and `metrics.json`.
+- [x] Implement Table 10 Inception v3 from `specs/features/table10_inception_v3.md`
+  - [x] Add Inception v3 TensorFlow graph wrapper with 299x299 preprocessing.
+  - [x] Register Table 10 CW L2 and CW Linf attack dispatchers.
+  - [x] Route `table_10_inception_v3` through the existing Table 10 group runner.
+  - [x] Update the Inception v3 config to use ImageNet 299x299 inputs and implemented CW rows.
+  - [x] Write Table 10 metrics outputs and a manifest for Inception v3 row statuses.
+  - [x] Add automated tests for config, wrapper preprocessing, dispatch, manifest, and row metrics.

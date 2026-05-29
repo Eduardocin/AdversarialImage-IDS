@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 
+from contextlib import contextmanager
 from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
@@ -102,6 +103,8 @@ def generate_cw_l2_examples(
     initial_const: float = 1e-3,
     abort_early: bool = True,
     targeted: bool = False,
+    nb_classes: int = 10,
+    image_shape: Optional[Tuple[int, ...]] = None,
     progress_callback: Optional[Callable[[int, int, int], None]] = None,
 ) -> np.ndarray:
     """Generate CW L2 adversarial examples.
@@ -121,8 +124,9 @@ def generate_cw_l2_examples(
             return self._model(x)
 
     image_array = np.asarray(images, dtype=np.float32)
-    if image_array.ndim != 4 or image_array.shape[1:] != (28, 28, 1):
-        raise ValueError("Expected images with shape (N, 28, 28, 1).")
+    expected_shape = tuple(image_shape or (28, 28, 1))
+    if image_array.ndim != 4 or tuple(image_array.shape[1:]) != expected_shape:
+        raise ValueError("Expected images with shape (N, {0}).".format(expected_shape))
 
     try:
         from keras import backend as K
@@ -132,7 +136,7 @@ def generate_cw_l2_examples(
     except Exception:
         pass
 
-    label_array = _one_hot(labels)
+    label_array = _one_hot(labels, nb_classes=int(nb_classes))
     wrapper = LogitsWrapper(model)
     batch_size = int(batch_size)
     attack = CWL2(
@@ -175,3 +179,64 @@ def generate_cw_l2_examples(
     adv_examples = np.concatenate(adv_batches, axis=0)
 
     return np.clip(adv_examples, clip_min, clip_max).astype(np.float32)
+
+
+def _model_session(model: Any) -> Any:
+    session = getattr(model, "sess", None) or getattr(model, "session", None)
+    if session is None:
+        raise NotImplementedError("CW L2 requires a model exposing sess or session.")
+    return session
+
+
+@contextmanager
+def _session_graph_context(session: Any):
+    graph = getattr(session, "graph", None)
+    if graph is None or not hasattr(graph, "as_default"):
+        yield
+        return
+    with graph.as_default():
+        yield
+
+
+def generate_cw_l2_attack(
+    model: Any,
+    images: np.ndarray,
+    labels: np.ndarray,
+    *,
+    kappa: float = 0.0,
+    confidence: Optional[float] = None,
+    batch_size: int = 1,
+    max_iterations: int = 1000,
+    learning_rate: float = 0.01,
+    binary_search_steps: int = 9,
+    clip_min: float = -0.5,
+    clip_max: float = 0.5,
+    initial_const: float = 1e-3,
+    abort_early: bool = True,
+    targeted: bool = False,
+    progress_callback: Optional[Callable[[int, int, int], None]] = None,
+) -> np.ndarray:
+    """Registry-compatible CW L2 attack for Table 10 model wrappers."""
+    image_array = np.asarray(images, dtype=np.float32)
+    session = _model_session(model)
+    with _session_graph_context(session):
+        return generate_cw_l2_examples(
+            sess=session,
+            model=model,
+            x_placeholder=getattr(model, "input_tensor", None),
+            images=image_array,
+            labels=np.asarray(labels),
+            confidence=float(kappa if confidence is None else confidence),
+            batch_size=int(batch_size),
+            max_iterations=int(max_iterations),
+            learning_rate=float(learning_rate),
+            binary_search_steps=int(binary_search_steps),
+            clip_min=float(clip_min),
+            clip_max=float(clip_max),
+            initial_const=float(initial_const),
+            abort_early=bool(abort_early),
+            targeted=bool(targeted),
+            nb_classes=int(getattr(model, "num_labels", 10)),
+            image_shape=tuple(image_array.shape[1:]),
+            progress_callback=progress_callback,
+        )

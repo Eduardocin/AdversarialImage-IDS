@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 
+from contextlib import contextmanager
 from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
@@ -59,6 +60,8 @@ def generate_cw_linf_examples(
     tau_check_interval: int = 50,
     clip_min: float = 0.0,
     clip_max: float = 1.0,
+    nb_classes: int = 10,
+    image_shape: Optional[Tuple[int, ...]] = None,
     progress_callback: Optional[Callable[[int, int, int], None]] = None,
 ) -> np.ndarray:
     """Generate CW Linf-style adversarial examples with TensorFlow 1.x.
@@ -69,10 +72,11 @@ def generate_cw_linf_examples(
     import tensorflow as tf
 
     image_array = np.asarray(images, dtype=np.float32)
-    if image_array.ndim != 4 or image_array.shape[1:] != (28, 28, 1):
-        raise ValueError("Expected images with shape (N, 28, 28, 1).")
+    expected_shape = tuple(image_shape or (28, 28, 1))
+    if image_array.ndim != 4 or tuple(image_array.shape[1:]) != expected_shape:
+        raise ValueError("Expected images with shape (N, {0}).".format(expected_shape))
 
-    label_array = _one_hot(labels)
+    label_array = _one_hot(labels, nb_classes=int(nb_classes))
     true_labels = _one_hot_to_int(labels)
     batch_size = int(batch_size)
     max_iterations = int(max_iterations)
@@ -80,18 +84,18 @@ def generate_cw_linf_examples(
 
     attack_x = tf.compat.v1.placeholder(
         tf.float32,
-        shape=(batch_size, 28, 28, 1),
+        shape=(batch_size,) + expected_shape,
         name="cw_linf_x",
     )
     attack_y = tf.compat.v1.placeholder(
         tf.float32,
-        shape=(batch_size, 10),
+        shape=(batch_size, int(nb_classes)),
         name="cw_linf_y",
     )
     tau = tf.compat.v1.placeholder(tf.float32, shape=(), name="cw_linf_tau")
 
     delta = tf.Variable(
-        tf.zeros((batch_size, 28, 28, 1), dtype=tf.float32),
+        tf.zeros((batch_size,) + expected_shape, dtype=tf.float32),
         name="cw_linf_delta",
     )
     adv_tensor = tf.clip_by_value(attack_x + delta, clip_min, clip_max)
@@ -180,3 +184,63 @@ def generate_cw_linf_examples(
 
     adv_examples = np.concatenate(adv_batches, axis=0)
     return np.clip(adv_examples, clip_min, clip_max).astype(np.float32)
+
+
+def _model_session(model: Any) -> Any:
+    session = getattr(model, "sess", None) or getattr(model, "session", None)
+    if session is None:
+        raise NotImplementedError("CW Linf requires a model exposing sess or session.")
+    return session
+
+
+@contextmanager
+def _session_graph_context(session: Any):
+    graph = getattr(session, "graph", None)
+    if graph is None or not hasattr(graph, "as_default"):
+        yield
+        return
+    with graph.as_default():
+        yield
+
+
+def generate_cw_linf_attack(
+    model: Any,
+    images: np.ndarray,
+    labels: np.ndarray,
+    *,
+    batch_size: int = 1,
+    max_iterations: int = 1000,
+    learning_rate: float = 0.01,
+    confidence: float = 0.0,
+    initial_tau: float = 1.0,
+    const: float = 1.0,
+    tau_decay: float = 0.9,
+    tau_check_interval: int = 50,
+    clip_min: float = -0.5,
+    clip_max: float = 0.5,
+    progress_callback: Optional[Callable[[int, int, int], None]] = None,
+) -> np.ndarray:
+    """Registry-compatible CW Linf attack for Table 10 model wrappers."""
+    image_array = np.asarray(images, dtype=np.float32)
+    session = _model_session(model)
+    with _session_graph_context(session):
+        return generate_cw_linf_examples(
+            sess=session,
+            model=model,
+            x_placeholder=getattr(model, "input_tensor", None),
+            images=image_array,
+            labels=np.asarray(labels),
+            batch_size=int(batch_size),
+            max_iterations=int(max_iterations),
+            learning_rate=float(learning_rate),
+            confidence=float(confidence),
+            initial_tau=float(initial_tau),
+            const=float(const),
+            tau_decay=float(tau_decay),
+            tau_check_interval=int(tau_check_interval),
+            clip_min=float(clip_min),
+            clip_max=float(clip_max),
+            nb_classes=int(getattr(model, "num_labels", 10)),
+            image_shape=tuple(image_array.shape[1:]),
+            progress_callback=progress_callback,
+        )

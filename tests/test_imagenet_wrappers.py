@@ -11,7 +11,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 sys.path.insert(0, str(SRC_ROOT))
 
-from deepdetector.models.imagenet_wrappers import GoogLeNetCaffeWrapper
+from deepdetector.models.imagenet_wrappers import (
+    GoogLeNetCaffeWrapper,
+    InceptionV3TensorFlowWrapper,
+)
 
 
 def test_googlenet_caffe_wrapper_reports_missing_caffe(monkeypatch) -> None:
@@ -134,3 +137,28 @@ def test_googlenet_caffe_wrapper_falls_back_to_prediction_deploy_for_gradient(
     np.testing.assert_array_equal(gradient, np.full((3, 2, 2), 3.0, dtype=np.float32))
     assert len(wrapper.net.backward_calls) == 1
     assert "prob" in wrapper.net.backward_calls[0]
+
+
+def test_inception_v3_wrapper_reports_missing_graph(tmp_path) -> None:
+    """Missing Inception graph assets should fail before TensorFlow graph loading."""
+    with pytest.raises(IOError, match="Missing Inception v3 graph file"):
+        InceptionV3TensorFlowWrapper(graph_path=str(tmp_path / "missing.pb"))
+
+
+def test_inception_v3_preprocess_uses_299_centered_range() -> None:
+    """Inception v3 Table 10 inputs should be resized to 299 and centered."""
+    wrapper = object.__new__(InceptionV3TensorFlowWrapper)
+    wrapper.image_size = 299
+
+    images = np.asarray(
+        [
+            np.zeros((4, 4, 3), dtype=np.float32),
+            np.ones((4, 4, 3), dtype=np.float32),
+        ]
+    )
+
+    preprocessed = InceptionV3TensorFlowWrapper.preprocess(wrapper, images)
+
+    assert preprocessed.shape == (2, 299, 299, 3)
+    assert float(preprocessed[0].min()) == -0.5
+    assert float(preprocessed[1].max()) == 0.5

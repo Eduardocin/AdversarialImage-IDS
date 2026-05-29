@@ -54,6 +54,8 @@ class DualNetworkDeepFoolModel:
 
 def test_deepfool_attack_is_registered() -> None:
     assert "deepfool" in ATTACK_REGISTRY
+    assert "cw_l2" in ATTACK_REGISTRY
+    assert "cw_linf" in ATTACK_REGISTRY
     assert ATTACK_REGISTRY["deepfool"] is generate_deepfool
 
 

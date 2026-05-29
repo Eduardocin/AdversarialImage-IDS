@@ -18,7 +18,10 @@ from deepdetector.evaluation.detector_metrics import (
 from deepdetector.filters.factory import build_filter_from_config
 from deepdetector.io.paths import ensure_dir, resolve_project_path
 from deepdetector.io.result_writers import write_metrics_csv, write_metrics_json
-from deepdetector.models.imagenet_wrappers import GoogLeNetCaffeWrapper
+from deepdetector.models.imagenet_wrappers import (
+    GoogLeNetCaffeWrapper,
+    InceptionV3TensorFlowWrapper,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -104,7 +107,7 @@ def _output_dir(config: dict[str, Any]) -> Path:
 def _path_text(path_value: Any, field_name: str) -> str:
     path = resolve_project_path(path_value)
     if path is None:
-        raise ValueError("Table 10 GoogLeNet config must define {0}.".format(field_name))
+        raise ValueError("Table 10 ImageNet config must define {0}.".format(field_name))
     return str(path)
 
 
@@ -130,11 +133,35 @@ def build_table_10_googlenet_model(config: dict[str, Any]) -> Any:
     )
 
 
+def build_table_10_inception_v3_model(config: dict[str, Any]) -> Any:
+    """Instantiate the configured Inception v3 TensorFlow wrapper."""
+    model_config = config.get("model", {})
+    return InceptionV3TensorFlowWrapper(
+        graph_path=_path_text(model_config.get("graph_path"), "model.graph_path"),
+        input_map_name=str(model_config.get("input_map_name", "Mul:0")),
+        output_tensor_name=str(model_config.get("output_tensor", "softmax/logits:0")),
+        batch_size=int(model_config.get("batch_size", 32)),
+    )
+
+
+def _build_table_10_imagenet_model(config: dict[str, Any]) -> Any:
+    model_group = str(config.get("model_group", "")).lower()
+    if not model_group:
+        model_name = str(config.get("model", {}).get("name", "")).lower()
+        if model_name == "googlenet_caffe":
+            model_group = "googlenet"
+        elif model_name == "inception_v3":
+            model_group = "inception_v3"
+    if model_group == "googlenet":
+        return build_table_10_googlenet_model(config)
+    if model_group == "inception_v3":
+        return build_table_10_inception_v3_model(config)
+    raise ValueError("Unsupported Table 10 ImageNet model group: {0}".format(model_group))
+
+
 def _validate_table_10_model(model: Any) -> None:
-    if not hasattr(model, "gradient"):
-        raise NotImplementedError("Table 10 DeepFool requires gradient access on the model.")
     if not (hasattr(model, "predict_preprocessed_batch") or hasattr(model, "predict_batch")):
-        raise NotImplementedError("Table 10 DeepFool requires model scores or predictions.")
+        raise NotImplementedError("Table 10 ImageNet requires model scores or predictions.")
 
 
 def _predict_one(model: Any, image: np.ndarray) -> int:
@@ -149,7 +176,7 @@ def _configured_n_samples(config: dict[str, Any]) -> int | None:
         return None
     n_samples = int(value)
     if n_samples <= 0:
-        raise ValueError("Table 10 GoogLeNet n_samples must be positive or 'all'.")
+        raise ValueError("Table 10 ImageNet n_samples must be positive or 'all'.")
     return n_samples
 
 
@@ -186,7 +213,7 @@ def _class_folder_rows(
     return rows
 
 
-def _load_table_10_googlenet_class_folders(
+def _load_table_10_imagenet_class_folders(
     *,
     config: dict[str, Any],
     model: Any,
@@ -197,7 +224,7 @@ def _load_table_10_googlenet_class_folders(
     images_dir = _path_text(dataset_config.get("images_dir"), "dataset.images_dir")
     class_indices = dataset_config.get("class_indices", {})
     if not isinstance(class_indices, dict) or not class_indices:
-        raise ValueError("Table 10 GoogLeNet dataset must define class_indices.")
+        raise ValueError("Table 10 ImageNet dataset must define class_indices.")
 
     rows = _class_folder_rows(Path(images_dir), class_indices)
     if bool(dataset_config.get("shuffle", False)):
@@ -230,18 +257,18 @@ def _load_table_10_googlenet_class_folders(
     return np.asarray(images, dtype=np.float32), np.asarray(labels, dtype=np.int32)
 
 
-def _load_table_10_googlenet_images(
+def _load_table_10_imagenet_images(
     config: dict[str, Any],
     model: Any,
 ) -> tuple[np.ndarray, np.ndarray]:
     dataset_config = config.get("dataset", {})
     images_dir = dataset_config.get("images_dir")
     if not images_dir:
-        raise ValueError("Table 10 GoogLeNet dataset must define images_dir.")
+        raise ValueError("Table 10 ImageNet dataset must define images_dir.")
 
     n_samples = _configured_n_samples(config)
     image_size = int(dataset_config.get("image_size", 224))
-    images, labels = _load_table_10_googlenet_class_folders(
+    images, labels = _load_table_10_imagenet_class_folders(
         config=config,
         model=model,
         n_samples=n_samples,
@@ -249,9 +276,17 @@ def _load_table_10_googlenet_images(
     )
 
     if len(images) == 0:
-        raise ValueError("Table 10 GoogLeNet dataset is empty.")
-    logger.info("Loaded %d ImageNet samples for Table 10 GoogLeNet.", len(images))
+        raise ValueError("Table 10 ImageNet dataset is empty.")
+    logger.info("Loaded %d ImageNet samples for Table 10 %s.", len(images), config.get("model_group"))
     return images.astype(np.float32), labels.astype(np.int32)
+
+
+def _load_table_10_googlenet_images(
+    config: dict[str, Any],
+    model: Any,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compatibility wrapper for existing GoogLeNet tests and callers."""
+    return _load_table_10_imagenet_images(config, model)
 
 
 def _table_10_filter(config: dict[str, Any]):
@@ -307,6 +342,10 @@ def _generate_table_10_adversarial(
     return np.asarray(adversarial_batch[0], dtype=np.float32)
 
 
+def _is_gradient_attack(attack_name: str) -> bool:
+    return str(attack_name).lower() == "deepfool"
+
+
 def _table_10_metrics_from_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     counts = compute_detector_counts(records)
     rates = compute_precision_recall(counts)
@@ -329,11 +368,11 @@ def _progress_interval(total: int) -> int:
     return 25
 
 
-def evaluate_table_10_googlenet_row(
+def evaluate_table_10_imagenet_row(
     group_config: dict[str, Any],
     row_config: dict[str, Any],
 ) -> dict[str, Any]:
-    """Evaluate one implemented ImageNet/GoogLeNet Table 10 row."""
+    """Evaluate one implemented ImageNet Table 10 row."""
     attack_config = row_config.get("attack", {})
     attack_name = str(attack_config.get("name", "")).strip()
     if not attack_name:
@@ -344,9 +383,14 @@ def evaluate_table_10_googlenet_row(
         row_config.get("no", ""),
         attack_name,
     )
-    model = build_table_10_googlenet_model(group_config)
+    model = _build_table_10_imagenet_model(group_config)
     _validate_table_10_model(model)
-    images, labels = _load_table_10_googlenet_images(group_config, model)
+    if _is_gradient_attack(attack_name) and not hasattr(model, "gradient"):
+        raise NotImplementedError("Table 10 DeepFool requires gradient access on the model.")
+    if str(group_config.get("model_group", "")).lower() == "googlenet":
+        images, labels = _load_table_10_googlenet_images(group_config, model)
+    else:
+        images, labels = _load_table_10_imagenet_images(group_config, model)
     filter_fn = _table_10_filter(group_config)
 
     records: list[dict[str, Any]] = []
@@ -474,14 +518,28 @@ def evaluate_table_10_googlenet_row(
     return {"metrics": metrics}
 
 
-def _is_table_10_googlenet_attack(
+def evaluate_table_10_googlenet_row(
+    group_config: dict[str, Any],
+    row_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Compatibility wrapper for the GoogLeNet Table 10 evaluator."""
+    config = dict(group_config)
+    config.setdefault("model_group", "googlenet")
+    return evaluate_table_10_imagenet_row(config, row_config)
+
+
+def _is_table_10_imagenet_attack(
     group_config: dict[str, Any],
     row_config: dict[str, Any],
 ) -> bool:
+    model_group = str(group_config.get("model_group", "")).lower()
+    attack_name = str(row_config.get("attack", {}).get("name", "")).lower()
     return (
         str(group_config.get("dataset", {}).get("name", "")).lower() == "imagenet"
-        and str(group_config.get("model_group", "")).lower() == "googlenet"
-        and str(row_config.get("attack", {}).get("name", "")).lower() in {"fgsm", "deepfool"}
+        and (
+            (model_group == "googlenet" and attack_name in {"fgsm", "deepfool"})
+            or (model_group == "inception_v3" and attack_name in {"cw_l2", "cw_linf"})
+        )
     )
 
 
@@ -489,8 +547,10 @@ def _row_result(group_config: dict[str, Any], row_config: dict[str, Any]) -> dic
     metrics = row_config.get("metrics")
     if isinstance(metrics, dict):
         return {"metrics": metrics}
-    if _is_table_10_googlenet_attack(group_config, row_config):
-        return evaluate_table_10_googlenet_row(group_config, row_config)
+    if _is_table_10_imagenet_attack(group_config, row_config):
+        if str(group_config.get("model_group", "")).lower() == "googlenet":
+            return evaluate_table_10_googlenet_row(group_config, row_config)
+        return evaluate_table_10_imagenet_row(group_config, row_config)
     return row_config
 
 
@@ -500,6 +560,7 @@ def save_table_10_outputs(
     output_dir: Path,
     dataset_group: str,
     model_group: str,
+    manifest_entries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Path]:
     """Write the official CSV and JSON outputs for one Table 10 group."""
     output_path = ensure_dir(output_dir)
@@ -513,7 +574,18 @@ def save_table_10_outputs(
             "rows": rows,
         },
     )
-    return {"csv": csv_path, "json": json_path}
+    outputs = {"csv": csv_path, "json": json_path}
+    if manifest_entries is not None:
+        outputs["manifest"] = write_metrics_json(
+            output_path / "manifest.json",
+            {
+                "table": 10,
+                "dataset_group": dataset_group,
+                "model_group": model_group,
+                "rows": manifest_entries,
+            },
+        )
+    return outputs
 
 
 def run_table_10_group(config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -535,11 +607,23 @@ def run_table_10_group(config: dict[str, Any]) -> list[dict[str, Any]]:
         raise ValueError("Table 10 group must define dataset.name.")
 
     rows: list[dict[str, Any]] = []
+    manifest_entries: list[dict[str, Any]] = []
+    write_manifest = model_group == "inception_v3"
     for row_config in rows_config:
         no = int(row_config["no"])
         attack_model = str(row_config["attack_model"])
         status = str(row_config.get("status", "planned"))
         if status != "implemented":
+            manifest_entry = {
+                "no": no,
+                "attack_model": attack_model,
+                "status": status,
+            }
+            if row_config.get("blocked_reason"):
+                manifest_entry["blocked_reason"] = str(row_config["blocked_reason"])
+                if model_group == "inception_v3":
+                    write_manifest = True
+            manifest_entries.append(manifest_entry)
             rows.append(
                 build_pending_table_10_row(
                     no=no,
@@ -549,13 +633,43 @@ def run_table_10_group(config: dict[str, Any]) -> list[dict[str, Any]]:
             )
             continue
 
+        try:
+            result = _row_result(config, row_config)
+        except Exception as exc:
+            if model_group != "inception_v3":
+                raise
+            rows.append(
+                build_pending_table_10_row(
+                    no=no,
+                    attack_model=attack_model,
+                    dataset=dataset_label,
+                )
+            )
+            manifest_entries.append(
+                {
+                    "no": no,
+                    "attack_model": attack_model,
+                    "status": "blocked",
+                    "blocked_reason": str(exc),
+                }
+            )
+            write_manifest = True
+            continue
+
         rows.append(
             normalize_table_10_result(
                 no=no,
                 attack_model=attack_model,
                 dataset=dataset_label,
-                result=_row_result(config, row_config),
+                result=result,
             )
+        )
+        manifest_entries.append(
+            {
+                "no": no,
+                "attack_model": attack_model,
+                "status": "completed",
+            }
         )
 
     save_table_10_outputs(
@@ -563,5 +677,6 @@ def run_table_10_group(config: dict[str, Any]) -> list[dict[str, Any]]:
         output_dir=_output_dir(config),
         dataset_group=dataset_group,
         model_group=model_group,
+        manifest_entries=manifest_entries if write_manifest else None,
     )
     return rows

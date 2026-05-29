@@ -15,6 +15,7 @@ sys.path.insert(0, str(SRC_ROOT))
 from deepdetector.evaluation.tables.table_10 import (  # noqa: E402
     TABLE_10_SCHEMA,
     build_pending_table_10_row,
+    evaluate_table_10_imagenet_row,
     evaluate_table_10_googlenet_row,
     run_table_10_group,
 )
@@ -141,7 +142,6 @@ def test_table10_imagenet_groups_use_test_dataset() -> None:
     for experiment_name in (
         "table_10_googlenet",
         "table_10_caffenet",
-        "table_10_inception_v3",
     ):
         dataset = config["experiments"][experiment_name]["dataset"]
         assert dataset["name"] == "imagenet"
@@ -152,6 +152,50 @@ def test_table10_imagenet_groups_use_test_dataset() -> None:
             "panda": 388,
             "zebra": 340,
         }
+
+    inception_dataset = config["experiments"]["table_10_inception_v3"]["dataset"]
+    assert inception_dataset["name"] == "imagenet"
+    assert inception_dataset["split"] == "test"
+    assert inception_dataset["images_dir"] == "data/imagenet/test"
+    assert inception_dataset["class_indices"] == {
+        "cab": 267,
+        "panda": 169,
+        "zebra": 80,
+    }
+
+
+def test_table10_inception_v3_config_enables_cw_rows() -> None:
+    """Inception v3 should be configured as a real Table 10 ImageNet group."""
+    config = _consolidated_config()
+    experiment = config["experiments"]["table_10_inception_v3"]
+
+    assert experiment["kind"] == "table_10_group"
+    assert experiment["dataset"]["image_size"] == 299
+    assert experiment["dataset"]["image_shape"] == [299, 299, 3]
+    assert experiment["dataset"]["value_range"] == [-0.5, 0.5]
+    assert experiment["model"]["name"] == "inception_v3"
+    assert (
+        experiment["model"]["graph_path"]
+        == "artifacts/models/imagenet/inceptionv3/classify_image_graph_def.pb"
+    )
+    assert experiment["model"]["input_map_name"] == "ResizeBilinear:0"
+    assert [row["no"] for row in experiment["rows"]] == [14, 15, 16, 17, 18, 20]
+    assert [row["status"] for row in experiment["rows"]] == ["implemented"] * 6
+    assert [row["attack"]["name"] for row in experiment["rows"]] == [
+        "cw_l2",
+        "cw_l2",
+        "cw_l2",
+        "cw_l2",
+        "cw_l2",
+        "cw_linf",
+    ]
+    assert [row["attack"].get("kappa") for row in experiment["rows"][:5]] == [
+        0.0,
+        0.5,
+        1.0,
+        2.0,
+        4.0,
+    ]
 
 
 def test_table_10_schema_matches_paper_fields() -> None:
@@ -275,6 +319,38 @@ def test_table10_blocked_reasons_stay_out_of_outputs(tmp_path) -> None:
         encoding="utf-8"
     )
     assert not (tmp_path / "manifest.json").exists()
+
+
+def test_table10_inception_v3_group_writes_manifest_for_blocked_rows(tmp_path) -> None:
+    """Inception v3 should keep row execution status in a side manifest."""
+    rows = run_table_10_group(
+        {
+            "experiment_id": "table_10_inception_v3",
+            "kind": "table_10_group",
+            "dataset": {"name": "imagenet"},
+            "model_group": "inception_v3",
+            "dataset_label": "ImageNet",
+            "output_dir": str(tmp_path),
+            "rows": [
+                {
+                    "no": 14,
+                    "attack_model": "CW L2 (κ=0.0)/Inception v3",
+                    "status": "blocked",
+                    "blocked_reason": "missing graph",
+                }
+            ],
+        }
+    )
+
+    assert rows[0]["no"] == 14
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "manifest.json",
+        "metrics.csv",
+        "metrics.json",
+    ]
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["model_group"] == "inception_v3"
+    assert manifest["rows"][0]["blocked_reason"] == "missing graph"
 
 
 def test_table_10_googlenet_group_generates_three_rows(tmp_path) -> None:
@@ -439,6 +515,66 @@ def test_table10_googlenet_fgsm_row_uses_caffe_attack(monkeypatch) -> None:
 
     assert calls == [(1, 1.0, 0.0, 255.0)]
     assert float(adversarial.reshape(-1)[0]) == 1.0
+
+
+def test_table10_inception_v3_row_computes_cw_metrics(monkeypatch) -> None:
+    """Inception v3 implemented rows should use the shared ImageNet evaluator."""
+    images = [
+        [[[1.0]]],
+        [[[2.0]]],
+        [[[3.0]]],
+    ]
+    labels = [1, 2, 99]
+
+    monkeypatch.setattr(
+        table_10_module,
+        "build_table_10_inception_v3_model",
+        lambda config: Table10DummyModel(),
+    )
+    monkeypatch.setattr(
+        table_10_module,
+        "_load_table_10_imagenet_images",
+        lambda config, model: (
+            table_10_module.np.asarray(images, dtype=table_10_module.np.float32),
+            table_10_module.np.asarray(labels, dtype=table_10_module.np.int32),
+        ),
+    )
+
+    def fake_generate_attack(name, model, images, labels, **kwargs):
+        assert name == "cw_l2"
+        assert kwargs["kappa"] == 0.5
+        adversarial = images.copy()
+        adversarial[0, ...] = 2.0 if float(images[0].reshape(-1)[0]) == 1.0 else images[0]
+        return adversarial
+
+    def fake_build_filter(config):
+        def filter_fn(image):
+            return table_10_module.np.where(image == 2.0, 1.0, image)
+
+        return "test_filter", filter_fn, {}
+
+    monkeypatch.setattr(table_10_module, "generate_attack", fake_generate_attack)
+    monkeypatch.setattr(table_10_module, "build_filter_from_config", fake_build_filter)
+
+    result = evaluate_table_10_imagenet_row(
+        {
+            "dataset": {"name": "imagenet"},
+            "model_group": "inception_v3",
+            "model": {"name": "inception_v3"},
+            "filter": {"name": "test_filter", "type": "proposed_detection_filter"},
+        },
+        {
+            "no": 15,
+            "attack_model": "CW L2 (κ=0.5)/Inception v3",
+            "status": "implemented",
+            "attack": {"name": "cw_l2", "kappa": 0.5},
+        },
+    )
+
+    assert result["metrics"]["num_failures"] == 1
+    assert result["metrics"]["tp"] == 1
+    assert result["metrics"]["fn"] == 0
+    assert result["metrics"]["fp"] == 0
 
 
 def test_table10_googlenet_evaluator_requires_dataset_config(monkeypatch) -> None:

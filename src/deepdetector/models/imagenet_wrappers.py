@@ -326,3 +326,146 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
             resized_channels.append(np.asarray(resized, dtype=np.float32))
 
         return np.stack(resized_channels, axis=2).astype(np.float32)
+
+
+class InceptionV3TensorFlowWrapper(ImageNetModelWrapper):
+    """Run frozen TensorFlow Inception v3 graphs for Table 10 ImageNet CW rows."""
+
+    def __init__(
+        self,
+        graph_path: str,
+        input_map_name: str = "ResizeBilinear:0",
+        output_tensor_name: str = "softmax/logits:0",
+        batch_size: int = 32,
+        sess: Optional[object] = None,
+    ) -> None:
+        """Load a frozen Inception v3 graph and expose logits for CW attacks."""
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive.")
+
+        self.graph_path = Path(graph_path)
+        if not self.graph_path.is_file():
+            raise IOError("Missing Inception v3 graph file: {0}".format(self.graph_path))
+
+        try:
+            import tensorflow as tf
+        except ImportError as exc:
+            raise ImportError("TensorFlow is required for InceptionV3TensorFlowWrapper.") from exc
+
+        self.tf = tf
+        self.image_size = 299
+        self.num_labels = 1008
+        self.batch_size = int(batch_size)
+        self.input_map_name = str(input_map_name)
+        self.output_tensor_name = str(output_tensor_name)
+        self._attack_import_index = 0
+
+        graph_def = self._load_graph_def()
+        self.graph_def = graph_def
+        self.graph = self.tf.Graph()
+        with self.graph.as_default():
+            self.input_tensor = self.tf.compat.v1.placeholder(
+                self.tf.float32,
+                shape=(None, self.image_size, self.image_size, 3),
+                name="inception_input",
+            )
+            self.logits_tensor = self._import_logits(self.input_tensor, name="")
+
+        self.sess = sess or self.tf.compat.v1.Session(graph=self.graph)
+        self.session = self.sess
+
+    def _load_graph_def(self) -> object:
+        graph_def = self.tf.compat.v1.GraphDef()
+        with self.graph_path.open("rb") as handle:
+            graph_def.ParseFromString(handle.read())
+        return graph_def
+
+    def _scaled_input(self, tensor: object) -> object:
+        """Map Table 10 Inception input [-0.5, 0.5] to the graph's 0-255 input."""
+        if self.input_map_name == "ResizeBilinear:0":
+            return (tensor + 0.5) * 255.0
+        if self.input_map_name == "Sub:0":
+            return (tensor + 0.5) * 255.0 - 128.0
+        if self.input_map_name == "Mul:0":
+            return tensor * 2.0
+        return tensor
+
+    def _import_logits(self, tensor: object, name: str) -> object:
+        elements = self.tf.import_graph_def(
+            self.graph_def,
+            name=name,
+            input_map={self.input_map_name: self._scaled_input(tensor)},
+            return_elements=[self.output_tensor_name],
+        )
+        return elements[0]
+
+    def _resize_one(self, image: np.ndarray) -> np.ndarray:
+        """Resize one RGB image to Inception's fixed 299x299 input size."""
+        from PIL import Image
+
+        image_array = np.asarray(image, dtype=np.float32)
+        if image_array.ndim != 3 or image_array.shape[2] != 3:
+            raise ValueError("Expected image shape (H, W, 3).")
+
+        clipped = np.clip(image_array, 0.0, 1.0)
+        pil_image = Image.fromarray((clipped * 255.0).astype(np.uint8), mode="RGB")
+        resized = pil_image.resize((self.image_size, self.image_size), Image.BILINEAR)
+        return np.asarray(resized, dtype=np.float32) / 255.0
+
+    def _as_batch(self, images: np.ndarray) -> np.ndarray:
+        image_array = np.asarray(images, dtype=np.float32)
+        if image_array.ndim == 3:
+            image_array = image_array.reshape((1,) + image_array.shape)
+        if image_array.ndim != 4 or image_array.shape[-1] != 3:
+            raise ValueError("Expected image batch shape (N, H, W, 3).")
+        return image_array
+
+    def preprocess(self, images: np.ndarray) -> np.ndarray:
+        """Convert normalized RGB images from [0, 1] to Inception [-0.5, 0.5]."""
+        image_batch = self._as_batch(images)
+        resized = np.asarray(
+            [self._resize_one(image) for image in image_batch],
+            dtype=np.float32,
+        )
+        return (resized - 0.5).astype(np.float32)
+
+    def _looks_preprocessed(self, images: np.ndarray) -> bool:
+        if images.size == 0:
+            return False
+        return bool(float(np.nanmin(images)) < 0.0)
+
+    def predict_batch(self, images: np.ndarray) -> np.ndarray:
+        image_batch = self._as_batch(images)
+        if self._looks_preprocessed(image_batch):
+            return self.predict_preprocessed_batch(image_batch)
+        return self.predict_preprocessed_batch(self.preprocess(image_batch))
+
+    def predict_preprocessed_batch(self, preprocessed_images: np.ndarray) -> np.ndarray:
+        preprocessed = self._as_batch(preprocessed_images)
+        outputs = []
+        for start in range(0, len(preprocessed), self.batch_size):
+            batch = preprocessed[start : start + self.batch_size]
+            values = self.sess.run(self.logits_tensor, feed_dict={self.input_tensor: batch})
+            outputs.append(np.asarray(values[: len(batch)], dtype=np.float32))
+        if not outputs:
+            return np.empty((0, self.num_labels), dtype=np.float32)
+        return np.concatenate(outputs, axis=0).astype(np.float32)
+
+    def predict_preprocessed_label(self, preprocessed_images: np.ndarray) -> np.ndarray:
+        scores = self.predict_preprocessed_batch(preprocessed_images)
+        return np.asarray(np.argmax(scores, axis=1), dtype=np.int32)
+
+    def predict_label(self, images: np.ndarray) -> np.ndarray:
+        scores = self.predict_batch(images)
+        return np.asarray(np.argmax(scores, axis=1), dtype=np.int32)
+
+    def get_logits(self, tensor: object) -> object:
+        """Return logits for an attack tensor already in Inception [-0.5, 0.5]."""
+        self._attack_import_index += 1
+        return self._import_logits(
+            tensor,
+            name="inception_attack_{0}".format(self._attack_import_index),
+        )
+
+    def __call__(self, tensor: object) -> object:
+        return self.get_logits(tensor)
