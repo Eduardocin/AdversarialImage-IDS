@@ -144,12 +144,12 @@ def build_filter_from_config(config: Dict[str, Any]) -> Tuple[str, FilterFn, Dic
         return filter_name, adaptive_quantization_filter, metadata
 
     if filter_type in {"proposed_detection_filter", "proposed_filter"}:
-        from deepdetector.evaluation.article_reproduction import proposed_detection_filter
+        from deepdetector.filters.article_final import article_final_detection_filter
 
         metadata = {
             "filter_name": filter_name,
             "filter_type": "proposed_detection_filter",
         }
-        return filter_name, proposed_detection_filter, metadata
+        return filter_name, article_final_detection_filter, metadata
 
     raise ValueError("Unknown filter type: {0}".format(filter_type or "<missing>"))

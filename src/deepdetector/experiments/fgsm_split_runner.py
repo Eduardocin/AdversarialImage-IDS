@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Sequence
+from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 from deepdetector.evaluation.article_reproduction import (
     close_graph,
@@ -85,9 +85,10 @@ def _split_config(config: Dict[str, Any], split_config: Dict[str, Any]) -> Dict[
     return materialization_config
 
 
-def run_fgsm_split_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Run an FGSM filter evaluation experiment over configured dataset splits."""
-    experiment_id = _experiment_id(config)
+def evaluate_mnist_fgsm_splits(
+    config: Dict[str, Any],
+) -> Tuple[List[Dict[str, Any]], str, Dict[str, Any]]:
+    """Evaluate one configured filter over MNIST FGSM dataset slices."""
     dataset_name = str(config.get("dataset", {}).get("name", "")).strip()
     if dataset_name != "mnist":
         raise ValueError(
@@ -125,11 +126,18 @@ def run_fgsm_split_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     finally:
         close_graph(graph)
 
+    return rows, filter_name, dict(filter_metadata)
+
+
+def run_fgsm_split_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Run an FGSM filter evaluation experiment over configured dataset splits."""
+    experiment_id = _experiment_id(config)
+    rows, filter_name, filter_metadata = evaluate_mnist_fgsm_splits(config)
     payload = build_experiment_payload(
         experiment_id=experiment_id,
         config=config,
         rows=rows,
-        extra={"filter": dict(filter_metadata), "filter_name": filter_name},
+        extra={"filter": filter_metadata, "filter_name": filter_name},
     )
     output_dir = _output_dir(config, experiment_id)
     if output_dir is None:

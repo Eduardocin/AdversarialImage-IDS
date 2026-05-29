@@ -1,4 +1,3 @@
-````md
 # Spec — Table 9: Reprodução do Filtro Final contra FGSM
 
 ## 1. Objetivo
@@ -33,11 +32,12 @@ Na branch `fix/table7`, já existem partes importantes que devem ser reutilizada
 * infraestrutura de quantização adaptativa da Table 6;
 * scripts de reprodução para outras tabelas.
 
-Porém, para a Table 9 ainda é necessário garantir a existência dos seguintes arquivos:
+Para a Table 9, o fluxo oficial deve ser descrito e executado pelos seguintes
+arquivos:
 
 ```text
-configs/article_reproduction/table_9.yaml
-scripts/article_reproduction/table_9.py
+configs/experiments.yaml
+src/deepdetector/experiments/table9_runner.py
 src/deepdetector/filters/article_final.py
 ```
 
@@ -82,135 +82,67 @@ O código **não deve hardcodar esses valores como resultado calculado**.
 
 ## 5. Configuração principal
 
-Criar:
+A configuração oficial deve residir em:
 
 ```text
-configs/article_reproduction/table_9.yaml
+configs/experiments.yaml
 ```
 
-Esse YAML deve ser a fonte única de configuração da reprodução da Table 9.
+Esse YAML é a fonte única de configuração operacional da Table 9.
 
 ### YAML proposto
 
 ```yaml
-experiment:
-  name: table_9
-  article_table: 9
-  objective: Reproduce Table 9 using the final entropy-aware detection filter against FGSM.
-  attack_method: fgsm
-  evaluated_method: article_final_detection_filter
-
-orchestration:
-  flows:
-    - mnist_m1_fgsm
-    - imagenet_googlenet_fgsm
-  aggregate_by: split
-  aggregate_counts_before_metrics: true
-
-splits:
-  - Training
-  - Validation
-
-datasets:
+table_9:
+  kind: table_9
+  output_dir: results/experiments/table_9
+  datasets: [mnist, imagenet]
+  split_order: [train, validation]
   mnist:
-    enabled: true
-    flow: mnist_m1_fgsm
-    model: M1
-    checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
-    image_shape: [28, 28, 1]
-    value_range: [0.0, 1.0]
+    dataset:
+      name: mnist
+      split: test
+      slices:
+        - name: Training
+          start: 0
+          end: 4500
+        - name: Validation
+          start: 4500
+          end: 5500
     attack:
       name: fgsm
       epsilon: 0.2
       clip_min: 0.0
       clip_max: 1.0
-    slices:
-      Training:
-        start: 0
-        end: 4500
-      Validation:
-        start: 4500
-        end: 5500
-
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
   imagenet:
-    enabled: true
-    flow: imagenet_googlenet_fgsm
-    model: googlenet_caffe
-    image_shape: [224, 224, 3]
-    value_range: [0.0, 1.0]
-    model_assets:
-      model_dir: artifacts/models/imagenet/googlenet
-      deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
-      caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
-      mean_file: null
-      use_gpu: false
-      batch_size: 32
+    dataset:
+      name: imagenet
+      splits:
+        train:
+          - name: goldfish
+            label: 1
+            path: data/imagenet/train/goldfish
+          - name: pineapple
+            label: 953
+            path: data/imagenet/train/pineapple
+          - name: digital_clock
+            label: 530
+            path: data/imagenet/train/digital_clock
+        validation:
+          - name: jellyfish
+            label: 107
+            path: data/imagenet/validation/jellyfish
     attack:
       name: fgsm
       epsilon_255: 1.0
       clip_min: 0.0
       clip_max: 255.0
-    classes:
-      Training:
-        goldfish:
-          label_id: 1
-          expected_count: 648
-          path: data/imagenet/train/goldfish
-        pineapple:
-          label_id: 953
-          expected_count: 520
-          path: data/imagenet/train/pineapple
-        clock:
-          label_id: 530
-          expected_count: 455
-          path: data/imagenet/train/digital_clock
-      Validation:
-        jellyfish:
-          label_id: 107
-          expected_count: 618
-          path: data/imagenet/validation/jellyfish
-
-detection:
-  filter_name: article_final
-  method: prediction_change
-  rule: adversarial_if_prediction_changes_after_filtering
-
-evaluation:
-  exclude_clean_errors: true
-  exclude_failed_attacks: true
-  dry_run_sample_size: 4
-
-metrics:
-  fields:
-    - split
-    - TP
-    - FN
-    - FP
-    - recall_percent
-    - precision_percent
-    - f1_percent
-
-reference:
-  Training:
-    TP: 3324
-    FN: 266
-    FP: 108
-    recall_percent: 92.59
-    precision_percent: 96.85
-    f1_percent: 94.67
-  Validation:
-    TP: 1028
-    FN: 61
-    FP: 35
-    recall_percent: 94.40
-    precision_percent: 96.71
-    f1_percent: 95.54
-
-output:
-  results_dir: results/article_reproduction/table_9
-  csv: table_9.csv
-  markdown: table_9.md
-  status_json: status.json
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
 ```
 
 ---
@@ -397,104 +329,46 @@ O fluxo ImageNet deve usar o mesmo padrão dos scripts ImageNet já existentes:
 
 ## 12. Script principal
 
-Criar:
-
-```text
-scripts/article_reproduction/table_9.py
-```
-
-Esse script deve ser o ponto único de execução da Table 9.
-
-Ele deve suportar:
+O ponto único de execução da Table 9 deve ser o runner centralizado:
 
 ```bash
-python scripts/article_reproduction/table_9.py \
-  --config configs/article_reproduction/table_9.yaml
+python scripts/run_experiment.py --experiment table_9
 ```
 
-Também deve suportar:
-
-```bash
-python scripts/article_reproduction/table_9.py \
-  --config configs/article_reproduction/table_9.yaml \
-  --dry-run
-```
-
-E:
-
-```bash
-python scripts/article_reproduction/table_9.py \
-  --config configs/article_reproduction/table_9.yaml \
-  --sample-size 8
-```
+Não deve existir script público separado para a Table 9.
 
 ---
 
 ## 13. Argumentos do script
 
-| Argumento       | Obrigatório | Descrição                                                           |
-| --------------- | ----------- | ------------------------------------------------------------------- |
-| `--config`      | Não         | Caminho para `table_9.yaml`                                         |
-| `--dry-run`     | Não         | Valida configuração e dependências sem executar reprodução completa |
-| `--sample-size` | Não         | Executa fluxo real com amostra pequena                              |
-| `--output-dir`  | Não         | Sobrescreve diretório de saída do YAML                              |
+A Table 9 usa apenas os argumentos globais de `scripts/run_experiment.py`.
+
+| Argumento | Obrigatório | Descrição |
+| --- | --- | --- |
+| `--experiment table_9` | Sim | Seleciona a reprodução oficial da Table 9 |
 
 ---
 
-## 14. Dry run
+## 14. Validação de configuração
 
-O `--dry-run` deve validar:
+A configuração consolidada deve declarar:
 
-* leitura do YAML;
-* existência dos splits `Training` e `Validation`;
-* existência dos fluxos `mnist_m1_fgsm` e `imagenet_googlenet_fgsm`;
-* existência do filtro `article_final` no registry;
-* resolução dos paths principais;
-* capacidade de carregar pequena amostra de MNIST, se disponível;
-* existência ou ausência dos assets ImageNet/Caffe.
+* `kind: table_9`;
+* componentes internos `mnist` e `imagenet`;
+* splits `train` e `validation`;
+* filtro `proposed_detection_filter` nos dois componentes;
+* paths ImageNet/Caffe necessários para o fluxo GoogLeNet.
 
-O `dry-run` **não deve falhar apenas porque Caffe não está instalado**.
-
-Se Caffe ou os assets do GoogLeNet estiverem ausentes, o fluxo ImageNet deve ser marcado como:
-
-```text
-blocked_imagenet_caffe
-```
-
-ou status equivalente em `status.json`.
-
-O dry-run deve gerar:
-
-```text
-results/article_reproduction/table_9/status.json
-```
+A execução completa pode falhar se os assets Caffe/GoogLeNet estiverem ausentes.
+Ela não deve fabricar métricas ImageNet quando esses assets não existem.
 
 ---
 
-## 15. Sample size
+## 15. Execução reduzida
 
-O argumento `--sample-size` deve executar o fluxo real com poucas amostras.
-
-Comportamento esperado:
-
-```bash
-python scripts/article_reproduction/table_9.py \
-  --config configs/article_reproduction/table_9.yaml \
-  --sample-size 8
-```
-
-Deve:
-
-* usar no máximo 8 amostras por split no MNIST;
-* usar no máximo 8 amostras por classe no ImageNet;
-* aplicar ataque FGSM;
-* aplicar filtro final;
-* calcular métricas;
-* gerar `table_9.csv`;
-* gerar `table_9.md`;
-* gerar `status.json`.
-
-Se ImageNet estiver bloqueado por falta de Caffe/assets, o script deve registrar isso no `status.json` e não fabricar métricas para ImageNet.
+Execuções reduzidas devem ser feitas por ajustes explícitos em
+`configs/experiments.yaml`, por exemplo `imagenet.dataset.n_samples`, e não por
+um CLI paralelo da Table 9.
 
 ---
 
@@ -575,15 +449,16 @@ Não calcular média simples de métricas por fluxo.
 A execução padrão deve gerar apenas:
 
 ```text
-results/article_reproduction/table_9/table_9.csv
-results/article_reproduction/table_9/table_9.md
-results/article_reproduction/table_9/status.json
+results/experiments/table_9/metrics.csv
+results/experiments/table_9/metrics.json
 ```
 
 Não gerar por padrão:
 
 ```text
 table_9_diagnostics.csv
+table_9.md
+status.json
 ```
 
 Se diagnóstico for útil durante desenvolvimento, ele deve ser opcional, por exemplo via:
@@ -607,16 +482,16 @@ split,TP,FN,FP,recall_percent,precision_percent,f1_percent
 E exatamente duas linhas:
 
 ```text
-Training
-Validation
+train
+validation
 ```
 
 Exemplo:
 
 ```csv
 split,TP,FN,FP,recall_percent,precision_percent,f1_percent
-Training,3324,266,108,92.59,96.85,94.67
-Validation,1028,61,35,94.40,96.71,95.54
+train,3324,266,108,92.59,96.85,94.67
+validation,1028,61,35,94.40,96.71,95.54
 ```
 
 Os valores acima são exemplo de referência do artigo. Os valores gerados localmente podem variar conforme assets, modelo, ambiente e subset disponível.
@@ -625,59 +500,14 @@ Os valores acima são exemplo de referência do artigo. Os valores gerados local
 
 ## 21. Markdown final
 
-O arquivo:
-
-```text
-results/article_reproduction/table_9/table_9.md
-```
-
-Deve conter:
-
-* descrição curta do experimento;
-* tabela final obtida;
-* tabela de referência do artigo;
-* observações sobre execução parcial, se houver;
-* indicação de fluxos bloqueados, se houver;
-* path do CSV gerado.
-
-Não incluir diagnóstico detalhado por imagem.
+O fluxo oficial da Table 9 não deve gerar Markdown.
 
 ---
 
 ## 22. Status JSON
 
-O arquivo:
-
-```text
-results/article_reproduction/table_9/status.json
-```
-
-Deve conter, no mínimo:
-
-```json
-{
-  "status": "completed | partial | blocked | failed",
-  "config_path": "configs/article_reproduction/table_9.yaml",
-  "results_csv": "results/article_reproduction/table_9/table_9.csv",
-  "markdown": "results/article_reproduction/table_9/table_9.md",
-  "enabled_flows": ["mnist_m1_fgsm", "imagenet_googlenet_fgsm"],
-  "completed_flows": [],
-  "skipped_flows": [],
-  "sample_size": null,
-  "warnings": []
-}
-```
-
-Campos opcionais:
-
-```json
-{
-  "aggregate_counters": {},
-  "per_flow_counters": {}
-}
-```
-
-Esses campos opcionais não devem ser requisito rígido.
+O fluxo oficial da Table 9 não deve gerar `status.json`. O resultado
+estruturado deve ficar em `metrics.json`.
 
 ---
 
@@ -687,10 +517,10 @@ Não é necessário criar uma suíte extensa de testes automatizados para esta s
 
 A validação mínima deve ser:
 
-1. `--dry-run` executa e escreve `status.json`;
-2. `--sample-size 8` executa quando os assets necessários estão disponíveis;
-3. `table_9.csv` tem o schema correto;
-4. `table_9.csv` tem as linhas `Training` e `Validation`;
+1. `python scripts/run_experiment.py --experiment table_9` usa `kind: table_9`;
+2. a configuração declara `mnist` e `imagenet` como componentes internos;
+3. `metrics.csv` tem o schema correto;
+4. `metrics.csv` tem as linhas `train` e `validation`;
 5. `article_final` existe no `FILTER_REGISTRY`;
 6. métricas são calculadas após somar contadores.
 
@@ -711,13 +541,13 @@ A implementação será considerada pronta quando:
 1. existir:
 
 ```text
-configs/article_reproduction/table_9.yaml
+configs/experiments.yaml
 ```
 
 2. existir:
 
 ```text
-scripts/article_reproduction/table_9.py
+src/deepdetector/experiments/table9_runner.py
 ```
 
 3. existir:
@@ -741,45 +571,32 @@ src/deepdetector/filters/__init__.py
 6. o comando abaixo executar:
 
 ```bash
-python scripts/article_reproduction/table_9.py \
-  --config configs/article_reproduction/table_9.yaml \
-  --dry-run
+python scripts/run_experiment.py --experiment table_9
 ```
 
-7. o comando abaixo executar com assets disponíveis:
-
-```bash
-python scripts/article_reproduction/table_9.py \
-  --config configs/article_reproduction/table_9.yaml \
-  --sample-size 8
-```
-
-8. a execução gerar:
+7. a execução gerar:
 
 ```text
-table_9.csv
-table_9.md
-status.json
+metrics.csv
+metrics.json
 ```
 
-9. o CSV final tiver exatamente:
+8. o CSV final tiver exatamente:
 
 ```csv
 split,TP,FN,FP,recall_percent,precision_percent,f1_percent
 ```
 
-10. o CSV final tiver exatamente os splits:
+9. o CSV final tiver exatamente os splits:
 
 ```text
-Training
-Validation
+train
+validation
 ```
 
-11. o fluxo não gerar `table_9_diagnostics.csv` por padrão;
+10. o fluxo não gerar `table_9_diagnostics.csv`, `table_9.md` ou `status.json` por padrão;
 
-12. a ausência de Caffe/GoogLeNet não causar falha fatal em `--dry-run`;
-
-13. métricas forem calculadas por soma de contadores antes de `Recall`, `Precision` e `F1`.
+11. métricas forem calculadas por soma de contadores antes de `Recall`, `Precision` e `F1`.
 
 ---
 
@@ -787,18 +604,13 @@ Validation
 
 ```mermaid
 flowchart TD
-    A[configs/article_reproduction/table_9.yaml] --> B[scripts/article_reproduction/table_9.py]
+    A[configs/experiments.yaml] --> B[scripts/run_experiment.py --experiment table_9]
 
     B --> C[Carregar YAML]
-    C --> D[Resolver filtro article_final no FILTER_REGISTRY]
+    C --> D[Resolver filtro proposed_detection_filter]
 
-    D --> E{Modo de execução}
-
-    E -->|dry-run| F[Validar config, splits, filtro e assets]
-    F --> G[status.json]
-
-    E -->|execução| H[Fluxo MNIST M1 + FGSM]
-    E -->|execução| I[Fluxo ImageNet GoogLeNet + FGSM]
+    D --> H[Fluxo MNIST M1 + FGSM]
+    D --> I[Fluxo ImageNet GoogLeNet + FGSM]
 
     H --> H1[Training MNIST 0-4499]
     H --> H2[Validation MNIST 4500-5499]
@@ -821,37 +633,14 @@ flowchart TD
     O --> P[Somar contadores]
     P --> Q[Calcular Recall, Precision, F1]
 
-    Q --> R[table_9.csv]
-    Q --> S[table_9.md]
-    Q --> T[status.json]
+    Q --> R[metrics.csv]
+    Q --> S[metrics.json]
 ```
 
 ---
 
-## 26. Comandos finais
-
-Dry run:
+## 26. Comando final
 
 ```bash
-python scripts/article_reproduction/table_9.py \
-  --config configs/article_reproduction/table_9.yaml \
-  --dry-run
-```
-
-Execução pequena:
-
-```bash
-python scripts/article_reproduction/table_9.py \
-  --config configs/article_reproduction/table_9.yaml \
-  --sample-size 8
-```
-
-Execução completa:
-
-```bash
-python scripts/article_reproduction/table_9.py \
-  --config configs/article_reproduction/table_9.yaml
-```
-
-```
+python scripts/run_experiment.py --experiment table_9
 ```

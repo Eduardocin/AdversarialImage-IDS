@@ -141,8 +141,8 @@ def test_fgsm_split_runner_rejects_missing_slices(tmp_path) -> None:
         fgsm_split_runner.run_fgsm_split_experiment(config)
 
 
-def test_table9_remains_on_the_generic_split_runner() -> None:
-    """Table 9 should remain on split_eval after Table 6 becomes combined."""
+def test_table9_is_combined_mnist_imagenet_like_table6() -> None:
+    """Table 9 should declare MNIST and ImageNet internal components."""
     config = yaml.safe_load(
         (PROJECT_ROOT / "configs" / "experiments.yaml").read_text(encoding="utf-8")
     )
@@ -150,15 +150,19 @@ def test_table9_remains_on_the_generic_split_runner() -> None:
     table9 = config["experiments"]["table_9"]
 
     assert table6["kind"] == "table_6"
-    assert table9["kind"] == "split_eval"
-    assert table9["filter"]["type"] == "proposed_detection_filter"
-    assert table6["mnist"]["dataset"]["slices"] == table9["dataset"]["slices"]
+    assert table9["kind"] == "table_9"
+    assert table9["datasets"] == ["mnist", "imagenet"]
+    assert table9["mnist"]["filter"]["type"] == "proposed_detection_filter"
+    assert table9["imagenet"]["filter"]["type"] == "proposed_detection_filter"
+    assert table6["mnist"]["dataset"]["slices"] == table9["mnist"]["dataset"]["slices"]
+    assert table6["imagenet"]["dataset"]["splits"] == table9["imagenet"]["dataset"]["splits"]
     assert table6["output_dir"] == "results/experiments/table_6"
     assert table9["output_dir"] == "results/experiments/table_9"
     assert table6["mnist"]["attack"]["epsilon"] == 0.2
-    assert table9["attack"]["epsilon"] == 0.2
+    assert table9["mnist"]["attack"]["epsilon"] == 0.2
+    assert table9["imagenet"]["attack"]["epsilon_255"] == 1.0
     assert table6["mnist"]["evaluation"]["batch_size"] == 256
-    assert table9["evaluation"]["batch_size"] == 256
+    assert table9["mnist"]["evaluation"]["batch_size"] == 256
 
 
 def test_table6_and_table9_per_table_scripts_were_removed() -> None:

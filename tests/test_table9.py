@@ -14,26 +14,39 @@ sys.path.insert(0, str(SRC_ROOT))
 from deepdetector.filters.article_final import article_final_detection_filter  # noqa: E402
 from deepdetector.filters.registry import FILTER_REGISTRY  # noqa: E402
 from deepdetector.data import mnist as mnist_data  # noqa: E402
+from deepdetector.experiments import table9_runner  # noqa: E402
 from deepdetector.models import mnist_cnn  # noqa: E402
 
 
 def test_table9_config_documents_spec_contract() -> None:
-    """The refactored Table 9 config should use the shared split-runner contract."""
+    """The refactored Table 9 config should combine MNIST and ImageNet."""
     config_path = PROJECT_ROOT / "configs" / "experiments.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     table9 = config["experiments"]["table_9"]
 
-    assert table9["kind"] == "split_eval"
-    assert table9["dataset"]["slices"] == [
+    assert table9["kind"] == "table_9"
+    assert table9["datasets"] == ["mnist", "imagenet"]
+    assert table9["mnist"]["dataset"]["slices"] == [
         {"name": "Training", "start": 0, "end": 4500},
         {"name": "Validation", "start": 4500, "end": 5500},
     ]
-    assert table9["filter"] == {
+    assert table9["imagenet"]["dataset"]["splits"]["train"] == [
+        {"name": "goldfish", "label": 1, "path": "data/imagenet/train/goldfish"},
+        {"name": "pineapple", "label": 953, "path": "data/imagenet/train/pineapple"},
+        {
+            "name": "digital_clock",
+            "label": 530,
+            "path": "data/imagenet/train/digital_clock",
+        },
+    ]
+    assert table9["mnist"]["filter"] == {
         "name": "proposed_detection_filter",
         "type": "proposed_detection_filter",
     }
+    assert table9["imagenet"]["filter"] == table9["mnist"]["filter"]
     assert table9["output_dir"] == "results/experiments/table_9"
-    assert table9["attack"]["epsilon"] == 0.2
+    assert table9["mnist"]["attack"]["epsilon"] == 0.2
+    assert table9["imagenet"]["attack"]["epsilon_255"] == 1.0
 
 
 def test_article_final_filter_is_registered_and_preserves_scales() -> None:
@@ -58,6 +71,49 @@ def test_article_final_filter_is_registered_and_preserves_scales() -> None:
 def test_table9_legacy_script_was_removed() -> None:
     """The old Table 9 entry point should no longer be an active runtime path."""
     assert not (PROJECT_ROOT / "scripts/article_reproduction/table_9.py").exists()
+
+
+def test_run_table9_experiment_writes_combined_official_outputs(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """The official Table 9 runner should aggregate MNIST and ImageNet outputs."""
+    monkeypatch.setattr(
+        table9_runner,
+        "evaluate_mnist_table9",
+        lambda config: [
+            {"split": "Training", "TP": 1, "FN": 1, "FP": 0},
+            {"split": "Validation", "TP": 2, "FN": 0, "FP": 1},
+        ],
+    )
+    monkeypatch.setattr(
+        table9_runner,
+        "evaluate_imagenet_table9",
+        lambda config: [
+            {"split": "train", "TP": 3, "FN": 1, "FP": 2},
+            {"split": "validation", "TP": 1, "FN": 3, "FP": 0},
+        ],
+    )
+
+    rows = table9_runner.run_table9_experiment(
+        {
+            "experiment_id": "table_9",
+            "kind": "table_9",
+            "mnist": {"dataset": {"name": "mnist"}},
+            "imagenet": {"dataset": {"name": "imagenet"}},
+            "split_order": ["train", "validation"],
+            "output": {"dir": str(tmp_path), "csv": "metrics.csv", "json": "metrics.json"},
+        }
+    )
+
+    assert [row["split"] for row in rows] == ["train", "validation"]
+    assert rows[0]["TP"] == 4
+    assert rows[0]["FN"] == 2
+    assert rows[0]["FP"] == 2
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "metrics.csv",
+        "metrics.json",
+    ]
 
 
 def test_mnist_latest_checkpoint_falls_back_to_local_base(monkeypatch, tmp_path) -> None:

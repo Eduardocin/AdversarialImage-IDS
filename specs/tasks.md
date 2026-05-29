@@ -82,14 +82,14 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Write only `metrics.csv` and `metrics.json` under `results/experiments/table_6`.
   - [x] Remove the legacy public Table 6 ImageNet script and config.
 - [x] Implement Table 9 final FGSM detector from `specs/features/table_9.md`
-  - [x] Add `configs/article_reproduction/table_9.yaml`.
+  - [x] Add official Table 9 config to `configs/experiments.yaml`.
   - [x] Add `src/deepdetector/filters/article_final.py`.
   - [x] Register and export `article_final`.
-  - [x] Add `scripts/article_reproduction/table_9.py`.
+  - [x] Add official combined Table 9 runner.
   - [x] Orchestrate MNIST M1 FGSM and ImageNet GoogLeNet FGSM flows.
   - [x] Aggregate TP, FN, and FP by split before calculating metrics.
-  - [x] Write `table_9.csv`, `table_9.md`, and `status.json`.
-  - [x] Add automated tests for config, filter behavior, registry, aggregation, CSV shape, and dry-run status.
+  - [x] Write `metrics.csv` and `metrics.json`.
+  - [x] Add automated tests for config, filter behavior, registry, aggregation, and CSV shape.
   - [x] Suppress the known legacy CleverHans MNIST deprecation warning without changing loader behavior.
 - [x] Implement Table 6 ImageNet adaptive quantization from `specs/features/table_6_imagenet.md` (superseded by combined Table 6)
   - [x] Fold the ImageNet component into the official `table_6` experiment.

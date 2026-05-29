@@ -44,7 +44,7 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
     for experiment in config["experiments"].values():
         if experiment["kind"] == "composite":
             continue
-        if experiment["kind"] == "table_6":
+        if experiment["kind"] in {"table_6", "table_9"}:
             assert "mnist" in experiment
             assert "imagenet" in experiment
             continue
@@ -59,7 +59,7 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
         ("table_6", "table_6"),
         ("table_7", "filter_grid"),
         ("table_8", "filter_grid"),
-        ("table_9", "split_eval"),
+        ("table_9", "table_9"),
         ("table_3", "filter_grid"),
         ("table_4", "composite"),
         ("table_4_mnist", "filter_grid"),

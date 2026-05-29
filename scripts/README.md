@@ -42,7 +42,9 @@ results/experiments/<experiment_id>/metrics.json
 
 Table 4 e excecao composta: seus resultados ficam em
 `results/experiments/table_4/mnist/` e `results/experiments/table_4/imagenet/`,
-com `manifest.json` na raiz da tabela.
+com `manifest.json` na raiz da tabela. Table 6 e Table 9 tambem executam MNIST
+e ImageNet internamente, mas escrevem somente os agregados oficiais em
+`results/experiments/table_6/` e `results/experiments/table_9/`.
 
 Table 10 tambem e separada por grupo de modelo. Cada comando `table_10_*`
 escreve `metrics.csv`, `metrics.json` e `manifest.json` em

@@ -162,7 +162,8 @@ python scripts/run_experiment.py --experiment table_10_inception_v3
 
 As Tabelas 3-9 usam `configs/experiments.yaml`. A Table 4 e composta: por
 padrao `table_4` executa `table_4_mnist` e `table_4_imagenet` em sequencia.
-Tambem e possivel executar apenas um lado:
+As Tables 6 e 9 tambem combinam MNIST e ImageNet internamente e gravam metricas
+agregadas por split. Tambem e possivel executar apenas um lado da Table 4:
 
 ```bash
 python scripts/run_experiment.py --experiment table_4_mnist

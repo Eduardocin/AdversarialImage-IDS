@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import logging
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -23,6 +23,9 @@ from deepdetector.filters.quantization import scalar_quantization
 
 
 logger = logging.getLogger(__name__)
+
+
+ImageFilterFn = Callable[[np.ndarray], np.ndarray]
 
 
 TABLE6_OUTPUT_FIELDS: Tuple[str, ...] = (
@@ -180,6 +183,7 @@ def _evaluate_split(
     clip_min: float,
     clip_max: float,
     cached_adversarial_images: Optional[np.ndarray] = None,
+    filter_fn: Optional[ImageFilterFn] = None,
 ) -> Tuple[Table6SplitSummary, List[dict[str, Any]], np.ndarray]:
     """Evaluate adaptive quantization for one split."""
     total_images = len(samples)
@@ -214,7 +218,14 @@ def _evaluate_split(
             continue
 
         clean_correct_count += 1
-        filtered_clean, entropy_clean, clean_step = adaptive_quantize_image(clean_image)
+        if filter_fn is None:
+            filtered_clean, entropy_clean, clean_step = adaptive_quantize_image(clean_image)
+        else:
+            filtered_clean = np.asarray(filter_fn(clean_image), dtype=np.float32).reshape(
+                clean_image.shape
+            )
+            entropy_clean = ""
+            clean_step = ""
         filtered_clean_pred = _predict_one(model, filtered_clean)
 
         if using_cache and cached_adv_index < len(cached_adversarial_images):
@@ -265,9 +276,13 @@ def _evaluate_split(
                     "filtered_adv_pred": "",
                     "clean_correct": True,
                     "attack_success": False,
-                    "entropy_clean": float(entropy_clean),
+                    "entropy_clean": (
+                        float(entropy_clean) if entropy_clean != "" else ""
+                    ),
                     "entropy_adv": "",
-                    "clean_quantization_step": int(clean_step),
+                    "clean_quantization_step": (
+                        int(clean_step) if clean_step != "" else ""
+                    ),
                     "adv_quantization_step": "",
                     "is_fp": False,
                     "is_tp": False,
@@ -278,7 +293,15 @@ def _evaluate_split(
             continue
 
         fgsm_success += 1
-        filtered_adv, entropy_adv, adv_step = adaptive_quantize_image(adversarial_image)
+        if filter_fn is None:
+            filtered_adv, entropy_adv, adv_step = adaptive_quantize_image(adversarial_image)
+        else:
+            filtered_adv = np.asarray(
+                filter_fn(adversarial_image),
+                dtype=np.float32,
+            ).reshape(adversarial_image.shape)
+            entropy_adv = ""
+            adv_step = ""
         filtered_adv_pred = _predict_one(model, filtered_adv)
 
         is_fp = bool(filtered_clean_pred != clean_pred)
@@ -300,10 +323,10 @@ def _evaluate_split(
                 "filtered_adv_pred": int(filtered_adv_pred),
                 "clean_correct": True,
                 "attack_success": True,
-                "entropy_clean": float(entropy_clean),
-                "entropy_adv": float(entropy_adv),
-                "clean_quantization_step": int(clean_step),
-                "adv_quantization_step": int(adv_step),
+                "entropy_clean": float(entropy_clean) if entropy_clean != "" else "",
+                "entropy_adv": float(entropy_adv) if entropy_adv != "" else "",
+                "clean_quantization_step": int(clean_step) if clean_step != "" else "",
+                "adv_quantization_step": int(adv_step) if adv_step != "" else "",
                 "is_fp": is_fp,
                 "is_tp": is_tp,
                 "is_fn": is_fn,
@@ -378,6 +401,61 @@ def evaluate_table6_imagenet(
             clip_min=clip_min,
             clip_max=clip_max,
             cached_adversarial_images=cached_by_split.get(str(split)),
+        )
+        summaries.append(summary)
+        diagnostics.extend(split_diagnostics)
+        output_adversarial_by_split[str(split)] = split_adversarial
+        rows.append(
+            {
+                "split": str(split),
+                "TP": summary.tp,
+                "FN": summary.fn,
+                "FP": summary.fp,
+                "recall_percent": float(summary.recall * 100.0),
+                "precision_percent": float(summary.precision * 100.0),
+                "f1_percent": float(summary.f1 * 100.0),
+            }
+        )
+
+    return Table6Evaluation(
+        rows=rows,
+        diagnostics=diagnostics,
+        summaries=summaries,
+        adversarial_by_split=output_adversarial_by_split,
+    )
+
+
+def evaluate_imagenet_fgsm_filter(
+    model: Any,
+    samples_by_split: Mapping[str, Sequence[Table4Sample]],
+    filter_fn: ImageFilterFn,
+    epsilon_255: float = 1.0,
+    clip_min: float = 0.0,
+    clip_max: float = 255.0,
+    split_order: Sequence[str] = DEFAULT_SPLIT_ORDER,
+    adversarial_by_split: Optional[Mapping[str, np.ndarray]] = None,
+) -> Table6Evaluation:
+    """Evaluate a configured filter on ImageNet FGSM splits."""
+    rows: List[dict[str, Any]] = []
+    diagnostics: List[dict[str, Any]] = []
+    summaries: List[Table6SplitSummary] = []
+    output_adversarial_by_split: Dict[str, np.ndarray] = {}
+    cached_by_split = adversarial_by_split or {}
+
+    for split in split_order:
+        split_samples = list(samples_by_split.get(split, []))
+        if not split_samples:
+            raise ValueError("Configured split has no images: {0}".format(split))
+
+        summary, split_diagnostics, split_adversarial = _evaluate_split(
+            model=model,
+            split=str(split),
+            samples=split_samples,
+            epsilon_255=epsilon_255,
+            clip_min=clip_min,
+            clip_max=clip_max,
+            cached_adversarial_images=cached_by_split.get(str(split)),
+            filter_fn=filter_fn,
         )
         summaries.append(summary)
         diagnostics.extend(split_diagnostics)

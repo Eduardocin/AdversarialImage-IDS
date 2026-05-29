@@ -8,6 +8,7 @@ from typing import Any, Dict
 from deepdetector.experiments.fgsm_split_runner import run_fgsm_split_experiment
 from deepdetector.experiments.filter_candidate_runner import run_filter_candidate_experiment
 from deepdetector.experiments.table6_runner import run_table6_experiment
+from deepdetector.experiments.table9_runner import run_table9_experiment
 from deepdetector.experiments.table4_imagenet_runner import run_table4_imagenet_experiment
 from deepdetector.experiments.table10_runner import run_table10_group_experiment
 from deepdetector.io.paths import resolve_project_path
@@ -136,6 +137,12 @@ def build_experiment_config(
         base_config["quantization"] = dict(experiment.get("quantization", {}))
         return base_config
 
+    if kind == "table_9":
+        base_config["mnist"] = dict(experiment.get("mnist", {}))
+        base_config["imagenet"] = dict(experiment.get("imagenet", {}))
+        base_config["split_order"] = list(experiment.get("split_order", ["train", "validation"]))
+        return base_config
+
     if kind == "imagenet_table_4":
         base_config["quantization"] = dict(experiment.get("quantization", {}))
         return base_config
@@ -248,6 +255,8 @@ def run_experiment(name: str, consolidated_config: Dict[str, Any]):
         return run_fgsm_split_experiment(config)
     if kind == "table_6":
         return run_table6_experiment(config)
+    if kind == "table_9":
+        return run_table9_experiment(config)
     if kind == "filter_grid":
         return run_filter_candidate_experiment(config)
     if kind == "imagenet_table_4":

@@ -103,6 +103,7 @@ def _write_imagenet_fgsm_cache(cache_path: Path, adversarial_images: np.ndarray)
 def _load_imagenet_fgsm_caches(
     config: Dict[str, Any],
     split_order: Sequence[str],
+    table_label: str = "Table 6",
 ) -> Tuple[Dict[str, np.ndarray], Dict[str, Path]]:
     """Return cached ImageNet FGSM examples by split."""
     if not _cache_enabled(config):
@@ -117,7 +118,8 @@ def _load_imagenet_fgsm_caches(
         cached = _read_imagenet_fgsm_cache(cache_path)
         if cached is not None:
             logger.info(
-                "Loaded Table 6 ImageNet FGSM cache for split %s: %s (%d examples)",
+                "Loaded %s ImageNet FGSM cache for split %s: %s (%d examples)",
+                table_label,
                 split_key,
                 cache_path,
                 len(cached),
@@ -125,7 +127,8 @@ def _load_imagenet_fgsm_caches(
             cached_by_split[split_key] = cached
         else:
             logger.info(
-                "Table 6 ImageNet FGSM cache miss for split %s: %s; FGSM will be generated",
+                "%s ImageNet FGSM cache miss for split %s: %s; FGSM will be generated",
+                table_label,
                 split_key,
                 cache_path,
             )
@@ -136,6 +139,7 @@ def _write_missing_imagenet_fgsm_caches(
     result: Table6Evaluation,
     cached_by_split: Mapping[str, np.ndarray],
     paths_by_split: Mapping[str, Path],
+    table_label: str = "Table 6",
 ) -> None:
     """Write ImageNet FGSM caches that were not loaded before evaluation."""
     for split, adversarial_images in result.adversarial_by_split.items():
@@ -143,7 +147,8 @@ def _write_missing_imagenet_fgsm_caches(
             continue
         _write_imagenet_fgsm_cache(paths_by_split[split], adversarial_images)
         logger.info(
-            "Wrote Table 6 ImageNet FGSM cache for split %s: %s (%d examples)",
+            "Wrote %s ImageNet FGSM cache for split %s: %s (%d examples)",
+            table_label,
             split,
             paths_by_split[split],
             len(adversarial_images),
