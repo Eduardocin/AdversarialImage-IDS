@@ -76,6 +76,14 @@ def test_table10_googlenet_config_enables_deepfool_metrics() -> None:
     }
     assert experiment["evaluation"]["n_samples"] == "all"
     assert experiment["model"]["name"] == "googlenet_caffe"
+    assert (
+        experiment["model"]["deploy_proto"]
+        == "artifacts/models/imagenet/googlenet/deploy_original.prototxt"
+    )
+    assert (
+        experiment["model"]["attack_deploy_proto"]
+        == "artifacts/models/imagenet/googlenet/deploy_removeSoftmax.prototxt"
+    )
     assert experiment["model"]["use_gpu"] is True
     assert experiment["filter"]["type"] == "proposed_detection_filter"
     assert [item["status"] for item in experiment["rows"]] == [
@@ -86,6 +94,45 @@ def test_table10_googlenet_config_enables_deepfool_metrics() -> None:
     assert row["status"] == "implemented"
     assert row["attack"]["name"] == "deepfool"
     assert row["attack"]["num_classes"] == 10
+
+
+def test_table10_googlenet_builder_passes_attack_deploy_to_wrapper(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Table 10 should configure the wrapper with separate prediction/attack prototxts."""
+    captured = {}
+
+    def fake_wrapper(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    model_dir = tmp_path / "googlenet"
+    model_dir.mkdir()
+    deploy = model_dir / "deploy_original.prototxt"
+    attack_deploy = model_dir / "deploy_removeSoftmax.prototxt"
+    caffemodel = model_dir / "bvlc_googlenet.caffemodel"
+    for path in (deploy, attack_deploy, caffemodel):
+        path.write_text("placeholder", encoding="utf-8")
+
+    monkeypatch.setattr(table_10_module, "GoogLeNetCaffeWrapper", fake_wrapper)
+
+    table_10_module.build_table_10_googlenet_model(
+        {
+            "model": {
+                "model_dir": str(model_dir),
+                "deploy_proto": str(deploy),
+                "attack_deploy_proto": str(attack_deploy),
+                "caffemodel": str(caffemodel),
+                "batch_size": 8,
+                "use_gpu": False,
+            }
+        }
+    )
+
+    assert captured["deploy_prototxt"] == str(deploy)
+    assert captured["attack_deploy_prototxt"] == str(attack_deploy)
+    assert captured["caffemodel"] == str(caffemodel)
 
 
 def test_table10_imagenet_groups_use_test_dataset() -> None:

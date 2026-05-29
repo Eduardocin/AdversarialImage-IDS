@@ -47,11 +47,12 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
         model_dir: str,
         deploy_prototxt: str,
         caffemodel: str,
+        attack_deploy_prototxt: Optional[str] = None,
         mean_file: Optional[str] = None,
         use_gpu: bool = False,
         batch_size: int = 32,
     ) -> None:
-        """Load a Caffe network and optional per-channel mean data."""
+        """Load prediction and optional attack Caffe networks."""
         try:
             os.environ.setdefault("GLOG_minloglevel", "2")
             import caffe
@@ -67,6 +68,9 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
         self.caffe = caffe
         self.model_dir = Path(model_dir)
         self.deploy_prototxt = Path(deploy_prototxt)
+        self.attack_deploy_prototxt = (
+            Path(attack_deploy_prototxt) if attack_deploy_prototxt else None
+        )
         self.caffemodel = Path(caffemodel)
         self.mean_file = Path(mean_file) if mean_file else None
         self.use_gpu = bool(use_gpu)
@@ -86,13 +90,25 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
             str(self.caffemodel),
             self.caffe.TEST,
         )
+        self.attack_net = (
+            self.caffe.Net(
+                str(self.attack_deploy_prototxt),
+                str(self.caffemodel),
+                self.caffe.TEST,
+            )
+            if self.attack_deploy_prototxt is not None
+            else self.net
+        )
         self.mean = self._load_mean(self.mean_file)
 
     def _check_required_files(self) -> None:
         """Validate model file paths before Caffe tries to open them."""
+        model_paths = [self.deploy_prototxt, self.caffemodel]
+        if self.attack_deploy_prototxt is not None:
+            model_paths.append(self.attack_deploy_prototxt)
         missing = [
             path
-            for path in (self.deploy_prototxt, self.caffemodel)
+            for path in model_paths
             if not path.is_file()
         ]
         if missing:
@@ -175,23 +191,29 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
             nchw = nchw - self.mean
         return nchw.astype(np.float32)
 
-    def _output_from_forward(self, output: dict) -> np.ndarray:
+    def _output_from_forward(self, output: dict, net: Optional[object] = None) -> np.ndarray:
         """Select the Caffe output blob containing class scores."""
-        output_blob = self._output_blob_name(output)
+        selected_net = net or self.net
+        output_blob = self._output_blob_name(output, net=selected_net)
         if output_blob in output:
             return np.asarray(output[output_blob], dtype=np.float32)
-        return np.asarray(self.net.blobs[output_blob].data, dtype=np.float32)
+        return np.asarray(selected_net.blobs[output_blob].data, dtype=np.float32)
 
-    def _output_blob_name(self, output: Optional[dict] = None) -> str:
+    def _output_blob_name(
+        self,
+        output: Optional[dict] = None,
+        net: Optional[object] = None,
+    ) -> str:
         """Return the Caffe output blob name containing class scores."""
+        selected_net = net or self.net
         output = output or {}
         for name in self.output_candidates:
             if name in output:
                 return name
-            if name in self.net.blobs:
+            if name in selected_net.blobs:
                 return name
 
-        available = sorted(set(output.keys()) | set(self.net.blobs.keys()))
+        available = sorted(set(output.keys()) | set(selected_net.blobs.keys()))
         raise KeyError(
             "Could not find GoogLeNet output blob. Available blobs: {0}".format(
                 ", ".join(available)
@@ -252,24 +274,25 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
         if len(preprocessed) != 1:
             raise ValueError("gradient expects exactly one image.")
 
-        self.net.blobs[self.input_blob].reshape(*preprocessed.shape)
-        self.net.reshape()
-        self.net.blobs[self.input_blob].data[...] = preprocessed
+        gradient_net = self.attack_net
+        gradient_net.blobs[self.input_blob].reshape(*preprocessed.shape)
+        gradient_net.reshape()
+        gradient_net.blobs[self.input_blob].data[...] = preprocessed
 
-        output = self.net.forward()
+        output = gradient_net.forward()
 
-        if "prob" in self.net.blobs:
+        if "prob" in gradient_net.blobs:
             output_blob = "prob"
         else:
-            output_blob = self._output_blob_name(output)
+            output_blob = self._output_blob_name(output, net=gradient_net)
 
         output_diff = np.zeros_like(
-            self.net.blobs[output_blob].data,
+            gradient_net.blobs[output_blob].data,
             dtype=np.float32,
         )
         output_diff[0, int(class_id)] = -1.0
 
-        backward_result = self.net.backward(**{output_blob: output_diff})
+        backward_result = gradient_net.backward(**{output_blob: output_diff})
 
         if isinstance(backward_result, dict) and self.input_blob in backward_result:
             gradient = np.asarray(
@@ -278,7 +301,7 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
             )
         else:
             gradient = np.asarray(
-                self.net.blobs[self.input_blob].diff[0],
+                gradient_net.blobs[self.input_blob].diff[0],
                 dtype=np.float32,
             )
 

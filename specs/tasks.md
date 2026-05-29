@@ -159,6 +159,12 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Add explicit DeepFool parameters to Table 10 GoogLeNet row 7.
   - [x] Add automated tests for registry, DeepFool output contract, clipping, gradient requirement, and config.
   - [x] Run focused pytest validation.
+- [x] Refactor DeepFool/GoogLeNet from `specs/features/deepfool_googlenet_refactor.md`
+  - [x] Add optional `attack_deploy_proto` support to the GoogLeNet Caffe wrapper.
+  - [x] Use the original deploy prototxt for prediction and the removeSoftmax prototxt for gradients.
+  - [x] Keep `generate_deepfool` model-agnostic and registry-compatible.
+  - [x] Configure Table 10 GoogLeNet row 7 through the existing group runner.
+  - [x] Add tests for wrapper fallback, attack-deploy gradients, DeepFool contract, and config.
 - [x] Implement Table 10 GoogLeNet metrics from `specs/features/table_10_googlenet_metrics.md`
   - [x] Add ImageNet/GoogLeNet row evaluator using the attack registry and detector metrics.
   - [x] Add full class-folder dataset/evaluation config for table_10_googlenet.

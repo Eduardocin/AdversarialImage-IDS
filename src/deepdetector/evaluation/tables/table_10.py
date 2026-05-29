@@ -115,6 +115,11 @@ def build_table_10_googlenet_model(config: dict[str, Any]) -> Any:
         model_dir=_path_text(model_config.get("model_dir"), "model.model_dir"),
         deploy_prototxt=_path_text(model_config.get("deploy_proto"), "model.deploy_proto"),
         caffemodel=_path_text(model_config.get("caffemodel"), "model.caffemodel"),
+        attack_deploy_prototxt=(
+            _path_text(model_config.get("attack_deploy_proto"), "model.attack_deploy_proto")
+            if model_config.get("attack_deploy_proto")
+            else None
+        ),
         mean_file=(
             str(resolve_project_path(model_config.get("mean_file")))
             if model_config.get("mean_file")

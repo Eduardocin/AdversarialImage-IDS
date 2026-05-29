@@ -448,10 +448,11 @@ experiments:
       family: caffe
       reference: BVLC GoogLeNet
       model_dir: artifacts/models/imagenet/googlenet/
-      deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
+      deploy_proto: artifacts/models/imagenet/googlenet/deploy_original.prototxt
+      attack_deploy_proto: artifacts/models/imagenet/googlenet/deploy_removeSoftmax.prototxt
       caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
       mean_file: null
-      use_gpu: true
+      use_gpu: false
       batch_size: 32
     attack: {}
     evaluation:

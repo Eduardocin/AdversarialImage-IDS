@@ -34,6 +34,24 @@ class NonDifferentiableModel:
         return np.zeros((len(batch), 2), dtype=np.float32)
 
 
+class DualNetworkDeepFoolModel:
+    """Expose prediction scores and attack gradients from separate logical nets."""
+
+    def __init__(self):
+        self.gradient_sources = []
+
+    def predict_preprocessed_batch(self, images: np.ndarray) -> np.ndarray:
+        batch = np.asarray(images, dtype=np.float32)
+        flat_sum = np.sum(batch.reshape((len(batch), -1)), axis=1)
+        return np.stack([flat_sum, 4.0 - flat_sum], axis=1).astype(np.float32)
+
+    def gradient(self, image: np.ndarray, class_id: int) -> np.ndarray:
+        self.gradient_sources.append(("deploy_removeSoftmax", int(class_id)))
+        if int(class_id) == 0:
+            return -np.ones_like(image, dtype=np.float32)
+        return np.ones_like(image, dtype=np.float32)
+
+
 def test_deepfool_attack_is_registered() -> None:
     assert "deepfool" in ATTACK_REGISTRY
     assert ATTACK_REGISTRY["deepfool"] is generate_deepfool
@@ -89,6 +107,26 @@ def test_deepfool_respects_clip_bounds() -> None:
     assert float(x_adv.max()) <= 1.0
 
 
+def test_deepfool_uses_wrapper_gradient_contract_for_attack_network() -> None:
+    """DeepFool should rely on model.gradient without loading model files itself."""
+    model = DualNetworkDeepFoolModel()
+    images = np.full((1, 1, 2, 2), 0.8, dtype=np.float32)
+
+    x_adv = generate_deepfool(
+        model=model,
+        images=images,
+        max_iter=3,
+        clip_min=0.0,
+        clip_max=1.0,
+    )
+
+    assert x_adv.shape == images.shape
+    assert model.gradient_sources
+    assert {source for source, _class_id in model.gradient_sources} == {
+        "deploy_removeSoftmax"
+    }
+
+
 def test_deepfool_requires_differentiable_model() -> None:
     images = np.full((1, 1, 2, 2), 0.8, dtype=np.float32)
 
@@ -109,3 +147,11 @@ def test_table_10_googlenet_deepfool_row_has_config() -> None:
     assert row["attack"]["overshoot"] == 0.02
     assert row["attack"]["clip_min"] == 0.0
     assert row["attack"]["clip_max"] == 1.0
+    assert (
+        config["experiments"]["table_10_googlenet"]["model"]["deploy_proto"]
+        == "artifacts/models/imagenet/googlenet/deploy_original.prototxt"
+    )
+    assert (
+        config["experiments"]["table_10_googlenet"]["model"]["attack_deploy_proto"]
+        == "artifacts/models/imagenet/googlenet/deploy_removeSoftmax.prototxt"
+    )
