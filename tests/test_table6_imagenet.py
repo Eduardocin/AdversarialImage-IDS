@@ -16,15 +16,19 @@ from deepdetector.evaluation.table4_imagenet import (  # noqa: E402
     Table4Sample,
 )
 from deepdetector.evaluation.table6_imagenet import (  # noqa: E402
-    TABLE6_DIAGNOSTIC_FIELDS,
     TABLE6_OUTPUT_FIELDS,
     adaptive_quantization_step,
     adaptive_quantize_image,
     evaluate_table6_imagenet,
     validate_table6_result,
-    write_table6_outputs,
 )
-from scripts.article_reproduction.table_6_imagenet import load_split_samples  # noqa: E402
+from deepdetector.experiments import table6_runner  # noqa: E402
+from deepdetector.experiments.table6_runner import (  # noqa: E402
+    aggregate_table6_rows,
+    imagenet_fgsm_cache_path,
+    load_imagenet_split_samples,
+    run_table6_experiment,
+)
 
 
 class MeanCaffeModel:
@@ -56,6 +60,13 @@ class NoAttackModel(MeanCaffeModel):
         return np.zeros_like(image, dtype=np.float32)
 
 
+class ExplodingGradientModel(MeanCaffeModel):
+    """Model that proves cached ImageNet adversarials skip FGSM generation."""
+
+    def gradient(self, image: np.ndarray, class_id: int) -> np.ndarray:
+        raise AssertionError("cache miss")
+
+
 def _sample(value: float, true_label: int = 1, image_id: str = "img") -> Table4Sample:
     image = np.full((3, 2, 2), value, dtype=np.float32)
     return Table4Sample(
@@ -67,11 +78,12 @@ def _sample(value: float, true_label: int = 1, image_id: str = "img") -> Table4S
 
 
 def test_table6_config_documents_imagenet_parameters() -> None:
-    """The ImageNet Table 6 config should record the spec parameters."""
-    config_path = PROJECT_ROOT / "configs" / "article_reproduction" / "imagenet_table_6.yaml"
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    """The official Table 6 config should embed ImageNet as an internal dataset."""
+    all_config = yaml.safe_load(
+        (PROJECT_ROOT / "configs" / "experiments.yaml").read_text(encoding="utf-8")
+    )
+    config = all_config["experiments"]["table_6"]["imagenet"]
 
-    assert config["experiment"]["name"] == "imagenet_table_6_adaptive_quantization"
     assert config["dataset"]["name"] == "imagenet"
     assert config["dataset"]["splits"]["train"] == [
         {"name": "goldfish", "label": 1, "path": "data/imagenet/train/goldfish"},
@@ -90,15 +102,7 @@ def test_table6_config_documents_imagenet_parameters() -> None:
     assert config["model"]["mean_file"] is None
     assert config["attack"]["name"] == "fgsm"
     assert config["attack"]["epsilon_255"] == 1.0
-    assert config["quantization"]["method"] == "entropy_defined_adaptive_quantization"
-    assert config["quantization"]["entropy_thresholds"] == {"low": 4.0, "medium": 5.0}
-    assert config["quantization"]["interval_sizes"] == {
-        "low_entropy": 128,
-        "medium_entropy": 64,
-        "high_entropy": 43,
-    }
-    assert config["output"]["csv"] == "table_6_imagenet.csv"
-    assert config["output"]["diagnostics_csv"] == "table_6_imagenet_diagnostics.csv"
+    assert config["attack"]["clip_max"] == 255.0
 
 
 def test_adaptive_quantization_step_uses_table6_thresholds() -> None:
@@ -187,29 +191,147 @@ def test_table6_validation_fails_when_fgsm_has_zero_successes() -> None:
     assert str(excinfo.value) == ZERO_ATTACK_SUCCESS_MESSAGE
 
 
-def test_write_table6_outputs_uses_specified_csv_columns(tmp_path) -> None:
-    """The output CSV files should keep the spec field order."""
+def test_table6_imagenet_reuses_cached_adversarial_examples() -> None:
+    """Cached ImageNet Table 6 attacks should avoid gradient generation."""
+    cached_adv = np.asarray([np.full((3, 2, 2), 151.0, dtype=np.float32)])
+
     result = evaluate_table6_imagenet(
-        model=MeanCaffeModel(),
+        model=ExplodingGradientModel(),
         samples_by_split={
-            "train": [_sample(149.0, true_label=1)],
-            "validation": [_sample(149.0, true_label=1)],
+            "train": [
+                _sample(149.0, true_label=1, image_id="cached_success"),
+                _sample(149.0, true_label=9, image_id="wrong_clean"),
+            ],
+            "validation": [_sample(149.0, true_label=1, image_id="valid_success")],
         },
         epsilon_255=2.0,
+        adversarial_by_split={
+            "train": cached_adv,
+            "validation": cached_adv,
+        },
     )
 
-    csv_path, diagnostics_path = write_table6_outputs(tmp_path, result)
+    assert result.n_clean_correct == 2
+    assert result.n_attack_success == 2
+    assert result.summaries[0].skipped_wrong_baseline == 1
+    assert result.adversarial_by_split["train"].shape == (1, 3, 2, 2)
 
-    assert csv_path.name == "table_6_imagenet.csv"
-    assert diagnostics_path.name == "table_6_imagenet_diagnostics.csv"
-    csv_lines = csv_path.read_text(encoding="utf-8").splitlines()
-    assert csv_lines[0] == ",".join(TABLE6_OUTPUT_FIELDS)
-    assert len(csv_lines) == 3
-    assert csv_lines[1].split(",")[0] == "train"
-    assert csv_lines[2].split(",")[0] == "validation"
-    assert diagnostics_path.read_text(encoding="utf-8").splitlines()[0] == ",".join(
-        TABLE6_DIAGNOSTIC_FIELDS
+
+def test_table6_imagenet_rejects_short_adversarial_cache() -> None:
+    """A present but incompatible cache should not silently fall back to FGSM."""
+    with pytest.raises(ValueError, match="cache is incompatible"):
+        evaluate_table6_imagenet(
+            model=ExplodingGradientModel(),
+            samples_by_split={
+                "train": [_sample(149.0, true_label=1, image_id="missing_cached_adv")],
+                "validation": [_sample(149.0, true_label=1, image_id="valid_success")],
+            },
+            epsilon_255=2.0,
+            adversarial_by_split={
+                "train": np.empty((0, 3, 2, 2), dtype=np.float32),
+                "validation": np.asarray([np.full((3, 2, 2), 151.0, dtype=np.float32)]),
+            },
+        )
+
+
+def test_table6_imagenet_cache_path_defaults_to_artifacts() -> None:
+    """The Table 6 ImageNet cache should reuse the shared artifacts path."""
+    cache_path = imagenet_fgsm_cache_path(
+        {
+            "attack": {
+                "name": "fgsm",
+                "epsilon_255": 1.0,
+            },
+        },
+        "validation",
     )
+
+    assert cache_path == (
+        PROJECT_ROOT
+        / "artifacts"
+        / "adversarial_examples"
+        / "imagenet"
+        / "fgsm"
+        / "validation"
+        / "adversarial_examples.npy"
+    )
+
+
+def test_table6_imagenet_runner_generates_missing_cache_then_reuses(
+    monkeypatch, tmp_path
+) -> None:
+    """Missing ImageNet caches should be generated once and reused on rerun."""
+    samples_by_split = {
+        "train": [_sample(149.0, true_label=1, image_id="train_cached")],
+        "validation": [_sample(149.0, true_label=1, image_id="validation_cached")],
+    }
+    config = {
+        "split_order": ["train", "validation"],
+        "dataset": {"name": "imagenet"},
+        "model": {"name": "googlenet_caffe"},
+        "attack": {
+            "name": "fgsm",
+            "epsilon_255": 2.0,
+            "clip_min": 0.0,
+            "clip_max": 255.0,
+            "cache_dir": str(tmp_path / "adversarial_examples"),
+        },
+    }
+
+    monkeypatch.setattr(
+        table6_runner,
+        "load_imagenet_split_samples",
+        lambda _: samples_by_split,
+    )
+    monkeypatch.setattr(
+        table6_runner,
+        "build_imagenet_model",
+        lambda _: MeanCaffeModel(),
+    )
+
+    first_rows = table6_runner.evaluate_imagenet_table6(config)
+
+    train_cache = imagenet_fgsm_cache_path(config, "train")
+    validation_cache = imagenet_fgsm_cache_path(config, "validation")
+    assert train_cache.is_file()
+    assert validation_cache.is_file()
+    assert np.load(str(train_cache)).shape == (1, 3, 2, 2)
+
+    monkeypatch.setattr(
+        table6_runner,
+        "build_imagenet_model",
+        lambda _: ExplodingGradientModel(),
+    )
+
+    second_rows = table6_runner.evaluate_imagenet_table6(config)
+
+    assert second_rows == first_rows
+
+
+def test_aggregate_table6_rows_sums_counts_before_calculating_metrics() -> None:
+    """Combined Table 6 metrics should be calculated after summing counters."""
+    rows = aggregate_table6_rows(
+        mnist_rows=[
+            {"split": "train", "TP": 1, "FN": 1, "FP": 0},
+            {"split": "validation", "TP": 2, "FN": 0, "FP": 1},
+        ],
+        imagenet_rows=[
+            {"split": "train", "TP": 3, "FN": 1, "FP": 2},
+            {"split": "validation", "TP": 1, "FN": 3, "FP": 0},
+        ],
+    )
+
+    assert rows[0]["split"] == "train"
+    assert rows[0]["TP"] == 4
+    assert rows[0]["FN"] == 2
+    assert rows[0]["FP"] == 2
+    assert rows[0]["recall_percent"] == pytest.approx(66.6666667)
+    assert rows[0]["precision_percent"] == pytest.approx(66.6666667)
+    assert rows[0]["f1_percent"] == pytest.approx(66.6666667)
+    assert rows[1]["split"] == "validation"
+    assert rows[1]["TP"] == 3
+    assert rows[1]["FN"] == 3
+    assert rows[1]["FP"] == 1
 
 
 def test_table6_script_loads_local_jpeg_and_png_split_folders(tmp_path) -> None:
@@ -237,7 +359,7 @@ def test_table6_script_loads_local_jpeg_and_png_split_folders(tmp_path) -> None:
         }
     }
 
-    samples_by_split = load_split_samples(config)
+    samples_by_split = load_imagenet_split_samples(config)
 
     assert list(samples_by_split) == ["train", "validation"]
     assert len(samples_by_split["train"]) == 1
@@ -245,3 +367,57 @@ def test_table6_script_loads_local_jpeg_and_png_split_folders(tmp_path) -> None:
     assert samples_by_split["train"][0].image.shape == (4, 4, 3)
     assert samples_by_split["train"][0].true_label == 1
     assert samples_by_split["validation"][0].true_label == 107
+
+
+def test_run_table6_experiment_writes_only_official_outputs(monkeypatch, tmp_path) -> None:
+    """The official Table 6 runner should write only metrics CSV and JSON."""
+    monkeypatch.setattr(
+        table6_runner,
+        "evaluate_mnist_table6",
+        lambda config: [
+            {"split": "train", "TP": 1, "FN": 1, "FP": 0},
+            {"split": "validation", "TP": 2, "FN": 0, "FP": 1},
+        ],
+    )
+    monkeypatch.setattr(
+        table6_runner,
+        "evaluate_imagenet_table6",
+        lambda config: [
+            {"split": "train", "TP": 3, "FN": 1, "FP": 2},
+            {"split": "validation", "TP": 1, "FN": 3, "FP": 0},
+        ],
+    )
+
+    rows = run_table6_experiment(
+        {
+            "experiment_id": "table_6",
+            "kind": "table_6",
+            "mnist": {"dataset": {"name": "mnist"}},
+            "imagenet": {"dataset": {"name": "imagenet"}},
+            "split_order": ["train", "validation"],
+            "output": {"dir": str(tmp_path), "csv": "metrics.csv", "json": "metrics.json"},
+        }
+    )
+
+    assert [row["split"] for row in rows] == ["train", "validation"]
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "metrics.csv",
+        "metrics.json",
+    ]
+    assert (tmp_path / "metrics.csv").read_text(encoding="utf-8").splitlines()[0] == (
+        ",".join(TABLE6_OUTPUT_FIELDS)
+    )
+    payload = yaml.safe_load((tmp_path / "metrics.json").read_text(encoding="utf-8"))
+    assert payload["train"]["tp"] == 4
+    assert payload["train"]["fn"] == 2
+    assert payload["train"]["fp"] == 2
+
+
+def test_legacy_table6_imagenet_public_files_were_removed() -> None:
+    """Table 6 should not expose a separate ImageNet experiment path."""
+    assert not (
+        PROJECT_ROOT / "scripts" / "article_reproduction" / "table_6_imagenet.py"
+    ).exists()
+    assert not (
+        PROJECT_ROOT / "configs" / "article_reproduction" / "imagenet_table_6.yaml"
+    ).exists()

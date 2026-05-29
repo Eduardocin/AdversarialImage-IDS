@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
-from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
@@ -36,26 +34,6 @@ TABLE6_OUTPUT_FIELDS: Tuple[str, ...] = (
     "precision_percent",
     "f1_percent",
 )
-TABLE6_DIAGNOSTIC_FIELDS: Tuple[str, ...] = (
-    "split",
-    "image_id",
-    "class_name",
-    "true_label",
-    "clean_pred",
-    "filtered_clean_pred",
-    "adv_pred",
-    "filtered_adv_pred",
-    "clean_correct",
-    "attack_success",
-    "entropy_clean",
-    "entropy_adv",
-    "clean_quantization_step",
-    "adv_quantization_step",
-    "is_fp",
-    "is_tp",
-    "is_fn",
-    "skip_reason",
-)
 DEFAULT_SPLIT_ORDER: Tuple[str, ...] = ("train", "validation")
 NO_CLEAN_CORRECT_MESSAGE = "No clean-correct ImageNet samples were available for Table 6."
 
@@ -85,6 +63,7 @@ class Table6Evaluation:
     rows: List[dict[str, Any]]
     diagnostics: List[dict[str, Any]]
     summaries: List[Table6SplitSummary]
+    adversarial_by_split: Dict[str, np.ndarray] = field(default_factory=dict)
 
     @property
     def n_clean_total(self) -> int:
@@ -200,7 +179,8 @@ def _evaluate_split(
     epsilon_255: float,
     clip_min: float,
     clip_max: float,
-) -> Tuple[Table6SplitSummary, List[dict[str, Any]]]:
+    cached_adversarial_images: Optional[np.ndarray] = None,
+) -> Tuple[Table6SplitSummary, List[dict[str, Any]], np.ndarray]:
     """Evaluate adaptive quantization for one split."""
     total_images = len(samples)
     clean_correct_count = 0
@@ -211,6 +191,9 @@ def _evaluate_split(
     fn = 0
     fp = 0
     diagnostics: List[dict[str, Any]] = []
+    cached_adv_index = 0
+    using_cache = cached_adversarial_images is not None
+    adversarial_for_cache: List[np.ndarray] = []
 
     for sample_index, sample in enumerate(samples, start=1):
         clean_image = _article_model_input(model, sample.image)
@@ -234,14 +217,38 @@ def _evaluate_split(
         filtered_clean, entropy_clean, clean_step = adaptive_quantize_image(clean_image)
         filtered_clean_pred = _predict_one(model, filtered_clean)
 
-        adversarial_image = generate_fgsm_from_gradient(
-            model=model,
-            image=clean_image,
-            class_id=clean_pred,
-            epsilon_255=epsilon_255,
-            clip_min=clip_min,
-            clip_max=clip_max,
-        )
+        if using_cache and cached_adv_index < len(cached_adversarial_images):
+            adversarial_image = np.asarray(
+                cached_adversarial_images[cached_adv_index],
+                dtype=np.float32,
+            )
+            cached_adv_index += 1
+            if adversarial_image.shape != clean_image.shape:
+                raise ValueError(
+                    "Cached Table 6 ImageNet adversarial shape {0} does not match clean image shape {1} for split {2}.".format(
+                        adversarial_image.shape,
+                        clean_image.shape,
+                        split,
+                    )
+                )
+        elif using_cache:
+            raise ValueError(
+                "Cached Table 6 ImageNet adversarials for split {0} ended after {1} clean-correct samples. "
+                "The cache is incompatible with the current dataset/model configuration.".format(
+                    split,
+                    cached_adv_index,
+                )
+            )
+        else:
+            adversarial_image = generate_fgsm_from_gradient(
+                model=model,
+                image=clean_image,
+                class_id=clean_pred,
+                epsilon_255=epsilon_255,
+                clip_min=clip_min,
+                clip_max=clip_max,
+            )
+        adversarial_for_cache.append(np.asarray(adversarial_image, dtype=np.float32))
         adv_pred = _predict_one(model, adversarial_image)
 
         if adv_pred == clean_pred:
@@ -306,10 +313,11 @@ def _evaluate_split(
 
         if sample_index == 1 or sample_index == total_images or sample_index % 20 == 0:
             logger.info(
-                "Table 6 ImageNet %s progress %d/%d | clean_correct=%d attack_success=%d disturbed_failure=%d skipped=%d",
+                "Table 6 ImageNet %s progress %d/%d | adversarial_source=%s clean_correct=%d attack_success=%d disturbed_failure=%d skipped=%d",
                 split,
                 sample_index,
                 total_images,
+                "cache" if using_cache else "generated",
                 clean_correct_count,
                 fgsm_success,
                 disturbed_failure,
@@ -331,7 +339,14 @@ def _evaluate_split(
         precision=precision,
         f1=f1,
     )
-    return summary, diagnostics
+    if using_cache and cached_adv_index != len(cached_adversarial_images):
+        logger.warning(
+            "Table 6 ImageNet cache for split %s had %d unused adversarial examples.",
+            split,
+            len(cached_adversarial_images) - cached_adv_index,
+        )
+    adversarial_array = np.asarray(adversarial_for_cache, dtype=np.float32)
+    return summary, diagnostics, adversarial_array
 
 
 def evaluate_table6_imagenet(
@@ -341,27 +356,32 @@ def evaluate_table6_imagenet(
     clip_min: float = 0.0,
     clip_max: float = 255.0,
     split_order: Sequence[str] = DEFAULT_SPLIT_ORDER,
+    adversarial_by_split: Optional[Mapping[str, np.ndarray]] = None,
 ) -> Table6Evaluation:
     """Evaluate ImageNet Table 6 adaptive quantization for configured splits."""
     rows: List[dict[str, Any]] = []
     diagnostics: List[dict[str, Any]] = []
     summaries: List[Table6SplitSummary] = []
+    output_adversarial_by_split: Dict[str, np.ndarray] = {}
+    cached_by_split = adversarial_by_split or {}
 
     for split in split_order:
         split_samples = list(samples_by_split.get(split, []))
         if not split_samples:
             raise ValueError("Configured split has no images: {0}".format(split))
 
-        summary, split_diagnostics = _evaluate_split(
+        summary, split_diagnostics, split_adversarial = _evaluate_split(
             model=model,
             split=str(split),
             samples=split_samples,
             epsilon_255=epsilon_255,
             clip_min=clip_min,
             clip_max=clip_max,
+            cached_adversarial_images=cached_by_split.get(str(split)),
         )
         summaries.append(summary)
         diagnostics.extend(split_diagnostics)
+        output_adversarial_by_split[str(split)] = split_adversarial
         rows.append(
             {
                 "split": str(split),
@@ -374,7 +394,12 @@ def evaluate_table6_imagenet(
             }
         )
 
-    return Table6Evaluation(rows=rows, diagnostics=diagnostics, summaries=summaries)
+    return Table6Evaluation(
+        rows=rows,
+        diagnostics=diagnostics,
+        summaries=summaries,
+        adversarial_by_split=output_adversarial_by_split,
+    )
 
 
 def validate_table6_result(result: Table6Evaluation) -> None:
@@ -383,29 +408,3 @@ def validate_table6_result(result: Table6Evaluation) -> None:
         raise RuntimeError(NO_CLEAN_CORRECT_MESSAGE)
     if result.n_attack_success == 0 or result.n_valid_detections == 0:
         raise RuntimeError(ZERO_ATTACK_SUCCESS_MESSAGE)
-
-
-def write_table6_outputs(
-    output_dir: Path,
-    result: Table6Evaluation,
-    csv_name: str = "table_6_imagenet.csv",
-    diagnostics_name: str = "table_6_imagenet_diagnostics.csv",
-) -> Tuple[Path, Path]:
-    """Write Table 6 result and diagnostic CSV files."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    csv_path = output_dir / csv_name
-    diagnostics_path = output_dir / diagnostics_name
-
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=TABLE6_OUTPUT_FIELDS)
-        writer.writeheader()
-        for row in result.rows:
-            writer.writerow({field: row.get(field, "") for field in TABLE6_OUTPUT_FIELDS})
-
-    with diagnostics_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=TABLE6_DIAGNOSTIC_FIELDS)
-        writer.writeheader()
-        for row in result.diagnostics:
-            writer.writerow({field: row.get(field, "") for field in TABLE6_DIAGNOSTIC_FIELDS})
-
-    return csv_path, diagnostics_path

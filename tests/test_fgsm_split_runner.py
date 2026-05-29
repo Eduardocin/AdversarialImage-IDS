@@ -141,24 +141,23 @@ def test_fgsm_split_runner_rejects_missing_slices(tmp_path) -> None:
         fgsm_split_runner.run_fgsm_split_experiment(config)
 
 
-def test_fgsm_split_configs_match_except_filter_identity_and_output() -> None:
-    """Table 6 and Table 9 should differ only by filter identity and output."""
+def test_table9_remains_on_the_generic_split_runner() -> None:
+    """Table 9 should remain on split_eval after Table 6 becomes combined."""
     config = yaml.safe_load(
         (PROJECT_ROOT / "configs" / "experiments.yaml").read_text(encoding="utf-8")
     )
     table6 = config["experiments"]["table_6"]
     table9 = config["experiments"]["table_9"]
 
-    assert table6["kind"] == "split_eval"
+    assert table6["kind"] == "table_6"
     assert table9["kind"] == "split_eval"
-    assert table6["filter"]["type"] == "adaptive_quantization"
     assert table9["filter"]["type"] == "proposed_detection_filter"
-    assert table6["dataset"]["slices"] == table9["dataset"]["slices"]
+    assert table6["mnist"]["dataset"]["slices"] == table9["dataset"]["slices"]
     assert table6["output_dir"] == "results/experiments/table_6"
     assert table9["output_dir"] == "results/experiments/table_9"
-    assert table6["attack"]["epsilon"] == 0.2
+    assert table6["mnist"]["attack"]["epsilon"] == 0.2
     assert table9["attack"]["epsilon"] == 0.2
-    assert table6["evaluation"]["batch_size"] == 256
+    assert table6["mnist"]["evaluation"]["batch_size"] == 256
     assert table9["evaluation"]["batch_size"] == 256
 
 

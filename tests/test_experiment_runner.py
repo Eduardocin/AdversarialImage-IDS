@@ -44,6 +44,10 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
     for experiment in config["experiments"].values():
         if experiment["kind"] == "composite":
             continue
+        if experiment["kind"] == "table_6":
+            assert "mnist" in experiment
+            assert "imagenet" in experiment
+            continue
         assert "dataset" in experiment
         assert "model" in experiment
         assert "attack" in experiment
@@ -52,7 +56,7 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
 @pytest.mark.parametrize(
     ("experiment_name", "kind"),
     [
-        ("table_6", "split_eval"),
+        ("table_6", "table_6"),
         ("table_7", "filter_grid"),
         ("table_8", "filter_grid"),
         ("table_9", "split_eval"),

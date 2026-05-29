@@ -23,6 +23,9 @@ The official experiment runner regenerates FGSM adversarial examples every time 
 - `filter_grid` MNIST experiments must reuse the cached adversarial set across repeated `run_experiment.py` executions.
 - `split_eval` MNIST experiments must cache each configured split independently.
 - ImageNet Table 4 must cache the valid successful FGSM attacks and baseline counters.
+- ImageNet Table 6 must reuse split-level FGSM caches from
+  `artifacts/adversarial_examples/imagenet/fgsm/{split}/adversarial_examples.npy`
+  when they are present and compatible.
 - Cache use may be disabled with `attack.cache: false`.
 - Cache location may be overridden with `attack.cache_dir`.
 
@@ -38,6 +41,7 @@ The official experiment runner regenerates FGSM adversarial examples every time 
 - Running `table_7` twice with unchanged config loads MNIST FGSM adversarial examples from cache on the second run.
 - Running `table_6` and `table_9` can reuse identical MNIST split attack caches.
 - Running `table_4_imagenet` twice with unchanged config loads cached successful ImageNet FGSM attacks on the second run.
+- Running `table_6` with existing compatible ImageNet FGSM split caches does not call the ImageNet FGSM generator again for those splits.
 - Automated tests cover cache miss, cache hit, and generated artifact ignore behavior.
 
 ## Error Cases

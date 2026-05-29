@@ -141,32 +141,88 @@ experiments:
       status_json: table_4_status.json
 
   table_6:
-    kind: split_eval
+    kind: table_6
+    description: Adaptive quantization strategy
     output_dir: results/experiments/table_6
-    dataset:
-      name: mnist
-      split: test
-      slices:
-        - name: Training
-          start: 0
-          end: 4500
-        - name: Validation
-          start: 4500
-          end: 5500
-    model:
-      name: mnist_m1
-      checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
-    attack:
-      name: fgsm
-      epsilon: 0.2
-      clip_min: 0.0
-      clip_max: 1.0
-    evaluation:
-      batch_size: 256
-      exclude_invalid_pairs: false
-    filter:
-      name: adaptive_quantization
-      type: adaptive_quantization
+    datasets: [mnist, imagenet]
+    split_order: [train, validation]
+    entropy_thresholds:
+      low: 4.0
+      medium: 5.0
+    quantization:
+      low_entropy_intervals: 2
+      medium_entropy_intervals: 4
+      high_entropy_intervals: 6
+      interval_sizes:
+        low_entropy: 128
+        medium_entropy: 64
+        high_entropy: 43
+    mnist:
+      dataset:
+        name: mnist
+        split: test
+        slices:
+          - name: Training
+            start: 0
+            end: 4500
+          - name: Validation
+            start: 4500
+            end: 5500
+      model:
+        name: mnist_m1
+        checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
+      attack:
+        name: fgsm
+        epsilon: 0.2
+        clip_min: 0.0
+        clip_max: 1.0
+      evaluation:
+        batch_size: 256
+        exclude_invalid_pairs: false
+      filter:
+        name: adaptive_quantization
+        type: adaptive_quantization
+    imagenet:
+      dataset:
+        name: imagenet
+        image_size: 224
+        image_shape: [224, 224, 3]
+        value_range: [0.0, 1.0]
+        shuffle: false
+        n_samples: null
+        splits:
+          train:
+            - name: goldfish
+              label: 1
+              path: data/imagenet/train/goldfish
+            - name: pineapple
+              label: 953
+              path: data/imagenet/train/pineapple
+            - name: digital_clock
+              label: 530
+              path: data/imagenet/train/digital_clock
+          validation:
+            - name: jellyfish
+              label: 107
+              path: data/imagenet/validation/jellyfish
+      model:
+        name: googlenet_caffe
+        family: caffe
+        reference: BVLC GoogLeNet
+        model_dir: artifacts/models/imagenet/googlenet/
+        deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
+        caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+        mean_file: null
+        use_gpu: false
+        batch_size: 32
+      attack:
+        name: fgsm
+        epsilon_255: 1.0
+        clip_min: 0.0
+        clip_max: 255.0
+        batch_size: 32
+      evaluation:
+        exclude_invalid_pairs: false
 
   table_7:
     kind: filter_grid

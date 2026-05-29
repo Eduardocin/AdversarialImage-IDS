@@ -184,8 +184,16 @@ def test_table_6_config_documents_experiment_parameters() -> None:
     )
     table6 = config["experiments"]["table_6"]
 
-    assert table6["kind"] == "split_eval"
-    assert table6["dataset"] == {
+    assert table6["kind"] == "table_6"
+    assert table6["datasets"] == ["mnist", "imagenet"]
+    assert table6["split_order"] == ["train", "validation"]
+    assert table6["entropy_thresholds"] == {"low": 4.0, "medium": 5.0}
+    assert table6["quantization"]["interval_sizes"] == {
+        "low_entropy": 128,
+        "medium_entropy": 64,
+        "high_entropy": 43,
+    }
+    assert table6["mnist"]["dataset"] == {
         "name": "mnist",
         "split": "test",
         "slices": [
@@ -193,19 +201,28 @@ def test_table_6_config_documents_experiment_parameters() -> None:
             {"name": "Validation", "start": 4500, "end": 5500},
         ],
     }
-    assert table6["dataset"]["slices"] == [
-        {"name": "Training", "start": 0, "end": 4500},
-        {"name": "Validation", "start": 4500, "end": 5500},
-    ]
-    assert table6["attack"]["name"] == "fgsm"
-    assert table6["attack"]["epsilon"] == 0.2
-    assert table6["model"]["checkpoint_dir"] == (
+    assert table6["mnist"]["attack"]["name"] == "fgsm"
+    assert table6["mnist"]["attack"]["epsilon"] == 0.2
+    assert table6["mnist"]["model"]["checkpoint_dir"] == (
         "artifacts/models/mnist/m1/clean_baseline/checkpoints"
     )
-    assert table6["filter"] == {
+    assert table6["mnist"]["filter"] == {
         "name": "adaptive_quantization",
         "type": "adaptive_quantization",
     }
+    assert table6["imagenet"]["dataset"]["splits"]["train"] == [
+        {"name": "goldfish", "label": 1, "path": "data/imagenet/train/goldfish"},
+        {"name": "pineapple", "label": 953, "path": "data/imagenet/train/pineapple"},
+        {
+            "name": "digital_clock",
+            "label": 530,
+            "path": "data/imagenet/train/digital_clock",
+        },
+    ]
+    assert table6["imagenet"]["dataset"]["splits"]["validation"] == [
+        {"name": "jellyfish", "label": 107, "path": "data/imagenet/validation/jellyfish"},
+    ]
+    assert table6["imagenet"]["attack"]["epsilon_255"] == 1.0
     assert table6["output_dir"] == "results/experiments/table_6"
 
 

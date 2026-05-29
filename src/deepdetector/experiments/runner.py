@@ -7,6 +7,7 @@ from typing import Any, Dict
 
 from deepdetector.experiments.fgsm_split_runner import run_fgsm_split_experiment
 from deepdetector.experiments.filter_candidate_runner import run_filter_candidate_experiment
+from deepdetector.experiments.table6_runner import run_table6_experiment
 from deepdetector.experiments.table4_imagenet_runner import run_table4_imagenet_experiment
 from deepdetector.experiments.table10_runner import run_table10_group_experiment
 from deepdetector.io.paths import resolve_project_path
@@ -127,6 +128,14 @@ def build_experiment_config(
         base_config["filter"] = filter_config_from_alias(experiment.get("filter"))
         return base_config
 
+    if kind == "table_6":
+        base_config["mnist"] = dict(experiment.get("mnist", {}))
+        base_config["imagenet"] = dict(experiment.get("imagenet", {}))
+        base_config["split_order"] = list(experiment.get("split_order", ["train", "validation"]))
+        base_config["entropy_thresholds"] = dict(experiment.get("entropy_thresholds", {}))
+        base_config["quantization"] = dict(experiment.get("quantization", {}))
+        return base_config
+
     if kind == "imagenet_table_4":
         base_config["quantization"] = dict(experiment.get("quantization", {}))
         return base_config
@@ -237,6 +246,8 @@ def run_experiment(name: str, consolidated_config: Dict[str, Any]):
         return _run_composite_experiment(config, consolidated_config)
     if kind == "split_eval":
         return run_fgsm_split_experiment(config)
+    if kind == "table_6":
+        return run_table6_experiment(config)
     if kind == "filter_grid":
         return run_filter_candidate_experiment(config)
     if kind == "imagenet_table_4":

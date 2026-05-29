@@ -73,6 +73,14 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Add per-filter timing to Table 3 rows.
   - [x] Suppress `filter_name` in the Table 3 CSV.
   - [x] Keep other filter-grid schemas unchanged by default.
+- [x] Refactor Table 6 from `specs/features/table_6.md`
+  - [x] Make `table_6` the only public experiment for adaptive quantization.
+  - [x] Run MNIST and ImageNet as internal Table 6 components.
+  - [x] Reuse compatible ImageNet FGSM caches from `artifacts/adversarial_examples`.
+  - [x] Generate and persist ImageNet FGSM caches when a split cache is missing.
+  - [x] Aggregate TP, FN, and FP across datasets before calculating metrics.
+  - [x] Write only `metrics.csv` and `metrics.json` under `results/experiments/table_6`.
+  - [x] Remove the legacy public Table 6 ImageNet script and config.
 - [x] Implement Table 9 final FGSM detector from `specs/features/table_9.md`
   - [x] Add `configs/article_reproduction/table_9.yaml`.
   - [x] Add `src/deepdetector/filters/article_final.py`.
@@ -83,12 +91,12 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Write `table_9.csv`, `table_9.md`, and `status.json`.
   - [x] Add automated tests for config, filter behavior, registry, aggregation, CSV shape, and dry-run status.
   - [x] Suppress the known legacy CleverHans MNIST deprecation warning without changing loader behavior.
-- [x] Implement Table 6 ImageNet adaptive quantization from `specs/features/table_6_imagenet.md`
-  - [x] Add `configs/article_reproduction/imagenet_table_6.yaml`.
-  - [x] Add `scripts/article_reproduction/table_6_imagenet.py`.
+- [x] Implement Table 6 ImageNet adaptive quantization from `specs/features/table_6_imagenet.md` (superseded by combined Table 6)
+  - [x] Fold the ImageNet component into the official `table_6` experiment.
+  - [x] Remove `configs/article_reproduction/imagenet_table_6.yaml`.
+  - [x] Remove `scripts/article_reproduction/table_6_imagenet.py`.
   - [x] Reuse the Caffe-scale GoogLeNet FGSM path from Table 4 ImageNet.
-  - [x] Write `table_6_imagenet.csv` and `table_6_imagenet_diagnostics.csv`.
-  - [x] Add automated tests for adaptive steps, metrics, diagnostics, CSV shape, and zero-attack failure.
+  - [x] Add automated tests for adaptive steps, metrics, aggregation, output shape, and zero-attack failure.
 - [x] Implement Table 4 ImageNet reproduction from `specs/features/Table 4 ImageNet.md`
   - [x] Add CLI support for `--data-root`, `--limit`, `--epsilon`, and `--output-dir`.
   - [x] Evaluate ImageNet PNGs with GoogLeNet/Caffe predictions and FGSM generated from model gradients.
