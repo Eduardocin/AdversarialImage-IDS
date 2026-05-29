@@ -1,0 +1,2 @@
+"""Official article table materializers."""
+

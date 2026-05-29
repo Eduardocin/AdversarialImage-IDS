@@ -406,7 +406,7 @@ experiments:
 
   table_10_googlenet:
     kind: table_10_group
-    output_dir: results/experiments/table_10/googlenet
+    output_dir: results/experiments/table_10/imagenet/googlenet
     dataset:
       name: imagenet
     model:
@@ -433,6 +433,10 @@ experiments:
         status: planned
         attack:
           name: deepfool
+          max_iter: 50
+          overshoot: 0.02
+          clip_min: 0.0
+          clip_max: 1.0
 
   table_10_caffenet:
     kind: table_10_group

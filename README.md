@@ -66,10 +66,7 @@ Detalhes de versao e decisoes ficam em
 .
 |-- configs/                         # contratos YAML por responsabilidade
 |   |-- article_reproduction/         # reproducoes das tabelas do artigo
-|   |-- attacks/                      # contratos isolados dos ataques
-|   |-- experiments/                  # pipelines operacionais/exploratorios
-|   |-- filters/                      # filtros e detector
-|   `-- training/                     # treino/restauracao de modelos
+|   `-- experiments.yaml              # inventario de experimentos
 |-- scripts/
 |   |-- article_reproduction/         # scripts para tabelas do artigo
 |   |-- dev/                          # validacoes rapidas de ambiente
@@ -81,7 +78,7 @@ Detalhes de versao e decisoes ficam em
 |   |-- attacks/                      # FGSM e CW
 |   |-- data/                         # loaders MNIST e ImageNet
 |   |-- detection/                    # regra por mudanca de predicao
-|   |-- evaluation/                   # metricas e relatorios
+|   |-- evaluation/                   # metricas, tabelas e comparacoes do artigo
 |   |-- filters/                      # filtros de reducao de ruido
 |   |-- models/                       # modelos MNIST e wrappers ImageNet
 |   |-- training/                     # treino/restauracao de baselines
@@ -107,14 +104,14 @@ Detalhes de versao e decisoes ficam em
 | `deepdetector.attacks` | Geracao de exemplos adversariais FGSM e CW. |
 | `deepdetector.filters` | Reducoes de ruido usadas pelo detector. |
 | `deepdetector.detection` | Detector DeepDetector-style por mudanca de predicao. |
-| `deepdetector.evaluation` | Metricas, agregacoes e comparacoes com o artigo. |
+| `deepdetector.evaluation` | Metricas, agregacoes e avaliacao das tabelas do artigo, incluindo materializadores oficiais. |
 
 ## Configuracoes
 
 O fluxo oficial usa `configs/experiments.yaml`. Cada experimento declara
-explicitamente dataset, modelo, ataque, amostras/splits e filtros. Configs
-antigas de treino, ataque e filtros foram removidas para evitar caminhos
-paralelos.
+explicitamente dataset, modelo, ataque, amostras/splits e filtros. As
+configuracoes de reproducoes especificas ficam em
+`configs/article_reproduction/`.
 
 ## Fluxos Operacionais
 

@@ -12,11 +12,12 @@ SRC_ROOT = PROJECT_ROOT / "src"
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SRC_ROOT))
 
-from deepdetector.experiments import runner as experiment_runner  # noqa: E402
-from deepdetector.experiments.table10_runner import (  # noqa: E402
-    TABLE10_SCHEMA,
-    run_table10_group_experiment,
+from deepdetector.evaluation.tables.table_10 import (  # noqa: E402
+    TABLE_10_SCHEMA,
+    build_pending_table_10_row,
+    run_table_10_group,
 )
+from deepdetector.experiments import runner as experiment_runner  # noqa: E402
 from scripts import run_experiment as run_experiment_script  # noqa: E402
 
 
@@ -46,27 +47,70 @@ def test_table10_config_declares_one_experiment_per_model_group() -> None:
 
     for experiment_name, (model_group, dataset_label, row_numbers) in TABLE10_EXPERIMENTS.items():
         experiment = experiments[experiment_name]
+        expected_output_dir = "results/experiments/table_10/{0}".format(model_group)
+        if experiment_name == "table_10_googlenet":
+            expected_output_dir = "results/experiments/table_10/imagenet/googlenet"
+
         assert experiment["kind"] == "table_10_group"
         assert experiment["model_group"] == model_group
         assert experiment["dataset_label"] == dataset_label
-        assert experiment["output_dir"] == "results/experiments/table_10/{0}".format(
-            model_group
-        )
+        assert experiment["output_dir"] == expected_output_dir
         assert [row["no"] for row in experiment["rows"]] == row_numbers
 
 
-def test_table10_runner_writes_official_schema_and_manifest(tmp_path) -> None:
-    """A Table 10 group should write metrics CSV/JSON plus a manifest."""
-    rows = run_table10_group_experiment(
+def test_table_10_schema_matches_paper_fields() -> None:
+    assert TABLE_10_SCHEMA == [
+        "no",
+        "attack_model",
+        "dataset",
+        "num_failures",
+        "tp",
+        "fn",
+        "fp",
+        "rtp",
+        "rtp_percent",
+        "recall",
+        "precision",
+        "f1",
+    ]
+
+
+def test_build_pending_table_10_row() -> None:
+    row = build_pending_table_10_row(
+        no=5,
+        attack_model="FGSM (\u03b5=1/255)/GoogLeNet",
+        dataset="ImageNet",
+    )
+
+    assert row == {
+        "no": 5,
+        "attack_model": "FGSM (\u03b5=1/255)/GoogLeNet",
+        "dataset": "ImageNet",
+        "num_failures": None,
+        "tp": None,
+        "fn": None,
+        "fp": None,
+        "rtp": None,
+        "rtp_percent": None,
+        "recall": None,
+        "precision": None,
+        "f1": None,
+    }
+
+
+def test_table10_runner_writes_official_schema_without_manifest(tmp_path) -> None:
+    """A Table 10 group should write only metrics CSV and JSON."""
+    rows = run_table_10_group(
         {
             "experiment_id": "table_10_test",
             "kind": "table_10_group",
+            "dataset": {"name": "imagenet"},
             "model_group": "googlenet",
             "dataset_label": "ImageNet",
             "rows": [
                 {
                     "no": 5,
-                    "attack_model": "FGSM (epsilon=1/255)/GoogLeNet",
+                    "attack_model": "FGSM (\u03b5=1/255)/GoogLeNet",
                     "status": "planned",
                 },
                 {
@@ -79,18 +123,14 @@ def test_table10_runner_writes_official_schema_and_manifest(tmp_path) -> None:
         }
     )
 
-    assert rows["status"] == "completed"
-    assert sorted(path.name for path in tmp_path.iterdir()) == [
-        "manifest.json",
-        "metrics.csv",
-        "metrics.json",
-    ]
+    assert [row["no"] for row in rows] == [5, 7]
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["metrics.csv", "metrics.json"]
     with (tmp_path / "metrics.csv").open("r", encoding="utf-8") as handle:
         csv_rows = list(csv.reader(handle))
-    assert csv_rows[0] == list(TABLE10_SCHEMA)
+    assert csv_rows[0] == TABLE_10_SCHEMA
     assert csv_rows[1] == [
         "5",
-        "FGSM (epsilon=1/255)/GoogLeNet",
+        "FGSM (\u03b5=1/255)/GoogLeNet",
         "ImageNet",
         "",
         "",
@@ -104,25 +144,20 @@ def test_table10_runner_writes_official_schema_and_manifest(tmp_path) -> None:
     ]
 
     metrics_payload = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
-    assert metrics_payload["schema"] == list(TABLE10_SCHEMA)
-    assert metrics_payload["metrics"][0]["num_failures"] is None
-    assert metrics_payload["metrics"][0]["no"] == 5
-
-    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["table"] == 10
-    assert manifest["model_group"] == "googlenet"
-    assert manifest["dataset"] == "ImageNet"
-    assert manifest["rows"] == [5, 7]
-    assert manifest["outputs"]["metrics_csv"] == str(tmp_path / "metrics.csv")
-    assert manifest["outputs"]["metrics_json"] == str(tmp_path / "metrics.json")
+    assert metrics_payload["table"] == 10
+    assert metrics_payload["dataset_group"] == "imagenet"
+    assert metrics_payload["model_group"] == "googlenet"
+    assert metrics_payload["rows"][0]["num_failures"] is None
+    assert metrics_payload["rows"][0]["no"] == 5
 
 
-def test_table10_blocked_reasons_stay_in_manifest_only(tmp_path) -> None:
-    """Blocked groups should not leak blocked reasons into metrics outputs."""
-    run_table10_group_experiment(
+def test_table10_blocked_reasons_stay_out_of_outputs(tmp_path) -> None:
+    """Blocked reasons should not leak into official metrics outputs."""
+    run_table_10_group(
         {
             "experiment_id": "table_10_caffenet",
             "kind": "table_10_group",
+            "dataset": {"name": "imagenet"},
             "model_group": "caffenet",
             "dataset_label": "ImageNet",
             "rows": [
@@ -130,22 +165,59 @@ def test_table10_blocked_reasons_stay_in_manifest_only(tmp_path) -> None:
                     "no": 8,
                     "attack_model": "DeepFool/CaffeNet",
                     "status": "blocked",
-                    "blocked_reason": "CaffeNet ainda não está implementado.",
+                    "blocked_reason": "CaffeNet is not implemented.",
                 }
             ],
             "output": {"dir": str(tmp_path), "csv": "metrics.csv", "json": "metrics.json"},
         }
     )
 
-    assert "CaffeNet ainda" not in (tmp_path / "metrics.csv").read_text(
+    assert "CaffeNet is not implemented" not in (tmp_path / "metrics.csv").read_text(
         encoding="utf-8"
     )
-    assert "CaffeNet ainda" not in (tmp_path / "metrics.json").read_text(
+    assert "CaffeNet is not implemented" not in (tmp_path / "metrics.json").read_text(
         encoding="utf-8"
     )
-    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["status"] == "blocked"
-    assert manifest["blocked_reason"] == "CaffeNet ainda não está implementado."
+    assert not (tmp_path / "manifest.json").exists()
+
+
+def test_table_10_googlenet_group_generates_three_rows(tmp_path) -> None:
+    config = {
+        "kind": "table_10_group",
+        "output_dir": str(tmp_path),
+        "dataset": {"name": "imagenet"},
+        "model": {"name": "googlenet"},
+        "model_group": "googlenet",
+        "dataset_label": "ImageNet",
+        "rows": [
+            {
+                "no": 5,
+                "attack_model": "FGSM (\u03b5=1/255)/GoogLeNet",
+                "status": "planned",
+                "attack": {"name": "fgsm", "epsilon": 1 / 255},
+            },
+            {
+                "no": 6,
+                "attack_model": "FGSM (\u03b5=2/255)/GoogLeNet",
+                "status": "planned",
+                "attack": {"name": "fgsm", "epsilon": 2 / 255},
+            },
+            {
+                "no": 7,
+                "attack_model": "DeepFool/GoogLeNet",
+                "status": "planned",
+                "attack": {"name": "deepfool"},
+            },
+        ],
+    }
+
+    rows = run_table_10_group(config)
+
+    assert [row["no"] for row in rows] == [5, 6, 7]
+    assert all(row["dataset"] == "ImageNet" for row in rows)
+    assert (tmp_path / "metrics.csv").exists()
+    assert (tmp_path / "metrics.json").exists()
+    assert not (tmp_path / "manifest.json").exists()
 
 
 def test_run_experiment_dispatches_table10_group(monkeypatch) -> None:

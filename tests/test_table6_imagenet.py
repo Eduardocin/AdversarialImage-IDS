@@ -5,6 +5,8 @@ import numpy as np
 import pytest
 import yaml
 
+from deepdetector.io.paths import get_project_root
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"

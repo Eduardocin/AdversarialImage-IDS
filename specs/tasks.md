@@ -109,6 +109,12 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Apply `epsilon_255=1.0` as a raw pixel step and clip to `[0,255]`.
   - [x] Share the same attack helper across Table 4, Table 7, and GoogLeNet FGSM scripts.
   - [x] Add tests covering clean-baseline skip, Caffe-scale epsilon, and no TensorFlow import in the main path.
+- [x] Implement Table 10 ImageNet GoogLeNet group from `specs/features/table10_googlenet.md`
+  - [x] Update `table_10_googlenet` output directory to `results/experiments/table_10/imagenet/googlenet`.
+  - [x] Add official Table 10 schema and pending-row materialization.
+  - [x] Route `kind: table_10_group` through the reusable Table 10 group runner.
+  - [x] Write only `metrics.csv` and `metrics.json` for the Table 10 group.
+  - [x] Add and run focused automated tests for schema, pending rows, group outputs, and dispatch.
 - [x] Add FGSM diagnostic guard for mean-subtracted ImageNet tensors
   - [x] Fail explicitly when the Caffe FGSM helper receives negative preprocessed values before `[0,255]` clipping.
   - [x] Add a regression test showing that mean-subtracted Caffe tensors are rejected for the article reproduction path.
@@ -131,6 +137,12 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Remove `diagnostics_csv` from the official Table 4 ImageNet config.
   - [x] Stop writing `table_4_imagenet_diagnostics.csv`.
   - [x] Update tests for the simplified output contract.
+- [ ] Reorganize evaluation and deduplicate helpers from `specs/refactor/refactor08.md`
+  - [ ] Move Table 10 materializer under `src/deepdetector/evaluation/`.
+  - [ ] Add shared evaluation helper modules for dataset iteration, metrics, and image layout conversion.
+  - [ ] Deduplicate Table 4/6 and Table 7/8 helper logic.
+  - [ ] Share the Keras learning phase helper across evaluation modules.
+  - [ ] Update imports, tests, and docs when needed.
 - [ ] Implement Table 8 ImageNet validation spatial smoothing from `specs/features/Table 8 ImageNet.md`
   - [x] Add config-driven Table 8 ImageNet experiment for the validation split.
   - [x] Evaluate exactly the five fixed superior spatial smoothing filters.
@@ -138,3 +150,15 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Preserve clean-baseline filtering and disturbed-failure exclusion.
   - [x] Add automated tests for filters, pivot output, validation config, and partial statuses.
   - [x] Run focused pytest validation.
+- [ ] Implement DeepFool for Table 10 GoogLeNet from `specs/features/deepfool.md`
+  - [x] Add reusable DeepFool attack generation under `src/deepdetector/attacks`.
+  - [x] Register `deepfool` in the common attack registry.
+  - [x] Add explicit DeepFool parameters to Table 10 GoogLeNet row 7.
+  - [x] Add automated tests for registry, DeepFool output contract, clipping, gradient requirement, and config.
+  - [x] Run focused pytest validation.
+- [ ] Implement Table 10 GoogLeNet metrics from `specs/features/table_10_googlenet_metrics.md`
+  - [ ] Add ImageNet/GoogLeNet row evaluator using the attack registry and detector metrics.
+  - [ ] Add dataset/evaluation config for table_10_googlenet (index CSV, images dir, n_samples).
+  - [ ] Switch row 7 to `implemented` when metrics are computed.
+  - [ ] Add smoke test using `evaluation.n_samples: 2`.
+  - [ ] Keep outputs limited to `metrics.csv` and `metrics.json`.
