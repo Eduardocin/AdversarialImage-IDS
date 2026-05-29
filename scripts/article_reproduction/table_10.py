@@ -13,13 +13,16 @@ from deepdetector.evaluation.article_reproduction import (  # noqa: E402
     close_graph,
     create_restored_mnist_graph,
     ensure_output_dir,
-    evaluate_filter_on_images,
+    evaluate_filter_on_existing_adversarial,
     format_percent,
     load_mnist_test_slice,
     percent_delta,
     proposed_detection_filter,
     write_csv,
     write_markdown_table,
+)
+from deepdetector.experiments.adversarial_examples import (  # noqa: E402
+    materialize_mnist_fgsm_examples,
 )
 from deepdetector.paths import MNIST_M1_CHECKPOINT_DIR  # noqa: E402
 
@@ -50,11 +53,19 @@ def main() -> int:
 
     try:
         for epsilon in [0.1, 0.2, 0.3, 0.4]:
-            metrics = evaluate_filter_on_images(
+            adversarial_set = materialize_mnist_fgsm_examples(
                 graph=graph,
                 images=images,
                 labels=labels,
-                epsilon=epsilon,
+                attack_config={"name": "fgsm", "epsilon": epsilon},
+            )
+            metrics = evaluate_filter_on_existing_adversarial(
+                graph=adversarial_set.graph,
+                images=adversarial_set.images,
+                labels=adversarial_set.labels,
+                adv_images=adversarial_set.adversarial_images,
+                clean_pred=adversarial_set.clean_predictions,
+                adv_pred=adversarial_set.adversarial_predictions,
                 filter_fn=proposed_detection_filter,
             )
             article = ARTICLE_TABLE_10[epsilon]
@@ -163,4 +174,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

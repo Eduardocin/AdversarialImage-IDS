@@ -261,3 +261,191 @@ experiments:
     filter:
       name: proposed_detection_filter
       type: proposed_detection_filter
+
+  table_10_m1:
+    kind: table_10_group
+    output_dir: results/experiments/table_10/m1
+    dataset:
+      name: mnist
+    model:
+      name: m1
+    attack: {}
+    evaluation: {}
+    model_group: m1
+    dataset_label: MNIST
+    rows:
+      - "no": 1
+        attack_model: "FGSM (ε=0.1)/M1"
+        status: implemented
+        attack:
+          name: fgsm
+          epsilon: 0.1
+      - "no": 2
+        attack_model: "FGSM (ε=0.2)/M1"
+        status: implemented
+        attack:
+          name: fgsm
+          epsilon: 0.2
+      - "no": 3
+        attack_model: "FGSM (ε=0.3)/M1"
+        status: implemented
+        attack:
+          name: fgsm
+          epsilon: 0.3
+      - "no": 4
+        attack_model: "FGSM (ε=0.4)/M1"
+        status: implemented
+        attack:
+          name: fgsm
+          epsilon: 0.4
+
+  table_10_googlenet:
+    kind: table_10_group
+    output_dir: results/experiments/table_10/googlenet
+    dataset:
+      name: imagenet
+    model:
+      name: googlenet
+    attack: {}
+    evaluation: {}
+    model_group: googlenet
+    dataset_label: ImageNet
+    rows:
+      - "no": 5
+        attack_model: "FGSM (ε=1/255)/GoogLeNet"
+        status: planned
+        attack:
+          name: fgsm
+          epsilon: 0.00392156862745098
+      - "no": 6
+        attack_model: "FGSM (ε=2/255)/GoogLeNet"
+        status: planned
+        attack:
+          name: fgsm
+          epsilon: 0.00784313725490196
+      - "no": 7
+        attack_model: "DeepFool/GoogLeNet"
+        status: planned
+        attack:
+          name: deepfool
+
+  table_10_caffenet:
+    kind: table_10_group
+    output_dir: results/experiments/table_10/caffenet
+    dataset:
+      name: imagenet
+    model:
+      name: caffenet
+    attack: {}
+    evaluation: {}
+    model_group: caffenet
+    dataset_label: ImageNet
+    rows:
+      - "no": 8
+        attack_model: "DeepFool/CaffeNet"
+        status: blocked
+        blocked_reason: "CaffeNet ainda não está implementado."
+        attack:
+          name: deepfool
+
+  table_10_m2:
+    kind: table_10_group
+    output_dir: results/experiments/table_10/m2
+    dataset:
+      name: mnist
+    model:
+      name: m2
+    attack: {}
+    evaluation: {}
+    model_group: m2
+    dataset_label: MNIST
+    rows:
+      - "no": 9
+        attack_model: "CW L2 (κ=0.0)/M2"
+        status: implemented
+        attack:
+          name: cw_l2
+          kappa: 0.0
+      - "no": 10
+        attack_model: "CW L2 (κ=0.5)/M2"
+        status: planned
+        attack:
+          name: cw_l2
+          kappa: 0.5
+      - "no": 11
+        attack_model: "CW L2 (κ=1.0)/M2"
+        status: planned
+        attack:
+          name: cw_l2
+          kappa: 1.0
+      - "no": 12
+        attack_model: "CW L2 (κ=2.0)/M2"
+        status: planned
+        attack:
+          name: cw_l2
+          kappa: 2.0
+      - "no": 13
+        attack_model: "CW L2 (κ=4.0)/M2"
+        status: planned
+        attack:
+          name: cw_l2
+          kappa: 4.0
+      - "no": 19
+        attack_model: "CW L∞/M2"
+        status: planned
+        attack:
+          name: cw_linf
+
+  table_10_inception_v3:
+    kind: table_10_group
+    output_dir: results/experiments/table_10/inception_v3
+    dataset:
+      name: imagenet
+    model:
+      name: inception_v3
+    attack: {}
+    evaluation: {}
+    model_group: inception_v3
+    dataset_label: ImageNet
+    rows:
+      - "no": 14
+        attack_model: "CW L2 (κ=0.0)/Inception v3"
+        status: blocked
+        blocked_reason: "Inception v3 ainda não está implementado."
+        attack:
+          name: cw_l2
+          kappa: 0.0
+      - "no": 15
+        attack_model: "CW L2 (κ=0.5)/Inception v3"
+        status: blocked
+        blocked_reason: "Inception v3 ainda não está implementado."
+        attack:
+          name: cw_l2
+          kappa: 0.5
+      - "no": 16
+        attack_model: "CW L2 (κ=1.0)/Inception v3"
+        status: blocked
+        blocked_reason: "Inception v3 ainda não está implementado."
+        attack:
+          name: cw_l2
+          kappa: 1.0
+      - "no": 17
+        attack_model: "CW L2 (κ=2.0)/Inception v3"
+        status: blocked
+        blocked_reason: "Inception v3 ainda não está implementado."
+        attack:
+          name: cw_l2
+          kappa: 2.0
+      - "no": 18
+        attack_model: "CW L2 (κ=4.0)/Inception v3"
+        status: blocked
+        blocked_reason: "Inception v3 ainda não está implementado."
+        attack:
+          name: cw_l2
+          kappa: 4.0
+      - "no": 20
+        attack_model: "CW L∞/Inception v3"
+        status: blocked
+        blocked_reason: "Inception v3 ainda não está implementado."
+        attack:
+          name: cw_linf

@@ -28,6 +28,11 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
         "table_4",
         "table_4_mnist",
         "table_4_imagenet",
+        "table_10_caffenet",
+        "table_10_googlenet",
+        "table_10_inception_v3",
+        "table_10_m1",
+        "table_10_m2",
         "table_6",
         "table_7",
         "table_8",
@@ -55,6 +60,11 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
         ("table_4", "composite"),
         ("table_4_mnist", "filter_grid"),
         ("table_4_imagenet", "imagenet_table_4"),
+        ("table_10_m1", "table_10_group"),
+        ("table_10_googlenet", "table_10_group"),
+        ("table_10_caffenet", "table_10_group"),
+        ("table_10_m2", "table_10_group"),
+        ("table_10_inception_v3", "table_10_group"),
     ],
 )
 def test_run_experiment_entrypoint_resolves_requested_experiment(

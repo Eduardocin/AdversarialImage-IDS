@@ -51,6 +51,23 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Update README and scripts README to the official flow only.
   - [x] Update tests away from removed legacy paths.
   - [x] Run forbidden-string/file checks and focused tests.
+- [x] Centralize MNIST FGSM adversarial materialization for official experiments
+  - [x] Add one adversarial example materialization module for MNIST FGSM.
+  - [x] Route split and filter-grid runners through the shared materializer.
+  - [x] Remove the redundant FGSM context module and direct evaluator generation helper.
+  - [x] Update automated tests for the shared materialization contract.
+- [x] Persist and reuse adversarial examples from `specs/features/adversarial_cache.md`
+  - [x] Add default ignored cache path under `artifacts/adversarial_examples/`.
+  - [x] Cache MNIST FGSM adversarial sets for `filter_grid` experiments.
+  - [x] Cache MNIST FGSM adversarial sets per split for `split_eval` experiments.
+  - [x] Cache successful ImageNet Table 4 FGSM attacks.
+  - [x] Add automated tests for cache miss/hit behavior.
+- [x] Implement Table 10 model-group structure from `specs/features/Table_10.md`
+  - [x] Add Table 10 group entries to `configs/experiments.yaml`.
+  - [x] Add official Table 10 group runner.
+  - [x] Write per-model `metrics.csv`, `metrics.json`, and `manifest.json`.
+  - [x] Preserve original article row numbers and schema.
+  - [x] Add automated tests for config, output schema, manifests, and dispatch.
 - [x] Implement Table 9 final FGSM detector from `specs/features/table_9.md`
   - [x] Add `configs/article_reproduction/table_9.yaml`.
   - [x] Add `src/deepdetector/filters/article_final.py`.

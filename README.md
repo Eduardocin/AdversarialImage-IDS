@@ -153,6 +153,11 @@ python scripts/run_experiment.py --experiment table_6
 python scripts/run_experiment.py --experiment table_7
 python scripts/run_experiment.py --experiment table_8
 python scripts/run_experiment.py --experiment table_9
+python scripts/run_experiment.py --experiment table_10_m1
+python scripts/run_experiment.py --experiment table_10_googlenet
+python scripts/run_experiment.py --experiment table_10_caffenet
+python scripts/run_experiment.py --experiment table_10_m2
+python scripts/run_experiment.py --experiment table_10_inception_v3
 ```
 
 As Tabelas 3-9 usam `configs/experiments.yaml`. A Table 4 e composta: por
@@ -168,13 +173,9 @@ Os resultados da Table 4 ficam sob `results/experiments/table_4/`, separados em
 `mnist/` e `imagenet/` porque os CSVs tem schemas diferentes. Table 5 nao
 aparece nesse arquivo porque nao ha fluxo correspondente no inventario atual.
 
-Table 10 permanece fora do fluxo oficial desta limpeza e conserva seus scripts
-historicos:
-
-```bash
-python scripts/article_reproduction/table_10.py
-python scripts/article_reproduction/table_10_m2.py
-```
+Table 10 e executada por grupo de modelo. Cada grupo escreve
+`metrics.csv`, `metrics.json` e `manifest.json` em
+`results/experiments/table_10/<grupo>/`.
 
 ## Dados, Artefatos e Resultados
 

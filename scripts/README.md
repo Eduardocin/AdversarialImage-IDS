@@ -15,6 +15,11 @@ python scripts/run_experiment.py --experiment table_6
 python scripts/run_experiment.py --experiment table_7
 python scripts/run_experiment.py --experiment table_8
 python scripts/run_experiment.py --experiment table_9
+python scripts/run_experiment.py --experiment table_10_m1
+python scripts/run_experiment.py --experiment table_10_googlenet
+python scripts/run_experiment.py --experiment table_10_caffenet
+python scripts/run_experiment.py --experiment table_10_m2
+python scripts/run_experiment.py --experiment table_10_inception_v3
 ```
 
 `table_4` executa os dois componentes da tabela em sequencia. Para rodar apenas
@@ -39,6 +44,10 @@ Table 4 e excecao composta: seus resultados ficam em
 `results/experiments/table_4/mnist/` e `results/experiments/table_4/imagenet/`,
 com `manifest.json` na raiz da tabela.
 
+Table 10 tambem e separada por grupo de modelo. Cada comando `table_10_*`
+escreve `metrics.csv`, `metrics.json` e `manifest.json` em
+`results/experiments/table_10/<grupo>/`.
+
 ## Fluxos Auxiliares
 
 | Script | Papel |
@@ -46,6 +55,6 @@ com `manifest.json` na raiz da tabela.
 | `dev/smoke_test.py` | Verifica rapidamente imports/dependencias principais. |
 | `imagenet/download_caffe_imagenet_assets.py` | Baixa ativos Caffe para a trilha ImageNet. |
 
-Table 10 fica preservada como excecao historica fora do fluxo oficial desta
-limpeza em `scripts/article_reproduction/table_10.py` e
-`scripts/article_reproduction/table_10_m2.py`.
+Scripts historicos de reproducao permanecem fora do caminho operacional
+principal quando ainda existirem, mas os experimentos oficiais devem passar por
+`scripts/run_experiment.py`.
