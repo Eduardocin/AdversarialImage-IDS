@@ -100,12 +100,14 @@ def test_table_3_config_documents_experiment_parameters() -> None:
         "artifacts/models/mnist/m1/clean_baseline/checkpoints"
     )
     assert table3["evaluation"]["exclude_invalid_pairs"] is True
+    assert table3["evaluation"]["include_filter_time"] is True
+    assert table3["output"]["include_filter_name"] is False
 
     filters = table3["filters"]
     assert filters[0]["type"] == "scalar_quantization"
     assert filters[0]["intervals"] == 2
     assert filters[1]["type"] == "nonuniform_quantization"
-    assert filters[2]["type"] == "nonuniform_quantization_legacy"
+    assert len(filters) == 2
 
 
 def test_table_4_config_documents_experiment_parameters() -> None:

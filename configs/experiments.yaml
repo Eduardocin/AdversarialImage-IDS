@@ -23,14 +23,15 @@ experiments:
     evaluation:
       batch_size: 256
       exclude_invalid_pairs: true
+      include_filter_time: true
+    output:
+      include_filter_name: false
     filters:
       - name: scalar_quantization_2
         type: scalar_quantization
         intervals: 2
       - name: nonuniform_quantization
         type: nonuniform_quantization
-      - name: nonuniform_quantization_legacy
-        type: nonuniform_quantization_legacy
 
   table_4:
     kind: composite

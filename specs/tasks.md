@@ -68,6 +68,11 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Write per-model `metrics.csv`, `metrics.json`, and `manifest.json`.
   - [x] Preserve original article row numbers and schema.
   - [x] Add automated tests for config, output schema, manifests, and dispatch.
+- [x] Adjust Table 3 output from `specs/features/table_3_output.md`
+  - [x] Remove `nonuniform_quantization_legacy` from the official Table 3 config.
+  - [x] Add per-filter timing to Table 3 rows.
+  - [x] Suppress `filter_name` in the Table 3 CSV.
+  - [x] Keep other filter-grid schemas unchanged by default.
 - [x] Implement Table 9 final FGSM detector from `specs/features/table_9.md`
   - [x] Add `configs/article_reproduction/table_9.yaml`.
   - [x] Add `src/deepdetector/filters/article_final.py`.

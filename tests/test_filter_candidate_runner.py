@@ -13,6 +13,7 @@ sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.experiments.adversarial_examples import AdversarialExampleSet  # noqa: E402
 from deepdetector.experiments import filter_candidate_runner  # noqa: E402
+from deepdetector.experiments.runner import build_experiment_config  # noqa: E402
 
 
 def _context() -> AdversarialExampleSet:
@@ -161,6 +162,66 @@ def test_filter_candidate_runner_derives_quantization_csv_schema(
     ]
 
 
+def test_filter_candidate_runner_can_time_filters_and_hide_filter_name(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Table 3 should include timing without the filter_name CSV column."""
+    monkeypatch.setattr(
+        filter_candidate_runner,
+        "prepare_mnist_fgsm_adversarial_set",
+        lambda config: _context(),
+    )
+    monkeypatch.setattr(
+        filter_candidate_runner,
+        "evaluate_filter_on_existing_adversarial",
+        lambda **kwargs: {
+            "TP": 1,
+            "FN": 2,
+            "FP": 3,
+            "recall_percent": 25.0,
+            "precision_percent": 50.0,
+            "f1_percent": 33.33,
+        },
+    )
+    monkeypatch.setattr(filter_candidate_runner, "time_filter_application", lambda fn, images: 0.125)
+    monkeypatch.setattr(filter_candidate_runner, "close_graph", lambda graph: None)
+
+    rows = filter_candidate_runner.run_filter_candidate_experiment(
+        {
+            "experiment_id": "table_3",
+            "filters": [
+                {
+                    "name": "scalar_quantization_2",
+                    "type": "scalar_quantization",
+                    "intervals": 2,
+                },
+                {
+                    "name": "nonuniform_quantization",
+                    "type": "nonuniform_quantization",
+                },
+            ],
+            "evaluation": {"include_filter_time": True},
+            "output": {
+                "dir": str(tmp_path),
+                "csv": "metrics.csv",
+                "json": "metrics.json",
+                "include_filter_name": False,
+            },
+        }
+    )
+
+    assert [row["time_s"] for row in rows] == [0.125, 0.125]
+    assert (tmp_path / "metrics.csv").read_text(encoding="utf-8").splitlines() == [
+        (
+            "filter_type,time_s,TP,FN,FP,recall_percent,"
+            "precision_percent,f1_percent"
+        ),
+        "scalar_quantization,0.125,1,2,3,25.0,50.0,33.33",
+        "nonuniform_quantization,0.125,1,2,3,25.0,50.0,33.33",
+    ]
+
+
 def test_filter_candidate_configs_define_expected_candidates() -> None:
     """Table 3, 4, 7, and 8 configs should declare candidates only in YAML."""
     config = yaml.safe_load(
@@ -178,7 +239,7 @@ def test_filter_candidate_configs_define_expected_candidates() -> None:
     assert table4_mnist["kind"] == "filter_grid"
     assert table7["kind"] == "filter_grid"
     assert table8["kind"] == "filter_grid"
-    assert len(table3["filters"]) == 3
+    assert len(table3["filters"]) == 2
     assert len(table4_mnist["filters"]) == 9
     assert len(table7["filters"]) == 12
     assert len(table8["filters"]) == 5
@@ -191,8 +252,11 @@ def test_filter_candidate_configs_define_expected_candidates() -> None:
     assert [row["type"] for row in table3["filters"]] == [
         "scalar_quantization",
         "nonuniform_quantization",
-        "nonuniform_quantization_legacy",
     ]
+    assert table3["evaluation"]["include_filter_time"] is True
+    assert table3["output"]["include_filter_name"] is False
+    built_table3 = build_experiment_config("table_3", config)
+    assert built_table3["output"]["include_filter_name"] is False
     assert [row["intervals"] for row in table4_mnist["filters"]] == list(range(2, 11))
     assert table7["filters"] == [
         "cross_3x3",

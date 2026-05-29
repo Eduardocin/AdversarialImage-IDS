@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Sequence
 from deepdetector.evaluation.article_reproduction import (
     close_graph,
     evaluate_filter_on_existing_adversarial,
+    time_filter_application,
 )
 from deepdetector.experiments.adversarial_examples import (
     prepare_mnist_fgsm_adversarial_set,
@@ -72,28 +73,33 @@ def _best_filter_by_f1(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     return {field: best.get(field) for field in fields}
 
 
-def _csv_fields_for_rows(rows: Sequence[Dict[str, Any]]) -> Sequence[str]:
+def _csv_fields_for_rows(
+    rows: Sequence[Dict[str, Any]],
+    include_filter_name: bool = True,
+) -> Sequence[str]:
     """Return output columns based on filter metadata present in result rows."""
+    prefix = ("filter_name", "filter_type") if include_filter_name else ("filter_type",)
+    if rows and any("time_s" in row for row in rows):
+        prefix = prefix + ("time_s",)
+
     if rows and all("intervals" in row and "interval_size" in row for row in rows):
-        return (
-            "filter_name",
-            "filter_type",
-            "intervals",
-            "interval_size",
-        ) + COUNT_FIELDS
+        return prefix + ("intervals", "interval_size") + COUNT_FIELDS
 
     mask_fields = ("mask_type", "mask_size", "radius", "kernel_size")
     if rows and any(any(field in row for field in mask_fields) for row in rows):
-        return (
-            "filter_name",
-            "filter_type",
-            "mask_type",
-            "mask_size",
-            "radius",
-            "kernel_size",
-        ) + COUNT_FIELDS
+        return prefix + ("mask_type", "mask_size", "radius", "kernel_size") + COUNT_FIELDS
 
-    return ("filter_name", "filter_type") + COUNT_FIELDS
+    return prefix + COUNT_FIELDS
+
+
+def _include_filter_time(config: Dict[str, Any]) -> bool:
+    """Return whether per-filter elapsed time should be included."""
+    return bool(config.get("evaluation", {}).get("include_filter_time", False))
+
+
+def _include_filter_name(config: Dict[str, Any]) -> bool:
+    """Return whether CSV output should include filter_name."""
+    return bool(config.get("output", {}).get("include_filter_name", True))
 
 
 def run_filter_candidate_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -123,6 +129,8 @@ def run_filter_candidate_experiment(config: Dict[str, Any]) -> List[Dict[str, An
                 ),
             )
             row = dict(filter_metadata)
+            if _include_filter_time(config):
+                row["time_s"] = time_filter_application(filter_fn, context.images)
             row.update(metrics)
             rows.append(row)
     finally:
@@ -153,7 +161,10 @@ def run_filter_candidate_experiment(config: Dict[str, Any]) -> List[Dict[str, An
     write_experiment_outputs(
         output_dir=output_dir,
         rows=rows,
-        csv_fields=_csv_fields_for_rows(rows),
+        csv_fields=_csv_fields_for_rows(
+            rows,
+            include_filter_name=_include_filter_name(config),
+        ),
         metadata=payload,
         csv_name=_output_name(config, "csv", "metrics.csv"),
         json_name=_output_name(config, "json", "metrics.json"),

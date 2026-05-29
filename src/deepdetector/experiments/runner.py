@@ -119,6 +119,7 @@ def build_experiment_config(
             "json": output_defaults.get("json", "metrics.json"),
         },
     }
+    base_config["output"].update(dict(experiment.get("output", {})))
 
     if kind == "split_eval":
         if "slices" in experiment:
@@ -128,7 +129,6 @@ def build_experiment_config(
 
     if kind == "imagenet_table_4":
         base_config["quantization"] = dict(experiment.get("quantization", {}))
-        base_config["output"].update(dict(experiment.get("output", {})))
         return base_config
 
     if kind == "table_10_group":
