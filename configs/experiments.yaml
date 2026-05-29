@@ -112,7 +112,7 @@ experiments:
       deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
       caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
       mean_file: null
-      use_gpu: false
+      use_gpu: true
       batch_size: 32
     attack:
       name: fgsm
@@ -213,7 +213,7 @@ experiments:
         deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
         caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
         mean_file: null
-        use_gpu: false
+        use_gpu: true
         batch_size: 32
       attack:
         name: fgsm
@@ -376,7 +376,7 @@ experiments:
         deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
         caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
         mean_file: null
-        use_gpu: false
+        use_gpu: true
         batch_size: 32
       attack:
         name: fgsm
@@ -432,40 +432,80 @@ experiments:
     output_dir: results/experiments/table_10/imagenet/googlenet
     dataset:
       name: imagenet
+      split: test
+      images_dir: data/imagenet/test
+      image_size: 224
+      n_samples: all
+      image_shape: [224, 224, 3]
+      value_range: [0.0, 1.0]
+      shuffle: false
+      class_indices:
+        cab: 468
+        panda: 388
+        zebra: 340
     model:
-      name: googlenet
+      name: googlenet_caffe
+      family: caffe
+      reference: BVLC GoogLeNet
+      model_dir: artifacts/models/imagenet/googlenet/
+      deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
+      caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+      mean_file: null
+      use_gpu: true
+      batch_size: 32
     attack: {}
-    evaluation: {}
+    evaluation:
+      n_samples: all
+      seed: 20170830
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
     model_group: googlenet
     dataset_label: ImageNet
     rows:
       - "no": 5
         attack_model: "FGSM (ε=1/255)/GoogLeNet"
-        status: planned
+        status: implemented
         attack:
           name: fgsm
           epsilon: 0.00392156862745098
+          clip_min: 0.0
+          clip_max: 255.0
       - "no": 6
         attack_model: "FGSM (ε=2/255)/GoogLeNet"
-        status: planned
+        status: implemented
         attack:
           name: fgsm
           epsilon: 0.00784313725490196
+          clip_min: 0.0
+          clip_max: 255.0
       - "no": 7
         attack_model: "DeepFool/GoogLeNet"
-        status: planned
+        status: implemented
         attack:
           name: deepfool
           max_iter: 50
           overshoot: 0.02
           clip_min: 0.0
           clip_max: 1.0
+          num_classes: 10
 
   table_10_caffenet:
     kind: table_10_group
     output_dir: results/experiments/table_10/caffenet
     dataset:
       name: imagenet
+      split: test
+      images_dir: data/imagenet/test
+      image_size: 224
+      n_samples: all
+      image_shape: [224, 224, 3]
+      value_range: [0.0, 1.0]
+      shuffle: false
+      class_indices:
+        cab: 468
+        panda: 388
+        zebra: 340
     model:
       name: caffenet
     attack: {}
@@ -533,6 +573,17 @@ experiments:
     output_dir: results/experiments/table_10/inception_v3
     dataset:
       name: imagenet
+      split: test
+      images_dir: data/imagenet/test
+      image_size: 224
+      n_samples: all
+      image_shape: [224, 224, 3]
+      value_range: [0.0, 1.0]
+      shuffle: false
+      class_indices:
+        cab: 468
+        panda: 388
+        zebra: 340
     model:
       name: inception_v3
     attack: {}

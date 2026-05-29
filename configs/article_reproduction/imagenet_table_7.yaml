@@ -10,7 +10,7 @@ model:
   deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
   caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
   mean_file: null
-  use_gpu: false
+  use_gpu: true
   batch_size: 32
 
 dataset:

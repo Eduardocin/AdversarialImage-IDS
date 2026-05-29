@@ -153,15 +153,14 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Preserve clean-baseline filtering and disturbed-failure exclusion.
   - [x] Add automated tests for filters, pivot output, validation config, and partial statuses.
   - [x] Run focused pytest validation.
-- [ ] Implement DeepFool for Table 10 GoogLeNet from `specs/features/deepfool.md`
+- [x] Implement DeepFool for Table 10 GoogLeNet from `specs/features/deepfool.md`
   - [x] Add reusable DeepFool attack generation under `src/deepdetector/attacks`.
   - [x] Register `deepfool` in the common attack registry.
   - [x] Add explicit DeepFool parameters to Table 10 GoogLeNet row 7.
   - [x] Add automated tests for registry, DeepFool output contract, clipping, gradient requirement, and config.
   - [x] Run focused pytest validation.
-- [ ] Implement Table 10 GoogLeNet metrics from `specs/features/table_10_googlenet_metrics.md`
-  - [ ] Add ImageNet/GoogLeNet row evaluator using the attack registry and detector metrics.
-  - [ ] Add dataset/evaluation config for table_10_googlenet (index CSV, images dir, n_samples).
-  - [ ] Switch row 7 to `implemented` when metrics are computed.
-  - [ ] Add smoke test using `evaluation.n_samples: 2`.
-  - [ ] Keep outputs limited to `metrics.csv` and `metrics.json`.
+- [x] Implement Table 10 GoogLeNet metrics from `specs/features/table_10_googlenet_metrics.md`
+  - [x] Add ImageNet/GoogLeNet row evaluator using the attack registry and detector metrics.
+  - [x] Add full class-folder dataset/evaluation config for table_10_googlenet.
+  - [x] Switch row 7 to `implemented` when metrics are computed.
+  - [x] Keep outputs limited to `metrics.csv` and `metrics.json`.
