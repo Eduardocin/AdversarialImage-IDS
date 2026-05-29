@@ -10,6 +10,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.evaluation import table7 as table7_module
+from deepdetector.evaluation.table7 import Table7FilterResult
+from deepdetector.experiments import table7_imagenet_runner
 from scripts.article_reproduction.table_7_imagenet import (
     filter_clean_baseline_images,
     generate_adversarial_images,
@@ -160,3 +162,92 @@ def test_table7_counts_fp_only_for_valid_high_entropy_adversarial_pairs(monkeypa
     assert result.fn == 0
     assert result.fp == 1
     assert result.precision == 0.5
+
+
+def test_run_table7_experiment_writes_pivot_and_status(monkeypatch, tmp_path) -> None:
+    """The official Table 7 experiment should write the ImageNet pivot output."""
+    calls = []
+    (tmp_path / "metrics.csv").write_text("stale", encoding="utf-8")
+    (tmp_path / "metrics.json").write_text("stale", encoding="utf-8")
+
+    monkeypatch.setattr(
+        table7_imagenet_runner,
+        "build_imagenet_table7_model",
+        lambda config: MarkerModel(),
+    )
+    monkeypatch.setattr(
+        table7_imagenet_runner,
+        "load_imagenet_table7_subset",
+        lambda config: (
+            np.asarray([_marker_image(10)], dtype=np.float32),
+            np.asarray([1], dtype=np.int32),
+        ),
+    )
+    monkeypatch.setattr(
+        table7_imagenet_runner,
+        "filter_clean_baseline_images",
+        lambda model, images, labels: (
+            images,
+            labels,
+            np.asarray([0], dtype=np.int64),
+            {"total_images": 1, "clean_correct": 1, "skipped_wrong_baseline": 0},
+        ),
+    )
+    monkeypatch.setattr(
+        table7_imagenet_runner,
+        "_article_model_inputs",
+        lambda model, images: images,
+    )
+    monkeypatch.setattr(
+        table7_imagenet_runner,
+        "adversarial_images_for_run",
+        lambda config, model, images, selected_indices=None: images + 1.0,
+    )
+
+    def fake_evaluate(**kwargs):
+        calls.append((kwargs["mask_type"], kwargs["size"]))
+        return Table7FilterResult(
+            mask_type=kwargs["mask_type"],
+            size=kwargs["size"],
+            tp=1,
+            fn=1,
+            fp=0,
+            recall=0.5,
+            precision=1.0,
+            f1=2.0 / 3.0,
+            n_high_entropy_clean=1,
+            n_high_entropy_adversarial=1,
+            disturbed_failure=0,
+            skipped_wrong_baseline=0,
+        )
+
+    monkeypatch.setattr(table7_imagenet_runner, "evaluate_table7_filter", fake_evaluate)
+
+    result = table7_imagenet_runner.run_table7_imagenet_experiment(
+        {
+            "experiment_id": "table_7",
+            "kind": "imagenet_table_7",
+            "dataset": {"name": "imagenet", "classes": []},
+            "model": {"name": "googlenet_caffe"},
+            "attack": {"epsilon_255": 1.0},
+            "filter": {"mask_types": ["cross"], "sizes": [3], "entropy_threshold": 5.0},
+            "output": {
+                "dir": str(tmp_path),
+                "pivot_csv": "table_7_imagnet.csv",
+                "status_json": "table_7_status.json",
+            },
+        }
+    )
+
+    assert result["status"] == "completo"
+    assert calls == [("cross", 3)]
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "table_7_imagnet.csv",
+        "table_7_status.json",
+    ]
+    assert (tmp_path / "table_7_imagnet.csv").read_text(encoding="utf-8").splitlines() == [
+        "metric,cross_3x3,cross_5x5,cross_7x7,cross_9x9,diamond_3x3,diamond_5x5,diamond_7x7,diamond_9x9,box_3x3,box_5x5,box_7x7,box_9x9",
+        "Recall,0.500000,,,,,,,,,,,",
+        "Precision,1.000000,,,,,,,,,,,",
+        "F1 Score,0.666667,,,,,,,,,,,",
+    ]

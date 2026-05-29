@@ -223,7 +223,7 @@ def test_filter_candidate_runner_can_time_filters_and_hide_filter_name(
 
 
 def test_filter_candidate_configs_define_expected_candidates() -> None:
-    """Table 3, 4, 7, and 8 configs should declare candidates only in YAML."""
+    """Filter-grid configs should declare candidates only in YAML."""
     config = yaml.safe_load(
         (PROJECT_ROOT / "configs" / "experiments.yaml").read_text(encoding="utf-8")
     )
@@ -237,12 +237,10 @@ def test_filter_candidate_configs_define_expected_candidates() -> None:
     assert table4["kind"] == "composite"
     assert table4["components"] == ["table_4_mnist", "table_4_imagenet"]
     assert table4_mnist["kind"] == "filter_grid"
-    assert table7["kind"] == "filter_grid"
-    assert table8["kind"] == "filter_grid"
+    assert table7["kind"] == "imagenet_table_7"
+    assert table8["kind"] == "imagenet_table_8"
     assert len(table3["filters"]) == 2
     assert len(table4_mnist["filters"]) == 9
-    assert len(table7["filters"]) == 12
-    assert len(table8["filters"]) == 5
     assert table3["output_dir"] == "results/experiments/table_3"
     assert table4["output_dir"] == "results/experiments/table_4"
     assert table4_mnist["output_dir"] == "results/experiments/table_4/mnist"
@@ -258,27 +256,20 @@ def test_filter_candidate_configs_define_expected_candidates() -> None:
     built_table3 = build_experiment_config("table_3", config)
     assert built_table3["output"]["include_filter_name"] is False
     assert [row["intervals"] for row in table4_mnist["filters"]] == list(range(2, 11))
-    assert table7["filters"] == [
-        "cross_3x3",
-        "cross_5x5",
-        "cross_7x7",
-        "cross_9x9",
-        "diamond_3x3",
-        "diamond_5x5",
-        "diamond_7x7",
-        "diamond_9x9",
-        "box_3x3",
-        "box_5x5",
-        "box_7x7",
-        "box_9x9",
+    assert table7["dataset"]["name"] == "imagenet"
+    assert table7["filter"]["mask_types"] == ["cross", "diamond", "box"]
+    assert table7["filter"]["sizes"] == [3, 5, 7, 9]
+    assert table7["output"]["pivot_csv"] == "table_7_imagnet.csv"
+    assert table8["dataset"]["name"] == "imagenet"
+    assert table8["dataset"]["split"] == "validation"
+    assert table8["filter"]["filters"] == [
+        {"mask_type": "cross", "size": 5},
+        {"mask_type": "cross", "size": 7},
+        {"mask_type": "diamond", "size": 5},
+        {"mask_type": "diamond", "size": 7},
+        {"mask_type": "box", "size": 5},
     ]
-    assert table8["filters"] == [
-        "cross_5x5",
-        "cross_7x7",
-        "diamond_5x5",
-        "diamond_7x7",
-        "box_5x5",
-    ]
+    assert table8["output"]["pivot_csv"] == "table_8_imagenet.csv"
 
 
 def test_table7_and_table8_per_table_scripts_were_removed() -> None:

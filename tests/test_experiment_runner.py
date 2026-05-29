@@ -57,8 +57,8 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
     ("experiment_name", "kind"),
     [
         ("table_6", "table_6"),
-        ("table_7", "filter_grid"),
-        ("table_8", "filter_grid"),
+        ("table_7", "imagenet_table_7"),
+        ("table_8", "imagenet_table_8"),
         ("table_9", "table_9"),
         ("table_3", "filter_grid"),
         ("table_4", "composite"),

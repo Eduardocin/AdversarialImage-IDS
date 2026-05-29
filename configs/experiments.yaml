@@ -225,71 +225,94 @@ experiments:
         exclude_invalid_pairs: false
 
   table_7:
-    kind: filter_grid
+    kind: imagenet_table_7
     output_dir: results/experiments/table_7
     dataset:
-      name: mnist
-      split: test
-      slice_name: Training
-      start: 0
-      end: 4500
-      high_entropy_only: true
-      entropy_threshold:
-        min: 5.0
+      name: imagenet
+      split: training
+      image_size: 224
+      shuffle: false
+      classes:
+        - name: goldfish
+          label: 1
+          path: data/imagenet/train/goldfish
+        - name: pineapple
+          label: 953
+          path: data/imagenet/train/pineapple
+        - name: digital_clock
+          label: 530
+          path: data/imagenet/train/digital_clock
     model:
-      name: mnist_m1
-      checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
+      name: googlenet_caffe
+      family: caffe
+      reference: BVLC GoogLeNet
+      model_dir: artifacts/models/imagenet/googlenet/
+      deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
+      caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+      mean_file: null
+      use_gpu: false
+      batch_size: 32
     attack:
       name: fgsm
-      epsilon: 0.2
+      epsilon_255: 1.0
       clip_min: 0.0
-      clip_max: 1.0
-    evaluation:
-      batch_size: 256
-      exclude_invalid_pairs: false
-    filters:
-      - cross_3x3
-      - cross_5x5
-      - cross_7x7
-      - cross_9x9
-      - diamond_3x3
-      - diamond_5x5
-      - diamond_7x7
-      - diamond_9x9
-      - box_3x3
-      - box_5x5
-      - box_7x7
-      - box_9x9
+      clip_max: 255.0
+      batch_size: 32
+      adversarial_path: artifacts/adversarial_examples/imagenet/fgsm/train/adversarial_examples.npy
+      save_adversarial_path: artifacts/adversarial_examples/imagenet/fgsm/train/adversarial_examples.npy
+    filter:
+      entropy_threshold: 5.0
+      mask_types: [cross, diamond, box]
+      sizes: [3, 5, 7, 9]
+    output:
+      pivot_csv: table_7_imagnet.csv
+      status_json: table_7_status.json
 
   table_8:
-    kind: filter_grid
+    kind: imagenet_table_8
     output_dir: results/experiments/table_8
     dataset:
-      name: mnist
-      split: test
-      slice_name: Validation
-      start: 4500
-      end: 5500
-      high_entropy_only: true
-      entropy_threshold:
-        min: 5.0
+      name: imagenet
+      split: validation
+      image_size: 224
+      shuffle: false
+      classes:
+        - name: jellyfish
+          label: 107
+          path: data/imagenet/validation/jellyfish
     model:
-      name: mnist_m1
-      checkpoint_dir: artifacts/models/mnist/m1/clean_baseline/checkpoints
+      name: googlenet_caffe
+      family: caffe
+      reference: BVLC GoogLeNet
+      model_dir: artifacts/models/imagenet/googlenet/
+      deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
+      caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+      mean_file: null
+      use_gpu: false
+      batch_size: 32
     attack:
       name: fgsm
-      epsilon: 0.2
+      epsilon_255: 1.0
       clip_min: 0.0
-      clip_max: 1.0
-    evaluation:
-      batch_size: 256
-      exclude_invalid_pairs: false
-    filters:
-      - cross_5x5
-      - cross_7x7
-      - diamond_5x5
-      - diamond_7x7
-      - box_5x5
+      clip_max: 255.0
+      batch_size: 32
+      adversarial_path: artifacts/adversarial_examples/imagenet/fgsm/validation/adversarial_examples.npy
+      save_adversarial_path: artifacts/adversarial_examples/imagenet/fgsm/validation/adversarial_examples.npy
+    filter:
+      filters:
+        - mask_type: cross
+          size: 5
+        - mask_type: cross
+          size: 7
+        - mask_type: diamond
+          size: 5
+        - mask_type: diamond
+          size: 7
+        - mask_type: box
+          size: 5
+    output:
+      pivot_csv: table_8_imagenet.csv
+      status_json: table_8_status.json
 
   table_9:
     kind: table_9
