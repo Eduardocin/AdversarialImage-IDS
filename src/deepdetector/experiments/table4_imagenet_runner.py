@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import numpy as np
 
 from deepdetector.data.imagenet import resize_normalized_image
+from deepdetector.experiments.adversarial_examples import DEFAULT_ADVERSARIAL_CACHE_DIR
 from deepdetector.evaluation.table4_imagenet import (
     TABLE4_INTERVALS,
     Table4Sample,
@@ -29,6 +31,27 @@ IMAGE_EXTENSIONS = (".jpeg", ".jpg", ".png")
 def _resolve_path(path_value: Optional[str]) -> Optional[Path]:
     """Resolve a config path relative to the project root."""
     return resolve_project_path(path_value)
+
+
+def _json_key(data: Dict[str, Any]) -> str:
+    """Return deterministic JSON text for cache key material."""
+    return json.dumps(data, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _cache_digest(data: Dict[str, Any]) -> str:
+    """Return a short stable cache digest."""
+    return hashlib.sha256(_json_key(data).encode("utf-8")).hexdigest()[:20]
+
+
+def _attack_cache_enabled(config: Dict[str, Any]) -> bool:
+    """Return whether the configured attack cache is enabled."""
+    return bool(config.get("attack", {}).get("cache", True))
+
+
+def _attack_cache_root(config: Dict[str, Any]) -> Path:
+    """Return the configured adversarial example cache root."""
+    cache_dir = config.get("attack", {}).get("cache_dir") or DEFAULT_ADVERSARIAL_CACHE_DIR
+    return _resolve_path(cache_dir) or Path(str(cache_dir))
 
 
 def configured_intervals(config: Dict[str, Any]) -> Iterable[int]:
@@ -149,6 +172,81 @@ def load_subset_samples(
     return samples
 
 
+def _table4_cache_key(
+    config: Dict[str, Any],
+    samples: List[Table4Sample],
+    epsilon_255: float,
+    clip_min: float,
+    clip_max: float,
+) -> Dict[str, Any]:
+    """Return cache key material for ImageNet Table 4 FGSM attacks."""
+    dataset_config = config.get("dataset", {})
+    model_config = config.get("model", {})
+    return {
+        "version": 1,
+        "kind": "imagenet_table4_fgsm",
+        "dataset": {
+            "name": "imagenet",
+            "split": dataset_config.get("split"),
+            "images_dir": str(_resolve_path(dataset_config.get("images_dir"))),
+            "image_size": int(dataset_config.get("image_size", 224)),
+            "samples": [
+                {
+                    "image_id": sample.image_id,
+                    "class_name": sample.class_name,
+                    "true_label": int(sample.true_label),
+                }
+                for sample in samples
+            ],
+        },
+        "model": {
+            "name": model_config.get("name"),
+            "family": model_config.get("family"),
+            "deploy_proto": str(_resolve_path(model_config.get("deploy_proto"))),
+            "caffemodel": str(_resolve_path(model_config.get("caffemodel"))),
+            "mean_file": str(_resolve_path(model_config.get("mean_file"))),
+        },
+        "attack": {
+            "name": config.get("attack", {}).get("name", "fgsm"),
+            "epsilon_255": float(epsilon_255),
+            "clip_min": float(clip_min),
+            "clip_max": float(clip_max),
+        },
+    }
+
+
+def table4_adversarial_cache_path(
+    config: Dict[str, Any],
+    samples: List[Table4Sample],
+    epsilon_255: float,
+    clip_min: float,
+    clip_max: float,
+) -> Optional[Tuple[Path, Dict[str, Any]]]:
+    """Return the configured ImageNet Table 4 attack cache path and key."""
+    if not _attack_cache_enabled(config):
+        return None
+    attack_config = config.get("attack", {})
+    explicit_path = attack_config.get("cache_path") or attack_config.get("adversarial_path")
+    cache_key = _table4_cache_key(
+        config=config,
+        samples=samples,
+        epsilon_255=epsilon_255,
+        clip_min=clip_min,
+        clip_max=clip_max,
+    )
+    if explicit_path:
+        cache_path = _resolve_path(explicit_path) or Path(str(explicit_path))
+    else:
+        cache_path = (
+            _attack_cache_root(config)
+            / "imagenet"
+            / "fgsm"
+            / "table_4"
+            / "{0}.npz".format(_cache_digest(cache_key))
+        )
+    return cache_path, cache_key
+
+
 def epsilon_255_from_config(config: Dict[str, Any], override: Optional[float]) -> float:
     """Return FGSM epsilon in 0-255 Caffe scale."""
     if override is not None:
@@ -255,18 +353,36 @@ def run_table4_imagenet_experiment(
         return {"status": "parcial", "status_json": str(status_path)}
 
     attack_config = config.get("attack", {})
+    epsilon_255 = epsilon_255_from_config(config, epsilon_override)
+    clip_min = float(attack_config.get("clip_min", 0.0))
+    clip_max = float(attack_config.get("clip_max", 1.0))
+    cache_info = table4_adversarial_cache_path(
+        config=config,
+        samples=samples,
+        epsilon_255=epsilon_255,
+        clip_min=clip_min,
+        clip_max=clip_max,
+    )
+    cache_path = cache_info[0] if cache_info else None
+    cache_metadata = (
+        {"cache_key": cache_info[1], "cache_path": str(cache_info[0])}
+        if cache_info
+        else None
+    )
     logger.info(
         "Evaluating ImageNet Table 4 with epsilon_255=%s and intervals=%s.",
-        epsilon_255_from_config(config, epsilon_override),
+        epsilon_255,
         ", ".join(str(value) for value in configured_intervals(config)),
     )
     result = evaluate_table4_imagenet(
         model=model,
         samples=samples,
         intervals=configured_intervals(config),
-        epsilon_255=epsilon_255_from_config(config, epsilon_override),
-        clip_min=float(attack_config.get("clip_min", 0.0)),
-        clip_max=float(attack_config.get("clip_max", 1.0)),
+        epsilon_255=epsilon_255,
+        clip_min=clip_min,
+        clip_max=clip_max,
+        cache_path=cache_path,
+        cache_metadata=cache_metadata,
     )
     output_config = config.get("output", {})
     logger.info("Writing ImageNet Table 4 CSV output.")

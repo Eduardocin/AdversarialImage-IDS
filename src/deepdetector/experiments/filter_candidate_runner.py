@@ -8,7 +8,9 @@ from deepdetector.evaluation.article_reproduction import (
     close_graph,
     evaluate_filter_on_existing_adversarial,
 )
-from deepdetector.experiments.fgsm_context import prepare_fgsm_context
+from deepdetector.experiments.adversarial_examples import (
+    prepare_mnist_fgsm_adversarial_set,
+)
 from deepdetector.experiments.metadata import build_experiment_payload
 from deepdetector.filters.factory import build_filter_from_config
 from deepdetector.io.paths import resolve_project_path
@@ -101,7 +103,7 @@ def run_filter_candidate_experiment(config: Dict[str, Any]) -> List[Dict[str, An
     if not filter_configs:
         raise ValueError("Config must define at least one filter candidate.")
 
-    context = prepare_fgsm_context(config)
+    context = prepare_mnist_fgsm_adversarial_set(config)
     rows: List[Dict[str, Any]] = []
 
     try:

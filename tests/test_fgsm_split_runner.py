@@ -13,6 +13,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.experiments import fgsm_split_runner  # noqa: E402
+from deepdetector.experiments.adversarial_examples import AdversarialExampleSet  # noqa: E402
 
 
 def _config(tmp_path) -> dict:
@@ -39,8 +40,8 @@ def test_fgsm_split_runner_uses_one_graph_and_writes_standard_outputs(
     tmp_path,
 ) -> None:
     """The split runner should restore once, iterate YAML slices, and write CSV/JSON."""
-    calls = {"graph": 0, "filter": 0, "evaluate": 0, "close": 0}
-    loaded_slices = []
+    calls = {"graph": 0, "filter": 0, "materialize": 0, "evaluate": 0, "close": 0}
+    materialized_slices = []
 
     monkeypatch.setattr(
         fgsm_split_runner,
@@ -59,20 +60,29 @@ def test_fgsm_split_runner_uses_one_graph_and_writes_standard_outputs(
         },
     )
 
-    def fake_load_slice(start, end):
-        loaded_slices.append((start, end))
-        return (
-            np.zeros((end - start, 2, 2, 1), dtype=np.float32),
-            np.zeros((end - start,), dtype=np.int64),
+    def fake_materialize(config, graph=None):
+        calls["materialize"] += 1
+        assert graph == {
+            "checkpoint_dir": str(PROJECT_ROOT / "artifacts" / "model")
+        }
+        dataset_config = config["dataset"]
+        materialized_slices.append((dataset_config["start"], dataset_config["end"]))
+        n_images = int(dataset_config["end"]) - int(dataset_config["start"])
+        return AdversarialExampleSet(
+            graph=graph,
+            images=np.zeros((n_images, 2, 2, 1), dtype=np.float32),
+            labels=np.zeros((n_images,), dtype=np.int64),
+            adversarial_images=np.ones((n_images, 2, 2, 1), dtype=np.float32),
+            clean_predictions=np.zeros((n_images,), dtype=np.int64),
+            adversarial_predictions=np.ones((n_images,), dtype=np.int64),
+            metadata={"slice_name": dataset_config["slice_name"]},
         )
 
     def fake_evaluate(**kwargs):
         calls["evaluate"] += 1
-        assert kwargs["epsilon"] == 0.3
-        assert kwargs["clip_min"] == 0.0
-        assert kwargs["clip_max"] == 1.0
         assert kwargs["exclude_invalid_pairs"] is True
         assert kwargs["batch_size"] == 4
+        assert kwargs["adv_images"].shape == kwargs["images"].shape
         return {
             "TP": calls["evaluate"],
             "FN": 2,
@@ -82,8 +92,16 @@ def test_fgsm_split_runner_uses_one_graph_and_writes_standard_outputs(
             "f1_percent": 33.33,
         }
 
-    monkeypatch.setattr(fgsm_split_runner, "load_mnist_test_slice", fake_load_slice)
-    monkeypatch.setattr(fgsm_split_runner, "evaluate_filter_on_images", fake_evaluate)
+    monkeypatch.setattr(
+        fgsm_split_runner,
+        "prepare_mnist_fgsm_adversarial_set",
+        fake_materialize,
+    )
+    monkeypatch.setattr(
+        fgsm_split_runner,
+        "evaluate_filter_on_existing_adversarial",
+        fake_evaluate,
+    )
     monkeypatch.setattr(
         fgsm_split_runner,
         "close_graph",
@@ -92,8 +110,8 @@ def test_fgsm_split_runner_uses_one_graph_and_writes_standard_outputs(
 
     rows = fgsm_split_runner.run_fgsm_split_experiment(_config(tmp_path))
 
-    assert calls == {"graph": 1, "filter": 1, "evaluate": 2, "close": 1}
-    assert loaded_slices == [(0, 1), (1, 2)]
+    assert calls == {"graph": 1, "filter": 1, "materialize": 2, "evaluate": 2, "close": 1}
+    assert materialized_slices == [(0, 1), (1, 2)]
     assert [row["split"] for row in rows] == ["Training", "Validation"]
     assert sorted(path.name for path in tmp_path.iterdir()) == [
         "metrics.csv",

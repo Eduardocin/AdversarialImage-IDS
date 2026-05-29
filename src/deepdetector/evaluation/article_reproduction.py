@@ -8,8 +8,6 @@ import time
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
-
-from deepdetector.attacks.fgsm import generate_fgsm_examples
 from deepdetector.data.mnist import load_mnist_data
 from deepdetector.filters.adaptive_quantization import entropy_based_quantization
 from deepdetector.filters.entropy import one_d_entropy
@@ -222,59 +220,6 @@ def evaluate_filter_predictions(
         "precision_percent": float(precision * 100.0),
         "f1_percent": float(f1 * 100.0),
     }
-
-
-def evaluate_filter_on_images(
-    graph: Dict[str, Any],
-    images: np.ndarray,
-    labels: np.ndarray,
-    epsilon: float,
-    filter_fn: FilterFn,
-    batch_size: int = 256,
-    clip_min: float = 0.0,
-    clip_max: float = 1.0,
-    exclude_invalid_pairs: bool = False,
-) -> Dict[str, Any]:
-    """Generate FGSM examples and evaluate one detection filter."""
-    sess = graph["sess"]
-    x_placeholder = graph["x"]
-    predictions = graph["predictions"]
-    adv_images = generate_fgsm_examples(
-        sess=sess,
-        model=graph["model"],
-        x_placeholder=x_placeholder,
-        images=images,
-        eps=epsilon,
-        clip_min=clip_min,
-        clip_max=clip_max,
-    )
-
-    clean_pred = predict_labels(sess, x_placeholder, predictions, images, batch_size)
-    adv_pred = predict_labels(sess, x_placeholder, predictions, adv_images, batch_size)
-    filtered_clean = apply_filter_batch(filter_fn, images)
-    filtered_adv = apply_filter_batch(filter_fn, adv_images)
-    filtered_clean_pred = predict_labels(
-        sess,
-        x_placeholder,
-        predictions,
-        filtered_clean,
-        batch_size,
-    )
-    filtered_adv_pred = predict_labels(
-        sess,
-        x_placeholder,
-        predictions,
-        filtered_adv,
-        batch_size,
-    )
-    return evaluate_filter_predictions(
-        y_true=label_to_int(labels),
-        clean_pred=clean_pred,
-        adv_pred=adv_pred,
-        filtered_clean_pred=filtered_clean_pred,
-        filtered_adv_pred=filtered_adv_pred,
-        exclude_invalid_pairs=exclude_invalid_pairs,
-    )
 
 
 def evaluate_filter_on_existing_adversarial(

@@ -11,18 +11,18 @@ SRC_ROOT = PROJECT_ROOT / "src"
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SRC_ROOT))
 
-from deepdetector.experiments.fgsm_context import FGSMEvaluationContext  # noqa: E402
+from deepdetector.experiments.adversarial_examples import AdversarialExampleSet  # noqa: E402
 from deepdetector.experiments import filter_candidate_runner  # noqa: E402
 
 
-def _context() -> FGSMEvaluationContext:
+def _context() -> AdversarialExampleSet:
     graph = {"sess": "session"}
     images = np.zeros((2, 3, 3, 1), dtype=np.float32)
     labels = np.asarray([1, 2], dtype=np.int64)
     adversarial_images = np.ones((2, 3, 3, 1), dtype=np.float32)
     clean_predictions = np.asarray([1, 2], dtype=np.int64)
     adversarial_predictions = np.asarray([2, 1], dtype=np.int64)
-    return FGSMEvaluationContext(
+    return AdversarialExampleSet(
         graph=graph,
         images=images,
         labels=labels,
@@ -64,7 +64,11 @@ def test_filter_candidate_runner_reuses_context_and_writes_standard_outputs(
             "f1_percent": 40.0 * calls["evaluate"],
         }
 
-    monkeypatch.setattr(filter_candidate_runner, "prepare_fgsm_context", fake_prepare)
+    monkeypatch.setattr(
+        filter_candidate_runner,
+        "prepare_mnist_fgsm_adversarial_set",
+        fake_prepare,
+    )
     monkeypatch.setattr(
         filter_candidate_runner,
         "evaluate_filter_on_existing_adversarial",
@@ -115,7 +119,11 @@ def test_filter_candidate_runner_derives_quantization_csv_schema(
     tmp_path,
 ) -> None:
     """Table 4 filter grids should emit interval columns without YAML field lists."""
-    monkeypatch.setattr(filter_candidate_runner, "prepare_fgsm_context", lambda config: _context())
+    monkeypatch.setattr(
+        filter_candidate_runner,
+        "prepare_mnist_fgsm_adversarial_set",
+        lambda config: _context(),
+    )
     monkeypatch.setattr(
         filter_candidate_runner,
         "evaluate_filter_on_existing_adversarial",

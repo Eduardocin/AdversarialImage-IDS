@@ -11,6 +11,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SRC_ROOT))
 
 from scripts.article_reproduction.table_4_imagenet import load_subset_samples
+from deepdetector.experiments.table4_imagenet_runner import (
+    table4_adversarial_cache_path,
+)
 from deepdetector.evaluation.table4_imagenet import (
     TABLE4_OUTPUT_HEADER,
     ZERO_ATTACK_SUCCESS_MESSAGE,
@@ -49,6 +52,13 @@ class NoAttackModel(ThresholdModel):
         return np.zeros_like(image, dtype=np.float32)
 
 
+class ExplodingGradientModel(ThresholdModel):
+    """Model that proves cache hits do not regenerate FGSM."""
+
+    def gradient(self, image: np.ndarray, class_id: int) -> np.ndarray:
+        raise AssertionError("cache miss")
+
+
 def _sample(value: float, true_label: int = 1, image_id: str = "img") -> Table4Sample:
     image = np.full((2, 2, 3), value, dtype=np.float32)
     return Table4Sample(
@@ -80,6 +90,65 @@ def test_evaluate_table4_imagenet_writes_nine_interval_rows() -> None:
     assert first_row["recall"] == pytest.approx(1.0)
     assert first_row["precision"] == pytest.approx(0.5)
     assert first_row["f1"] == pytest.approx(2.0 / 3.0)
+
+
+def test_evaluate_table4_imagenet_reuses_cached_attacks(tmp_path) -> None:
+    """Cached ImageNet Table 4 attacks should skip FGSM generation on rerun."""
+    cache_path = tmp_path / "table4_cache.npz"
+    samples = [_sample(0.49)]
+
+    first = evaluate_table4_imagenet(
+        model=ThresholdModel(),
+        samples=samples,
+        epsilon_255=60.0,
+        cache_path=cache_path,
+        cache_metadata={"cache_key": {"test": "table4"}},
+    )
+
+    assert first.n_attack_success == 1
+    assert cache_path.is_file()
+    assert cache_path.with_suffix(".json").is_file()
+
+    second = evaluate_table4_imagenet(
+        model=ExplodingGradientModel(),
+        samples=samples,
+        epsilon_255=60.0,
+        cache_path=cache_path,
+    )
+
+    assert second.n_clean_total == 1
+    assert second.n_clean_correct == 1
+    assert second.n_attack_success == 1
+    assert second.rows[0]["tp"] == 1
+
+
+def test_table4_adversarial_cache_path_defaults_to_artifacts() -> None:
+    """The configured Table 4 cache path should live under artifacts by default."""
+    config = {
+        "dataset": {
+            "images_dir": "data/imagenet/train",
+            "image_size": 224,
+            "split": "train",
+        },
+        "model": {
+            "name": "googlenet_caffe",
+            "family": "caffe",
+            "deploy_proto": "artifacts/models/imagenet/googlenet/deploy.prototxt",
+            "caffemodel": "artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel",
+        },
+        "attack": {"name": "fgsm", "epsilon_255": 1.0},
+    }
+
+    cache_info = table4_adversarial_cache_path(
+        config=config,
+        samples=[_sample(0.49)],
+        epsilon_255=1.0,
+        clip_min=0.0,
+        clip_max=1.0,
+    )
+
+    assert cache_info is not None
+    assert str(cache_info[0]).startswith(str(PROJECT_ROOT / "artifacts" / "adversarial_examples"))
 
 
 def test_table4_fgsm_uses_article_caffe_scale_for_preprocessed_images() -> None:

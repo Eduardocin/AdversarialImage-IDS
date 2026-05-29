@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
+import json
 import logging
 from pathlib import Path
-from typing import Any, Iterable, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -65,6 +66,83 @@ class Table4Evaluation:
     n_attack_success: int
     disturbed_failure: int
     skipped_wrong_baseline: int
+
+
+def _cache_metadata_path(cache_path: Path) -> Path:
+    """Return the sidecar metadata path for a cache archive."""
+    return cache_path.with_suffix(".json")
+
+
+def _read_table4_attack_cache(cache_path: Path) -> Optional[Tuple[List[_ValidAttack], Dict[str, int]]]:
+    """Load cached successful ImageNet Table 4 attacks when compatible."""
+    if not cache_path.is_file():
+        return None
+    try:
+        with np.load(str(cache_path), allow_pickle=False) as archive:
+            clean_images = np.asarray(archive["clean_images"], dtype=np.float32)
+            adversarial_images = np.asarray(archive["adversarial_images"], dtype=np.float32)
+            clean_predictions = np.asarray(archive["clean_predictions"], dtype=np.int64)
+            adversarial_predictions = np.asarray(
+                archive["adversarial_predictions"],
+                dtype=np.int64,
+            )
+        metadata = json.loads(
+            _cache_metadata_path(cache_path).read_text(encoding="utf-8")
+        )
+    except (OSError, KeyError, ValueError):
+        return None
+
+    if clean_images.shape != adversarial_images.shape:
+        return None
+    if len(clean_images) != len(clean_predictions) or len(clean_images) != len(adversarial_predictions):
+        return None
+
+    attacks = [
+        _ValidAttack(
+            clean_image=clean_images[index],
+            adversarial_image=adversarial_images[index],
+            clean_pred=int(clean_predictions[index]),
+            adv_pred=int(adversarial_predictions[index]),
+        )
+        for index in range(len(clean_images))
+    ]
+    counters = {
+        "n_clean_total": int(metadata["n_clean_total"]),
+        "n_clean_correct": int(metadata["n_clean_correct"]),
+        "n_attack_success": int(metadata["n_attack_success"]),
+        "disturbed_failure": int(metadata["disturbed_failure"]),
+        "skipped_wrong_baseline": int(metadata["skipped_wrong_baseline"]),
+    }
+    return attacks, counters
+
+
+def _write_table4_attack_cache(
+    cache_path: Path,
+    valid_attacks: Sequence[_ValidAttack],
+    metadata: Dict[str, Any],
+) -> None:
+    """Persist successful ImageNet Table 4 attacks and counters."""
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        str(cache_path),
+        clean_images=np.asarray([attack.clean_image for attack in valid_attacks], dtype=np.float32),
+        adversarial_images=np.asarray(
+            [attack.adversarial_image for attack in valid_attacks],
+            dtype=np.float32,
+        ),
+        clean_predictions=np.asarray(
+            [attack.clean_pred for attack in valid_attacks],
+            dtype=np.int64,
+        ),
+        adversarial_predictions=np.asarray(
+            [attack.adv_pred for attack in valid_attacks],
+            dtype=np.int64,
+        ),
+    )
+    _cache_metadata_path(cache_path).write_text(
+        json.dumps(metadata, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def _predict_one(model: Any, image: np.ndarray) -> int:
@@ -162,6 +240,8 @@ def evaluate_table4_imagenet(
     epsilon_255: float = 1.0,
     clip_min: float = 0.0,
     clip_max: float = 1.0,
+    cache_path: Optional[Path] = None,
+    cache_metadata: Optional[Dict[str, Any]] = None,
 ) -> Table4Evaluation:
     """Evaluate ImageNet Table 4 detection counts for scalar quantization intervals."""
     interval_values = [int(value) for value in intervals]
@@ -174,52 +254,76 @@ def evaluate_table4_imagenet(
 
     progress_every = _progress_every(n_clean_total)
 
-    for sample_index, sample in enumerate(samples, start=1):
-        clean_image = _article_model_input(model, sample.image)
-        clean_pred = _predict_one(model, clean_image)
-        clean_correct = clean_pred == int(sample.true_label)
+    cached_attacks = _read_table4_attack_cache(cache_path) if cache_path else None
+    if cached_attacks is not None:
+        valid_attacks, counters = cached_attacks
+        n_clean_total = counters["n_clean_total"]
+        n_clean_correct = counters["n_clean_correct"]
+        n_attack_success = counters["n_attack_success"]
+        disturbed_failure = counters["disturbed_failure"]
+        skipped_wrong_baseline = counters["skipped_wrong_baseline"]
+        logger.info("Loaded ImageNet Table 4 FGSM cache: %s", cache_path)
+    else:
+        for sample_index, sample in enumerate(samples, start=1):
+            clean_image = _article_model_input(model, sample.image)
+            clean_pred = _predict_one(model, clean_image)
+            clean_correct = clean_pred == int(sample.true_label)
 
-        if not clean_correct:
-            skipped_wrong_baseline += 1
-        else:
-            n_clean_correct += 1
-            adversarial_image = generate_fgsm_from_gradient(
-                model=model,
-                image=clean_image,
-                class_id=clean_pred,
-                epsilon_255=epsilon_255,
-                clip_min=clip_min,
-                clip_max=clip_max,
-            )
-            adv_pred = _predict_one(model, adversarial_image)
-
-            if adv_pred == clean_pred:
-                disturbed_failure += 1
+            if not clean_correct:
+                skipped_wrong_baseline += 1
             else:
-                n_attack_success += 1
-                valid_attacks.append(
-                    _ValidAttack(
-                        clean_image=clean_image,
-                        adversarial_image=adversarial_image,
-                        clean_pred=clean_pred,
-                        adv_pred=adv_pred,
+                n_clean_correct += 1
+                adversarial_image = generate_fgsm_from_gradient(
+                    model=model,
+                    image=clean_image,
+                    class_id=clean_pred,
+                    epsilon_255=epsilon_255,
+                    clip_min=clip_min,
+                    clip_max=clip_max,
+                )
+                adv_pred = _predict_one(model, adversarial_image)
+
+                if adv_pred == clean_pred:
+                    disturbed_failure += 1
+                else:
+                    n_attack_success += 1
+                    valid_attacks.append(
+                        _ValidAttack(
+                            clean_image=clean_image,
+                            adversarial_image=adversarial_image,
+                            clean_pred=clean_pred,
+                            adv_pred=adv_pred,
+                        )
                     )
+
+            if (
+                sample_index == 1
+                or sample_index == n_clean_total
+                or sample_index % progress_every == 0
+            ):
+                logger.info(
+                    "Table 4 ImageNet FGSM progress %d/%d | clean_correct=%d attack_success=%d disturbed_failure=%d skipped=%d",
+                    sample_index,
+                    n_clean_total,
+                    n_clean_correct,
+                    n_attack_success,
+                    disturbed_failure,
+                    skipped_wrong_baseline,
                 )
 
-        if (
-            sample_index == 1
-            or sample_index == n_clean_total
-            or sample_index % progress_every == 0
-        ):
-            logger.info(
-                "Table 4 ImageNet FGSM progress %d/%d | clean_correct=%d attack_success=%d disturbed_failure=%d skipped=%d",
-                sample_index,
-                n_clean_total,
-                n_clean_correct,
-                n_attack_success,
-                disturbed_failure,
-                skipped_wrong_baseline,
+        if cache_path:
+            metadata = dict(cache_metadata or {})
+            metadata.update(
+                {
+                    "n_clean_total": int(n_clean_total),
+                    "n_clean_correct": int(n_clean_correct),
+                    "n_attack_success": int(n_attack_success),
+                    "disturbed_failure": int(disturbed_failure),
+                    "skipped_wrong_baseline": int(skipped_wrong_baseline),
+                }
             )
+            _write_table4_attack_cache(cache_path, valid_attacks, metadata)
+            logger.info("Wrote ImageNet Table 4 FGSM cache: %s", cache_path)
 
     rows: List[dict[str, Any]] = []
     logger.info(

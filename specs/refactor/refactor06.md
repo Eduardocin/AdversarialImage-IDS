@@ -1,4 +1,4 @@
-# Spec 7 — Limpeza destrutiva de arquivos desnecessários
+# Spec 6 — Limpeza destrutiva de arquivos desnecessários
 
 ## Status
 

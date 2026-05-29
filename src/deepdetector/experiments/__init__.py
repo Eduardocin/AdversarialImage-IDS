@@ -1,8 +1,8 @@
 """Experiment orchestration helpers."""
 
-from deepdetector.experiments.fgsm_context import (
-    FGSMEvaluationContext,
-    prepare_fgsm_context,
+from deepdetector.experiments.adversarial_examples import (
+    AdversarialExampleSet,
+    prepare_mnist_fgsm_adversarial_set,
 )
 from deepdetector.experiments.filter_candidate_runner import (
     run_filter_candidate_experiment,
@@ -12,12 +12,14 @@ from deepdetector.experiments.runner import (
     build_experiment_config,
     run_experiment,
 )
+from deepdetector.experiments.table10_runner import run_table10_group_experiment
 
 __all__ = [
-    "FGSMEvaluationContext",
+    "AdversarialExampleSet",
     "build_experiment_config",
-    "prepare_fgsm_context",
+    "prepare_mnist_fgsm_adversarial_set",
     "run_experiment",
     "run_fgsm_split_experiment",
     "run_filter_candidate_experiment",
+    "run_table10_group_experiment",
 ]

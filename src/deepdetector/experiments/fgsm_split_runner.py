@@ -7,8 +7,10 @@ from typing import Any, Dict, Iterable, List, Sequence
 from deepdetector.evaluation.article_reproduction import (
     close_graph,
     create_restored_mnist_graph,
-    evaluate_filter_on_images,
-    load_mnist_test_slice,
+    evaluate_filter_on_existing_adversarial,
+)
+from deepdetector.experiments.adversarial_examples import (
+    prepare_mnist_fgsm_adversarial_set,
 )
 from deepdetector.experiments.metadata import build_experiment_payload
 from deepdetector.filters.factory import build_filter_from_config
@@ -67,6 +69,22 @@ def _checkpoint_dir(config: Dict[str, Any]) -> str:
     return str(checkpoint_dir or MNIST_M1_CHECKPOINT_DIR)
 
 
+def _split_config(config: Dict[str, Any], split_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a single-slice materialization config from the split runner config."""
+    dataset_config = dict(config.get("dataset", {}))
+    dataset_config.pop("slices", None)
+    dataset_config.update(
+        {
+            "start": split_config["start"],
+            "end": split_config["end"],
+            "slice_name": split_config["name"],
+        }
+    )
+    materialization_config = dict(config)
+    materialization_config["dataset"] = dataset_config
+    return materialization_config
+
+
 def run_fgsm_split_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Run an FGSM filter evaluation experiment over configured dataset splits."""
     experiment_id = _experiment_id(config)
@@ -77,7 +95,6 @@ def run_fgsm_split_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]:
         )
     split_configs = list(_configured_slices(config))
     filter_name, filter_fn, filter_metadata = build_filter_from_config(config.get("filter", {}))
-    attack_config = config.get("attack", {})
     evaluation_config = config.get("evaluation", {})
     rows: List[Dict[str, Any]] = []
 
@@ -85,19 +102,19 @@ def run_fgsm_split_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     try:
         for split_config in split_configs:
             split_name = str(split_config["name"])
-            images, labels = load_mnist_test_slice(
-                int(split_config["start"]),
-                int(split_config["end"]),
-            )
-            metrics = evaluate_filter_on_images(
+            adversarial_set = prepare_mnist_fgsm_adversarial_set(
+                _split_config(config, split_config),
                 graph=graph,
-                images=images,
-                labels=labels,
-                epsilon=float(attack_config.get("epsilon", attack_config.get("eps", 0.2))),
+            )
+            metrics = evaluate_filter_on_existing_adversarial(
+                graph=adversarial_set.graph,
+                images=adversarial_set.images,
+                labels=adversarial_set.labels,
+                adv_images=adversarial_set.adversarial_images,
+                clean_pred=adversarial_set.clean_predictions,
+                adv_pred=adversarial_set.adversarial_predictions,
                 filter_fn=filter_fn,
                 batch_size=int(evaluation_config.get("batch_size", 256)),
-                clip_min=float(attack_config.get("clip_min", 0.0)),
-                clip_max=float(attack_config.get("clip_max", 1.0)),
                 exclude_invalid_pairs=bool(
                     evaluation_config.get("exclude_invalid_pairs", False)
                 ),
