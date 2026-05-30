@@ -21,7 +21,7 @@ A implementação deve integrar o modelo ao runner Table 10 existente, gerar res
 
 ## 2. Contexto
 
-O repositório já define `configs/experiments.yaml` com `table_10_inception_v3` e os seis ataques CW, mas todas as linhas estão marcadas como `blocked` e a implementação de `inception_v3` não existe.
+O repositório define `configs/experiments.yaml` com `table_10_inception_v3` e os seis ataques CW marcados como `implemented`.
 
 O código de referência do repositório original `OwenSec/DeepDetector/Test/CW` mostra dois pontos importantes:
 
@@ -43,8 +43,11 @@ A configuração `table_10_inception_v3` deve permanecer como `kind: table_10_gr
 A configuração correta deve incluir, no mínimo:
 
 * `dataset.image_size: 299`
+* `dataset.n_samples: 100`
 * `dataset.image_shape: [299, 299, 3]`
 * `dataset.value_range: [-0.5, 0.5]` ou equivalente de pré-processamento
+* `dataset.shuffle: true`
+* `evaluation.seed: 20170830`
 * `model.name: inception_v3`
 * `rows` com os seis ataques CW listados
 
@@ -66,7 +69,8 @@ Esta spec cobre:
 * preservação do schema oficial da Table 10;
 * suporte a ataques `cw_l2` com κ = 0.0, 0.5, 1.0, 2.0, 4.0 e `cw_linf`;
 * uso de entrada 299x299 com pré-processamento de Inception;
-* manutenção do manifest para indicar linhas bloqueadas ou ainda não executadas.
+* uso de uma amostra reprodutível de 100 imagens ImageNet das classes zebra/panda/cab;
+* manutenção do manifest para registrar o status das linhas executadas ou bloqueadas.
 
 ---
 
@@ -90,7 +94,9 @@ Não implementar nesta spec:
 * O ataque `cw_l2` deve aceitar parâmetros `kappa` fixos conforme as linhas da Table 10.
 * O ataque `cw_linf` deve ser suportado como outra linha do grupo.
 * O `table_10_group` deve ser capaz de produzir os seis resultados conforme o schema oficial.
-* O `manifest.json` deve conter `blocked_reason` para linhas que ainda não puderam ser avaliadas.
+* A amostragem deve embaralhar a lista de imagens com `evaluation.seed` antes de limitar a `dataset.n_samples`.
+* Com `dataset.n_samples: 100`, `dataset.shuffle: true` e `evaluation.seed: 20170830`, o experimento deve avaliar 100 imagens aleatórias de forma reprodutível.
+* O `manifest.json` deve registrar o status de cada linha e conter `blocked_reason` quando uma linha não puder ser avaliada.
 * O `metrics.csv` deve manter todos os campos da Table 10 e manter os números de artigo originais nas linhas.
 
 ---
@@ -109,17 +115,21 @@ Não implementar nesta spec:
 - [ ] O `configs/experiments.yaml` contém `table_10_inception_v3` com `kind: table_10_group`.
 - [ ] O experimento `table_10_inception_v3` é executável por `python scripts/run_experiment.py --experiment table_10_inception_v3`.
 - [ ] O diretório `results/experiments/table_10/inception_v3/` é criado com `metrics.csv` e `metrics.json`.
-- [ ] O `manifest.json` é produzido e contém `blocked_reason` para linhas não executadas.
+- [ ] O `manifest.json` é produzido e registra o status das linhas avaliadas.
+- [ ] A configuração usa `dataset.n_samples: 100`, `dataset.shuffle: true` e `evaluation.seed: 20170830`.
+- [ ] A seleção de imagens é aleatória e reprodutível: o loader embaralha a população com o seed configurado e seleciona as primeiras 100 imagens após o embaralhamento.
 - [ ] O schema da Table 10 mantém os campos `no`, `attack_model`, `dataset`, `num_failures`, `tp`, `fn`, `fp`, `rtp`, `rtp_percent`, `recall`, `precision`, `f1`.
 - [ ] O modelo Inception v3 usa entrada `299x299` e o pré-processamento descrito no repositório original.
 - [ ] As linhas 14, 15, 16, 17, 18 e 20 preservam seus números originais do artigo.
+- [ ] As linhas 14, 15, 16, 17, 18 e 20 ficam com `status: implemented`.
 - [ ] O grupo `inception_v3` é integrado sem necessidade de um script específico fora do runner da Table 10.
 
 ---
 
 ## 9. Observações de implementação
 
-* A configuração atual de `image_size: 224` em `table_10_inception_v3` está incorreta para Inception v3 e deve ser ajustada para `299`.
+* A configuração de `table_10_inception_v3` deve usar `image_size: 299`, `image_shape: [299, 299, 3]` e `value_range: [-0.5, 0.5]`.
+* Para execução experimental mais controlada, a configuração deve limitar o grupo a 100 imagens com `shuffle: true` e `evaluation.seed: 20170830`.
 * O wrapper de modelo deve compatibilizar o fluxo de CW com o grafo Inception e com os ataques existentes do projeto.
 * O repositório original usa `modified_setup_inception.py` para importar `softmax/logits:0`; essa mesma abstração deve ser reproduzida de forma limpa aqui.
 * O original `Test_CWLi_ImageNet.py` carrega as classes zebra/panda/cab e usa alvos one-hot com 1008 dimensões; o suporte a esse tipo de rótulo deve ser preservado na implementação.
