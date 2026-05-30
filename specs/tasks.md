@@ -177,3 +177,9 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Update the Inception v3 config to use ImageNet 299x299 inputs and implemented CW rows.
   - [x] Write Table 10 metrics outputs and a manifest for Inception v3 row statuses.
   - [x] Add automated tests for config, wrapper preprocessing, dispatch, manifest, and row metrics.
+- [x] Implement Table 10 CaffeNet from `specs/features/table10_caffenet.md`
+  - [x] Add CaffeNet wrapper support for `deploy_original.prototxt` and `deploy_removeSoftmax.prototxt`.
+  - [x] Integrate `table_10_caffenet` through the existing Table 10 group runner.
+  - [x] Preserve row 8 with `DeepFool/CaffeNet` and blocked status until implemented.
+  - [x] Write `metrics.csv`, `metrics.json`, and `manifest.json` for the CaffeNet group.
+  - [x] Add automated tests for config, wrapper dispatch, and blocked manifest semantics.

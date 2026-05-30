@@ -42,6 +42,10 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
     are listed in the Caffe Model Zoo.
     """
 
+    model_label = "GoogLeNet"
+    default_image_size = 224
+    default_output_candidates = ("prob", "loss3/classifier")
+
     def __init__(
         self,
         model_dir: str,
@@ -58,8 +62,10 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
             import caffe
         except ImportError as exc:
             raise ImportError(
-                "Caffe is required for GoogLeNetCaffeWrapper. Install pycaffe "
-                "and provide deploy.prototxt plus bvlc_googlenet.caffemodel."
+                "Caffe is required for {0}. Install pycaffe and provide "
+                "deploy.prototxt plus a compatible .caffemodel.".format(
+                    self.__class__.__name__
+                )
             ) from exc
 
         if batch_size <= 0:
@@ -76,8 +82,8 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
         self.use_gpu = bool(use_gpu)
         self.batch_size = int(batch_size)
         self.input_blob = "data"
-        self.output_candidates = ("prob", "loss3/classifier")
-        self.image_size = 224
+        self.output_candidates = tuple(self.default_output_candidates)
+        self.image_size = int(self.default_image_size)
 
         self._check_required_files()
         if self.use_gpu:
@@ -113,12 +119,13 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
         ]
         if missing:
             raise IOError(
-                "Missing GoogLeNet Caffe file(s): {0}".format(
+                "Missing {0} Caffe file(s): {1}".format(
+                    self.model_label,
                     ", ".join(str(path) for path in missing)
                 )
             )
         if self.mean_file is not None and not self.mean_file.is_file():
-            raise IOError("Missing GoogLeNet mean file: {0}".format(self.mean_file))
+            raise IOError("Missing {0} mean file: {1}".format(self.model_label, self.mean_file))
 
     def _load_mean(self, mean_file: Optional[Path]) -> Optional[np.ndarray]:
         """Load an optional Caffe mean array."""
@@ -144,7 +151,9 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
 
         height, width = mean.shape[1], mean.shape[2]
         if height < self.image_size or width < self.image_size:
-            raise ValueError("Mean spatial size must be at least 224x224.")
+            raise ValueError(
+                "Mean spatial size must be at least {0}x{0}.".format(self.image_size)
+            )
 
         top = (height - self.image_size) // 2
         left = (width - self.image_size) // 2
@@ -215,7 +224,8 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
 
         available = sorted(set(output.keys()) | set(selected_net.blobs.keys()))
         raise KeyError(
-            "Could not find GoogLeNet output blob. Available blobs: {0}".format(
+            "Could not find {0} output blob. Available blobs: {1}".format(
+                self.model_label,
                 ", ".join(available)
             )
         )
@@ -326,6 +336,20 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
             resized_channels.append(np.asarray(resized, dtype=np.float32))
 
         return np.stack(resized_channels, axis=2).astype(np.float32)
+
+
+class CaffeNetCaffeWrapper(GoogLeNetCaffeWrapper):
+    """Run CaffeNet with separate prediction and DeepFool attack deploy files.
+
+    The original DeepDetector CaffeNet flow uses ``deploy_original.prototxt``
+    for classification/detection and ``deploy_removeSoftmax.prototxt`` for
+    DeepFool gradients. This subclass keeps that split while reusing the common
+    Caffe preprocessing, prediction, and gradient contract.
+    """
+
+    model_label = "CaffeNet"
+    default_image_size = 227
+    default_output_candidates = ("prob", "fc8")
 
 
 class InceptionV3TensorFlowWrapper(ImageNetModelWrapper):

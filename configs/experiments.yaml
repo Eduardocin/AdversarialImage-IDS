@@ -498,9 +498,9 @@ experiments:
       name: imagenet
       split: test
       images_dir: data/imagenet/test
-      image_size: 224
+      image_size: 227
       n_samples: all
-      image_shape: [224, 224, 3]
+      image_shape: [227, 227, 3]
       value_range: [0.0, 1.0]
       shuffle: false
       class_indices:
@@ -509,6 +509,15 @@ experiments:
         zebra: 340
     model:
       name: caffenet
+      family: caffe
+      reference: BVLC CaffeNet
+      model_dir: artifacts/models/imagenet/caffenet/
+      deploy_proto: artifacts/models/imagenet/caffenet/deploy_original.prototxt
+      attack_deploy_proto: artifacts/models/imagenet/caffenet/deploy_removeSoftmax.prototxt
+      caffemodel: artifacts/models/imagenet/caffenet/bvlc_reference_caffenet.caffemodel
+      mean_file: null
+      use_gpu: false
+      batch_size: 32
     attack: {}
     evaluation: {}
     model_group: caffenet
@@ -516,10 +525,14 @@ experiments:
     rows:
       - "no": 8
         attack_model: "DeepFool/CaffeNet"
-        status: blocked
-        blocked_reason: "CaffeNet ainda não está implementado."
+        status: implemented
         attack:
           name: deepfool
+          max_iter: 50
+          overshoot: 0.02
+          clip_min: 0.0
+          clip_max: 1.0
+          num_classes: 10
 
   table_10_m2:
     kind: table_10_group

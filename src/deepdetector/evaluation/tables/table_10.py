@@ -19,6 +19,7 @@ from deepdetector.filters.factory import build_filter_from_config
 from deepdetector.io.paths import ensure_dir, resolve_project_path
 from deepdetector.io.result_writers import write_metrics_csv, write_metrics_json
 from deepdetector.models.imagenet_wrappers import (
+    CaffeNetCaffeWrapper,
     GoogLeNetCaffeWrapper,
     InceptionV3TensorFlowWrapper,
 )
@@ -133,6 +134,28 @@ def build_table_10_googlenet_model(config: dict[str, Any]) -> Any:
     )
 
 
+def build_table_10_caffenet_model(config: dict[str, Any]) -> Any:
+    """Instantiate the configured CaffeNet model wrapper."""
+    model_config = config.get("model", {})
+    return CaffeNetCaffeWrapper(
+        model_dir=_path_text(model_config.get("model_dir"), "model.model_dir"),
+        deploy_prototxt=_path_text(model_config.get("deploy_proto"), "model.deploy_proto"),
+        caffemodel=_path_text(model_config.get("caffemodel"), "model.caffemodel"),
+        attack_deploy_prototxt=(
+            _path_text(model_config.get("attack_deploy_proto"), "model.attack_deploy_proto")
+            if model_config.get("attack_deploy_proto")
+            else None
+        ),
+        mean_file=(
+            str(resolve_project_path(model_config.get("mean_file")))
+            if model_config.get("mean_file")
+            else None
+        ),
+        use_gpu=bool(model_config.get("use_gpu", False)),
+        batch_size=int(model_config.get("batch_size", 32)),
+    )
+
+
 def build_table_10_inception_v3_model(config: dict[str, Any]) -> Any:
     """Instantiate the configured Inception v3 TensorFlow wrapper."""
     model_config = config.get("model", {})
@@ -150,10 +173,14 @@ def _build_table_10_imagenet_model(config: dict[str, Any]) -> Any:
         model_name = str(config.get("model", {}).get("name", "")).lower()
         if model_name == "googlenet_caffe":
             model_group = "googlenet"
+        elif model_name == "caffenet":
+            model_group = "caffenet"
         elif model_name == "inception_v3":
             model_group = "inception_v3"
     if model_group == "googlenet":
         return build_table_10_googlenet_model(config)
+    if model_group == "caffenet":
+        return build_table_10_caffenet_model(config)
     if model_group == "inception_v3":
         return build_table_10_inception_v3_model(config)
     raise ValueError("Unsupported Table 10 ImageNet model group: {0}".format(model_group))
@@ -538,6 +565,7 @@ def _is_table_10_imagenet_attack(
         str(group_config.get("dataset", {}).get("name", "")).lower() == "imagenet"
         and (
             (model_group == "googlenet" and attack_name in {"fgsm", "deepfool"})
+            or (model_group == "caffenet" and attack_name == "deepfool")
             or (model_group == "inception_v3" and attack_name in {"cw_l2", "cw_linf"})
         )
     )
@@ -608,7 +636,7 @@ def run_table_10_group(config: dict[str, Any]) -> list[dict[str, Any]]:
 
     rows: list[dict[str, Any]] = []
     manifest_entries: list[dict[str, Any]] = []
-    write_manifest = model_group == "inception_v3"
+    write_manifest = model_group in {"caffenet", "inception_v3"}
     for row_config in rows_config:
         no = int(row_config["no"])
         attack_model = str(row_config["attack_model"])
@@ -621,7 +649,7 @@ def run_table_10_group(config: dict[str, Any]) -> list[dict[str, Any]]:
             }
             if row_config.get("blocked_reason"):
                 manifest_entry["blocked_reason"] = str(row_config["blocked_reason"])
-                if model_group == "inception_v3":
+                if model_group in {"caffenet", "inception_v3"}:
                     write_manifest = True
             manifest_entries.append(manifest_entry)
             rows.append(

@@ -12,6 +12,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.models.imagenet_wrappers import (
+    CaffeNetCaffeWrapper,
     GoogLeNetCaffeWrapper,
     InceptionV3TensorFlowWrapper,
 )
@@ -52,7 +53,10 @@ class FakeNet:
         self.mode = mode
         self.forward_calls = 0
         self.backward_calls = []
-        output_blob = "loss3/classifier" if "removeSoftmax" in deploy else "prob"
+        if "removeSoftmax" in deploy:
+            output_blob = "fc8" if "caffenet" in deploy else "loss3/classifier"
+        else:
+            output_blob = "prob"
         self.output_blob = output_blob
         self.blobs = {"data": FakeBlob((1, 3, 2, 2)), output_blob: FakeBlob((1, 3))}
 
@@ -78,12 +82,12 @@ def _install_fake_caffe(monkeypatch):
     monkeypatch.setitem(sys.modules, "caffe", fake_caffe)
 
 
-def _touch_model_files(tmp_path):
-    model_dir = tmp_path / "googlenet"
+def _touch_model_files(tmp_path, model_name="googlenet", caffemodel_name="bvlc_googlenet.caffemodel"):
+    model_dir = tmp_path / model_name
     model_dir.mkdir()
     deploy = model_dir / "deploy_original.prototxt"
     attack_deploy = model_dir / "deploy_removeSoftmax.prototxt"
-    caffemodel = model_dir / "bvlc_googlenet.caffemodel"
+    caffemodel = model_dir / caffemodel_name
     for path in (deploy, attack_deploy, caffemodel):
         path.write_text("placeholder", encoding="utf-8")
     return model_dir, deploy, attack_deploy, caffemodel
@@ -137,6 +141,37 @@ def test_googlenet_caffe_wrapper_falls_back_to_prediction_deploy_for_gradient(
     np.testing.assert_array_equal(gradient, np.full((3, 2, 2), 3.0, dtype=np.float32))
     assert len(wrapper.net.backward_calls) == 1
     assert "prob" in wrapper.net.backward_calls[0]
+
+
+def test_caffenet_caffe_wrapper_uses_original_and_attack_deploys(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """CaffeNet should use original deploy for prediction and no-softmax deploy for gradients."""
+    _install_fake_caffe(monkeypatch)
+    model_dir, deploy, attack_deploy, caffemodel = _touch_model_files(
+        tmp_path,
+        model_name="caffenet",
+        caffemodel_name="bvlc_reference_caffenet.caffemodel",
+    )
+
+    wrapper = CaffeNetCaffeWrapper(
+        model_dir=str(model_dir),
+        deploy_prototxt=str(deploy),
+        attack_deploy_prototxt=str(attack_deploy),
+        caffemodel=str(caffemodel),
+    )
+
+    assert wrapper.image_size == 227
+    assert wrapper.net.deploy == str(deploy)
+    assert wrapper.attack_net.deploy == str(attack_deploy)
+
+    gradient = wrapper.gradient(np.zeros((3, 2, 2), dtype=np.float32), class_id=2)
+
+    np.testing.assert_array_equal(gradient, np.full((3, 2, 2), 7.0, dtype=np.float32))
+    assert wrapper.net.backward_calls == []
+    assert len(wrapper.attack_net.backward_calls) == 1
+    assert "fc8" in wrapper.attack_net.backward_calls[0]
 
 
 def test_inception_v3_wrapper_reports_missing_graph(tmp_path) -> None:

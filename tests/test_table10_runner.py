@@ -136,6 +136,76 @@ def test_table10_googlenet_builder_passes_attack_deploy_to_wrapper(
     assert captured["caffemodel"] == str(caffemodel)
 
 
+def test_table10_caffenet_config_uses_separate_deploy_files() -> None:
+    """CaffeNet row 8 should be wired structurally for DeepFool execution."""
+    config = _consolidated_config()
+    experiment = config["experiments"]["table_10_caffenet"]
+    row = experiment["rows"][0]
+
+    assert experiment["kind"] == "table_10_group"
+    assert experiment["dataset"]["image_size"] == 227
+    assert experiment["dataset"]["image_shape"] == [227, 227, 3]
+    assert experiment["model"]["name"] == "caffenet"
+    assert (
+        experiment["model"]["deploy_proto"]
+        == "artifacts/models/imagenet/caffenet/deploy_original.prototxt"
+    )
+    assert (
+        experiment["model"]["attack_deploy_proto"]
+        == "artifacts/models/imagenet/caffenet/deploy_removeSoftmax.prototxt"
+    )
+    assert experiment["model"]["use_gpu"] is True
+    assert row["no"] == 8
+    assert row["attack_model"] == "DeepFool/CaffeNet"
+    assert row["status"] == "implemented"
+    assert "blocked_reason" not in row
+    assert row["attack"]["name"] == "deepfool"
+    assert row["attack"]["max_iter"] == 50
+    assert row["attack"]["overshoot"] == 0.02
+    assert row["attack"]["clip_min"] == 0.0
+    assert row["attack"]["clip_max"] == 1.0
+    assert row["attack"]["num_classes"] == 10
+
+
+def test_table10_caffenet_builder_passes_attack_deploy_to_wrapper(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Table 10 should configure CaffeNet with separate prediction/attack prototxts."""
+    captured = {}
+
+    def fake_wrapper(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    model_dir = tmp_path / "caffenet"
+    model_dir.mkdir()
+    deploy = model_dir / "deploy_original.prototxt"
+    attack_deploy = model_dir / "deploy_removeSoftmax.prototxt"
+    caffemodel = model_dir / "bvlc_reference_caffenet.caffemodel"
+    for path in (deploy, attack_deploy, caffemodel):
+        path.write_text("placeholder", encoding="utf-8")
+
+    monkeypatch.setattr(table_10_module, "CaffeNetCaffeWrapper", fake_wrapper)
+
+    table_10_module.build_table_10_caffenet_model(
+        {
+            "model": {
+                "model_dir": str(model_dir),
+                "deploy_proto": str(deploy),
+                "attack_deploy_proto": str(attack_deploy),
+                "caffemodel": str(caffemodel),
+                "batch_size": 8,
+                "use_gpu": False,
+            }
+        }
+    )
+
+    assert captured["deploy_prototxt"] == str(deploy)
+    assert captured["attack_deploy_prototxt"] == str(attack_deploy)
+    assert captured["caffemodel"] == str(caffemodel)
+
+
 def test_table10_imagenet_groups_use_test_dataset() -> None:
     """Every ImageNet Table 10 group should point at the test split."""
     config = _consolidated_config()
@@ -291,8 +361,8 @@ def test_table10_runner_writes_official_schema_without_manifest(tmp_path) -> Non
     assert metrics_payload["rows"][0]["no"] == 5
 
 
-def test_table10_blocked_reasons_stay_out_of_outputs(tmp_path) -> None:
-    """Blocked reasons should not leak into official metrics outputs."""
+def test_table10_caffenet_blocked_group_writes_manifest(tmp_path) -> None:
+    """CaffeNet should keep blocked reasons in manifest, not official metrics."""
     run_table_10_group(
         {
             "experiment_id": "table_10_caffenet",
@@ -318,7 +388,14 @@ def test_table10_blocked_reasons_stay_out_of_outputs(tmp_path) -> None:
     assert "CaffeNet is not implemented" not in (tmp_path / "metrics.json").read_text(
         encoding="utf-8"
     )
-    assert not (tmp_path / "manifest.json").exists()
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["model_group"] == "caffenet"
+    assert manifest["rows"][0] == {
+        "no": 8,
+        "attack_model": "DeepFool/CaffeNet",
+        "status": "blocked",
+        "blocked_reason": "CaffeNet is not implemented.",
+    }
 
 
 def test_table10_inception_v3_group_writes_manifest_for_blocked_rows(tmp_path) -> None:
