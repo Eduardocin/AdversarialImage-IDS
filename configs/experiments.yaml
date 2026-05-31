@@ -288,7 +288,7 @@ experiments:
       deploy_proto: artifacts/models/imagenet/googlenet/deploy.prototxt
       caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
       mean_file: null
-      use_gpu: false
+      use_gpu: true
       batch_size: 32
     attack:
       name: fgsm
@@ -516,7 +516,7 @@ experiments:
       attack_deploy_proto: artifacts/models/imagenet/caffenet/deploy_removeSoftmax.prototxt
       caffemodel: artifacts/models/imagenet/caffenet/bvlc_reference_caffenet.caffemodel
       mean_file: null
-      use_gpu: false
+      use_gpu: true
       batch_size: 32
     attack: {}
     evaluation: {}
