@@ -22,13 +22,13 @@ conda activate adversarialimage-ids-legacy
 Create it from scratch with:
 
 ```bash
-conda env create -f environment.yml
+conda env create -f envs/environment.yml
 ```
 
 Synchronize an existing copy with:
 
 ```bash
-conda env update -n adversarialimage-ids-legacy -f environment.yml
+conda env update -n adversarialimage-ids-legacy -f envs/environment.yml
 ```
 
 The same pinned Python packages are also listed in `requirements.txt` for

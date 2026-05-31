@@ -36,7 +36,7 @@ Este projeto preserva uma pilha legada de proposito:
 Crie e valide o ambiente Conda:
 
 ```bash
-conda env create -f environment.yml
+conda env create -f envs/environment.yml
 conda activate adversarialimage-ids-legacy
 pip install -e .
 python scripts/dev/smoke_test.py
@@ -45,7 +45,7 @@ python scripts/dev/smoke_test.py
 Se o ambiente ja existir:
 
 ```bash
-conda env update -n adversarialimage-ids-legacy -f environment.yml
+conda env update -n adversarialimage-ids-legacy -f envs/environment.yml
 conda activate adversarialimage-ids-legacy
 pip install -e .
 python scripts/dev/smoke_test.py
@@ -88,7 +88,7 @@ Detalhes de versao e decisoes ficam em
 |-- reproduction_notes/               # notas, planos e decisoes de reproducao
 |-- results/                          # relatorios e metricas versionaveis
 |-- artifacts/                        # modelos, datasets processados e ataques
-|-- environment.yml
+|-- envs/                             # ambientes Conda versionados
 |-- requirements.txt
 |-- pyproject.toml
 `-- README.md

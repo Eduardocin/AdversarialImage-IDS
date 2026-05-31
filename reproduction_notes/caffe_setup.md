@@ -22,13 +22,13 @@ o desvio nao estiver documentado explicitamente.
 ## Ambiente Conda
 
 A trilha ImageNet espera o modulo Python `caffe` do pacote Caffe do
-`conda-forge`. Ele esta declarado em `environment.yml` como dependencia Conda
+`conda-forge`. Ele esta declarado em `envs/environment.yml` como dependencia Conda
 porque `pycaffe` nao e instalado via `pip`.
 
 Para criar ou atualizar o ambiente local:
 
 ```bash
-conda env create -f environment.yml
+conda env create -f envs/environment.yml
 conda activate adversarialimage-ids-legacy
 python scripts/dev/smoke_test.py
 ```
@@ -36,7 +36,7 @@ python scripts/dev/smoke_test.py
 Para um ambiente existente:
 
 ```bash
-conda env update -n adversarialimage-ids-legacy -f environment.yml
+conda env update -n adversarialimage-ids-legacy -f envs/environment.yml
 conda activate adversarialimage-ids-legacy
 python scripts/dev/smoke_test.py
 ```

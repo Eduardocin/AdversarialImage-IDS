@@ -377,6 +377,7 @@ class InceptionV3TensorFlowWrapper(ImageNetModelWrapper):
             raise ImportError("TensorFlow is required for InceptionV3TensorFlowWrapper.") from exc
 
         self.tf = tf
+        self.tf.compat.v1.disable_eager_execution()
         self.image_size = 299
         self.num_labels = 1008
         self.batch_size = int(batch_size)
@@ -415,7 +416,7 @@ class InceptionV3TensorFlowWrapper(ImageNetModelWrapper):
         return tensor
 
     def _import_logits(self, tensor: object, name: str) -> object:
-        elements = self.tf.import_graph_def(
+        elements = self.tf.compat.v1.graph_util.import_graph_def(
             self.graph_def,
             name=name,
             input_map={self.input_map_name: self._scaled_input(tensor)},

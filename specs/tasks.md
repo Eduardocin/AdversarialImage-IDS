@@ -177,6 +177,11 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Update the Inception v3 config to use ImageNet 299x299 inputs and implemented CW rows.
   - [x] Write Table 10 metrics outputs and a manifest for Inception v3 row statuses.
   - [x] Add automated tests for config, wrapper preprocessing, dispatch, manifest, and row metrics.
+- [x] Refactor InceptionV3 TensorFlow wrapper for Ampere from `specs/features/inceptionv3_ampere.md`
+  - [x] Add TensorFlow 2.11 Conda environment file under `envs/`.
+  - [x] Disable eager execution in `InceptionV3TensorFlowWrapper`.
+  - [x] Use TF2-compatible `tf.compat.v1.graph_util.import_graph_def`.
+  - [x] Add the Inception environment validation script.
 - [x] Implement Table 10 CaffeNet from `specs/features/table10_caffenet.md`
   - [x] Add CaffeNet wrapper support for `deploy_original.prototxt` and `deploy_removeSoftmax.prototxt`.
   - [x] Integrate `table_10_caffenet` through the existing Table 10 group runner.
