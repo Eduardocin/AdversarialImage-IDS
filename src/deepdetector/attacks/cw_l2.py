@@ -7,6 +7,47 @@ from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
 
+
+def _patch_tensorflow_v1_symbols() -> None:
+    """Expose TF1 symbols expected by CleverHans when running on TF2."""
+    try:
+        import tensorflow as tf
+    except Exception:
+        return
+
+    try:
+        tf.compat.v1.disable_eager_execution()
+    except Exception:
+        pass
+
+    names = [
+        "GraphKeys",
+        "get_collection",
+        "add_to_collection",
+        "variable_scope",
+        "get_variable",
+        "global_variables",
+        "local_variables",
+        "trainable_variables",
+        "global_variables_initializer",
+        "variables_initializer",
+        "placeholder",
+        "Session",
+        "ConfigProto",
+        "reset_default_graph",
+        "get_default_graph",
+        "name_scope",
+        "control_dependencies",
+        "assign",
+        "assign_add",
+        "gradients",
+    ]
+
+    for name in names:
+        if not hasattr(tf, name) and hasattr(tf.compat.v1, name):
+            setattr(tf, name, getattr(tf.compat.v1, name))
+
+
 def _one_hot_to_int(labels: np.ndarray) -> np.ndarray:
     """Convert one-hot labels to integer labels."""
     label_array = np.asarray(labels)
@@ -45,6 +86,7 @@ def _pad_to_batch(
 
 def _load_cwl2() -> Any:
     """Load the CWL2 class without importing optional attack dependencies."""
+    _patch_tensorflow_v1_symbols()
     try:
         from cleverhans.attacks.carlini_wagner_l2 import CWL2
 
