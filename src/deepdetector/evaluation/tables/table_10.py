@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+try:
+    import tensorflow as tf
+    tf.compat.v1.disable_eager_execution()
+except Exception:
+    pass
+
 import logging
 from pathlib import Path
 from typing import Any
@@ -192,7 +198,15 @@ def _validate_table_10_model(model: Any) -> None:
 
 
 def _predict_one(model: Any, image: np.ndarray) -> int:
-    return predict_caffe_label(model, image)
+    image_array = np.asarray(image, dtype=np.float32)
+
+    if isinstance(model, InceptionV3TensorFlowWrapper):
+        label = model.predict_preprocessed_label(
+            image_array.reshape((1,) + image_array.shape)
+        )
+        return int(np.asarray(label).reshape(-1)[0])
+
+    return predict_caffe_label(model, image_array)
 
 
 def _configured_n_samples(config: dict[str, Any]) -> int | None:

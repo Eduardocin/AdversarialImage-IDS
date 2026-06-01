@@ -377,7 +377,6 @@ class InceptionV3TensorFlowWrapper(ImageNetModelWrapper):
             raise ImportError("TensorFlow is required for InceptionV3TensorFlowWrapper.") from exc
 
         self.tf = tf
-        self.tf.compat.v1.disable_eager_execution()
         self.image_size = 299
         self.num_labels = 1008
         self.batch_size = int(batch_size)

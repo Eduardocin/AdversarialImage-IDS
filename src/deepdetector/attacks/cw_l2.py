@@ -47,6 +47,14 @@ def _patch_tensorflow_v1_symbols() -> None:
         if not hasattr(tf, name) and hasattr(tf.compat.v1, name):
             setattr(tf, name, getattr(tf.compat.v1, name))
 
+    # CleverHans TF1 attacks call tf.train.AdamOptimizer.
+    # In TF2 this optimizer lives under tf.compat.v1.train.
+    try:
+        if not hasattr(tf.train, "AdamOptimizer"):
+            tf.train.AdamOptimizer = tf.compat.v1.train.AdamOptimizer
+    except Exception:
+        pass
+
 
 def _one_hot_to_int(labels: np.ndarray) -> np.ndarray:
     """Convert one-hot labels to integer labels."""
