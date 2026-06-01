@@ -588,16 +588,20 @@ experiments:
     dataset:
       name: imagenet
       split: test
-      images_dir: data/imagenet/test
+      images_dir: data/inceptionV3
       image_size: 299
-      n_samples: 100 
       image_shape: [299, 299, 3]
       value_range: [-0.5, 0.5]
-      shuffle: true
+      shuffle: false
+      class_order: [zebra, panda, cab]
       class_indices:
-        cab: 267
-        panda: 169
         zebra: 80
+        panda: 169
+        cab: 267
+      class_quotas:
+        zebra: 40
+        panda: 40
+        cab: 20
     model:
       name: inception_v3
       family: tensorflow
@@ -620,30 +624,75 @@ experiments:
         attack:
           name: cw_l2
           kappa: 0.0
+          batch_size: 1
+          max_iterations: 1000
+          learning_rate: 0.01
+          binary_search_steps: 9
+          initial_const: 0.001
+          abort_early: true
+          targeted: false
+          clip_min: -0.5
+          clip_max: 0.5
       - "no": 15
         attack_model: "CW L2 (κ=0.5)/Inception v3"
         status: implemented
         attack:
           name: cw_l2
           kappa: 0.5
+          batch_size: 1
+          max_iterations: 1000
+          learning_rate: 0.01
+          binary_search_steps: 9
+          initial_const: 0.001
+          abort_early: true
+          targeted: false
+          clip_min: -0.5
+          clip_max: 0.5
       - "no": 16
         attack_model: "CW L2 (κ=1.0)/Inception v3"
         status: implemented
         attack:
           name: cw_l2
           kappa: 1.0
+          batch_size: 1
+          max_iterations: 1000
+          learning_rate: 0.01
+          binary_search_steps: 9
+          initial_const: 0.001
+          abort_early: true
+          targeted: false
+          clip_min: -0.5
+          clip_max: 0.5
       - "no": 17
         attack_model: "CW L2 (κ=2.0)/Inception v3"
         status: implemented
         attack:
           name: cw_l2
           kappa: 2.0
+          batch_size: 1
+          max_iterations: 1000
+          learning_rate: 0.01
+          binary_search_steps: 9
+          initial_const: 0.001
+          abort_early: true
+          targeted: false
+          clip_min: -0.5
+          clip_max: 0.5
       - "no": 18
         attack_model: "CW L2 (κ=4.0)/Inception v3"
         status: implemented
         attack:
           name: cw_l2
           kappa: 4.0
+          batch_size: 1
+          max_iterations: 1000
+          learning_rate: 0.01
+          binary_search_steps: 9
+          initial_const: 0.001
+          abort_early: true
+          targeted: false
+          clip_min: -0.5
+          clip_max: 0.5
       - "no": 20
         attack_model: "CW L∞/Inception v3"
         status: implemented

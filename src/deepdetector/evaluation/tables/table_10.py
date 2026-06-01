@@ -242,15 +242,51 @@ def _read_rgb_image(path: Path) -> np.ndarray:
 def _class_folder_rows(
     images_dir: Path,
     class_indices: dict[str, Any],
+    class_order: list[str] | None = None,
+    class_quotas: dict[str, Any] | None = None,
 ) -> list[tuple[Path, int]]:
     rows: list[tuple[Path, int]] = []
-    for class_name, label_index in sorted(class_indices.items()):
+    if class_order is None:
+        ordered_classes = sorted(str(class_name) for class_name in class_indices)
+    else:
+        ordered_classes = [str(class_name) for class_name in class_order]
+
+    for class_name in ordered_classes:
+        if class_name not in class_indices:
+            raise ValueError(
+                "Table 10 ImageNet class_order references unknown class: {0}".format(
+                    class_name
+                )
+            )
+        label_index = class_indices[class_name]
         class_dir = images_dir / str(class_name)
         if not class_dir.is_dir():
             raise ValueError("Missing Table 10 ImageNet class directory: {0}".format(class_dir))
-        for path in sorted(class_dir.iterdir()):
-            if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
-                rows.append((path, int(label_index)))
+        class_rows = [
+            (path, int(label_index))
+            for path in sorted(class_dir.iterdir())
+            if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+        ]
+        if class_quotas is not None:
+            if class_name not in class_quotas:
+                raise ValueError(
+                    "Table 10 ImageNet class_quotas must define class: {0}".format(
+                        class_name
+                    )
+                )
+            quota = int(class_quotas[class_name])
+            if quota < 0:
+                raise ValueError("Table 10 ImageNet class quota must be non-negative.")
+            if len(class_rows) < quota:
+                raise ValueError(
+                    "Table 10 ImageNet class {0} has {1} samples; quota requires {2}.".format(
+                        class_name,
+                        len(class_rows),
+                        quota,
+                    )
+                )
+            class_rows = class_rows[:quota]
+        rows.extend(class_rows)
     return rows
 
 
@@ -267,7 +303,25 @@ def _load_table_10_imagenet_class_folders(
     if not isinstance(class_indices, dict) or not class_indices:
         raise ValueError("Table 10 ImageNet dataset must define class_indices.")
 
-    rows = _class_folder_rows(Path(images_dir), class_indices)
+    class_order_config = dataset_config.get("class_order")
+    class_order = (
+        [str(class_name) for class_name in class_order_config]
+        if class_order_config is not None
+        else None
+    )
+    class_quotas_config = dataset_config.get("class_quotas")
+    class_quotas = (
+        {str(class_name): int(quota) for class_name, quota in class_quotas_config.items()}
+        if isinstance(class_quotas_config, dict)
+        else None
+    )
+
+    rows = _class_folder_rows(
+        Path(images_dir),
+        class_indices,
+        class_order=class_order,
+        class_quotas=class_quotas,
+    )
     if bool(dataset_config.get("shuffle", False)):
         rng = np.random.RandomState(int(config.get("evaluation", {}).get("seed", 20170830)))
         order = rng.permutation(len(rows))

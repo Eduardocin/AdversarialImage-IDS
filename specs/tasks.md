@@ -177,6 +177,18 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Update the Inception v3 config to use ImageNet 299x299 inputs and implemented CW rows.
   - [x] Write Table 10 metrics outputs and a manifest for Inception v3 row statuses.
   - [x] Add automated tests for config, wrapper preprocessing, dispatch, manifest, and row metrics.
+- [x] Refactor Inception v3 reproduction from `specs/refactor/refactor_inceptionv3.md`
+  - [x] Disable TensorFlow eager execution inside `InceptionV3TensorFlowWrapper`.
+  - [x] Support the original `Cast:0` Inception graph input mapping.
+  - [x] Configure the Table 10 Inception v3 dataset with deterministic zebra/panda/cab quotas.
+  - [x] Configure CW-L2 rows with explicit reproduction hyperparameters.
+  - [x] Add automated tests for dataset quotas/order, config fidelity, and wrapper scaling.
+- [x] Materialize the Inception v3 reproduction subset from `specs/refactor/refactor_inceptionv3.md`
+  - [x] Add a deterministic ImageNet class-subset materializer.
+  - [x] Add a script that writes `data/inceptionV3` from `data/imagenet/test`.
+  - [x] Point the Table 10 Inception v3 experiment at `data/inceptionV3`.
+  - [x] Add automated tests for generated quotas, overwrite behavior, and config path.
+  - [x] Generate the local `data/inceptionV3` subset.
 - [x] Refactor InceptionV3 TensorFlow wrapper for Ampere from `specs/features/inceptionv3_ampere.md`
   - [x] Add TensorFlow 2.11 Conda environment file under `envs/`.
   - [x] Disable eager execution in `InceptionV3TensorFlowWrapper`.

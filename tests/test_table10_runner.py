@@ -226,11 +226,18 @@ def test_table10_imagenet_groups_use_test_dataset() -> None:
     inception_dataset = config["experiments"]["table_10_inception_v3"]["dataset"]
     assert inception_dataset["name"] == "imagenet"
     assert inception_dataset["split"] == "test"
-    assert inception_dataset["images_dir"] == "data/imagenet/test"
+    assert inception_dataset["images_dir"] == "data/inceptionV3"
     assert inception_dataset["class_indices"] == {
-        "cab": 267,
-        "panda": 169,
         "zebra": 80,
+        "panda": 169,
+        "cab": 267,
+    }
+    assert inception_dataset["shuffle"] is False
+    assert inception_dataset["class_order"] == ["zebra", "panda", "cab"]
+    assert inception_dataset["class_quotas"] == {
+        "zebra": 40,
+        "panda": 40,
+        "cab": 20,
     }
 
 
@@ -243,6 +250,14 @@ def test_table10_inception_v3_config_enables_cw_rows() -> None:
     assert experiment["dataset"]["image_size"] == 299
     assert experiment["dataset"]["image_shape"] == [299, 299, 3]
     assert experiment["dataset"]["value_range"] == [-0.5, 0.5]
+    assert "n_samples" not in experiment["dataset"]
+    assert experiment["dataset"]["shuffle"] is False
+    assert experiment["dataset"]["class_order"] == ["zebra", "panda", "cab"]
+    assert experiment["dataset"]["class_quotas"] == {
+        "zebra": 40,
+        "panda": 40,
+        "cab": 20,
+    }
     assert experiment["model"]["name"] == "inception_v3"
     assert (
         experiment["model"]["graph_path"]
@@ -266,6 +281,20 @@ def test_table10_inception_v3_config_enables_cw_rows() -> None:
         2.0,
         4.0,
     ]
+    for row in experiment["rows"][:5]:
+        assert row["attack"] == {
+            "name": "cw_l2",
+            "kappa": row["attack"]["kappa"],
+            "batch_size": 1,
+            "max_iterations": 1000,
+            "learning_rate": 0.01,
+            "binary_search_steps": 9,
+            "initial_const": 0.001,
+            "abort_early": True,
+            "targeted": False,
+            "clip_min": -0.5,
+            "clip_max": 0.5,
+        }
 
 
 def test_table_10_schema_matches_paper_fields() -> None:
@@ -699,6 +728,34 @@ def test_table10_googlenet_class_folder_loader_uses_all_samples(tmp_path) -> Non
 
     assert images.shape == (3, 2, 2, 3)
     assert labels.tolist() == [1, 1, 2]
+
+
+def test_table10_imagenet_class_folder_loader_respects_quotas_and_order(tmp_path) -> None:
+    """The Inception v3 reproduction subset should match zebra/panda/cab order."""
+    images_dir = tmp_path / "images"
+    class_specs = {
+        "zebra": (80, 40),
+        "panda": (169, 40),
+        "cab": (267, 20),
+    }
+    for class_name, (_, count) in class_specs.items():
+        class_dir = images_dir / class_name
+        class_dir.mkdir(parents=True)
+        for index in range(count + 2):
+            (class_dir / "{0:03d}.JPEG".format(index)).write_bytes(b"placeholder")
+
+    rows = table_10_module._class_folder_rows(
+        images_dir,
+        {"cab": 267, "panda": 169, "zebra": 80},
+        class_order=["zebra", "panda", "cab"],
+        class_quotas={"zebra": 40, "panda": 40, "cab": 20},
+    )
+    labels = [label for _, label in rows]
+
+    assert len(rows) == 100
+    assert labels[:40] == [80] * 40
+    assert labels[40:80] == [169] * 40
+    assert labels[80:] == [267] * 20
 
 
 def test_table10_group_writes_computed_deepfool_metrics(monkeypatch, tmp_path) -> None:

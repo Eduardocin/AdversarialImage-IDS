@@ -197,3 +197,81 @@ def test_inception_v3_preprocess_uses_299_centered_range() -> None:
     assert preprocessed.shape == (2, 299, 299, 3)
     assert float(preprocessed[0].min()) == -0.5
     assert float(preprocessed[1].max()) == 0.5
+
+
+def test_inception_v3_wrapper_disables_eager_before_graph_ops(monkeypatch, tmp_path) -> None:
+    """The TF2 wrapper should switch to graph mode before creating placeholders."""
+    calls = []
+
+    class FakeGraphDef:
+        def ParseFromString(self, payload):
+            calls.append(("parse", payload))
+
+    class FakeGraph:
+        def as_default(self):
+            return self
+
+        def __enter__(self):
+            calls.append(("graph_enter",))
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            calls.append(("graph_exit",))
+            return False
+
+    def fake_disable_eager_execution():
+        calls.append(("disable_eager",))
+
+    def fake_placeholder(dtype, shape, name):
+        calls.append(("placeholder", dtype, shape, name))
+        return np.zeros((1,), dtype=np.float32)
+
+    def fake_import_graph_def(graph_def, name, input_map, return_elements):
+        calls.append(("import", name, sorted(input_map), return_elements))
+        return ["logits_tensor"]
+
+    class FakeSession:
+        def __init__(self, graph):
+            calls.append(("session", graph))
+
+    fake_tf = SimpleNamespace(
+        float32="float32",
+        Graph=FakeGraph,
+        compat=SimpleNamespace(
+            v1=SimpleNamespace(
+                disable_eager_execution=fake_disable_eager_execution,
+                GraphDef=FakeGraphDef,
+                placeholder=fake_placeholder,
+                graph_util=SimpleNamespace(import_graph_def=fake_import_graph_def),
+                Session=FakeSession,
+            )
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "tensorflow", fake_tf)
+    graph_path = tmp_path / "graph.pb"
+    graph_path.write_bytes(b"fake graph")
+
+    wrapper = InceptionV3TensorFlowWrapper(graph_path=str(graph_path), input_map_name="Cast:0")
+
+    call_names = [call[0] for call in calls]
+    assert call_names.index("disable_eager") < call_names.index("placeholder")
+    assert call_names.index("disable_eager") < call_names.index("import")
+    assert wrapper.input_map_name == "Cast:0"
+
+
+def test_inception_v3_scaled_input_supports_original_cast_mapping() -> None:
+    """`Cast:0` should use the same 0..255 scaling as the original script."""
+    wrapper = object.__new__(InceptionV3TensorFlowWrapper)
+    tensor = np.asarray([-0.5, 0.0, 0.5], dtype=np.float32)
+
+    wrapper.input_map_name = "Cast:0"
+    np.testing.assert_allclose(
+        InceptionV3TensorFlowWrapper._scaled_input(wrapper, tensor),
+        np.asarray([0.0, 127.5, 255.0], dtype=np.float32),
+    )
+
+    wrapper.input_map_name = "ResizeBilinear:0"
+    np.testing.assert_allclose(
+        InceptionV3TensorFlowWrapper._scaled_input(wrapper, tensor),
+        np.asarray([0.0, 127.5, 255.0], dtype=np.float32),
+    )

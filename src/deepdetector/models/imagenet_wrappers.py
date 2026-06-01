@@ -377,6 +377,7 @@ class InceptionV3TensorFlowWrapper(ImageNetModelWrapper):
             raise ImportError("TensorFlow is required for InceptionV3TensorFlowWrapper.") from exc
 
         self.tf = tf
+        self.tf.compat.v1.disable_eager_execution()
         self.image_size = 299
         self.num_labels = 1008
         self.batch_size = int(batch_size)
@@ -406,7 +407,7 @@ class InceptionV3TensorFlowWrapper(ImageNetModelWrapper):
 
     def _scaled_input(self, tensor: object) -> object:
         """Map Table 10 Inception input [-0.5, 0.5] to the graph's 0-255 input."""
-        if self.input_map_name == "ResizeBilinear:0":
+        if self.input_map_name in {"Cast:0", "ResizeBilinear:0"}:
             return (tensor + 0.5) * 255.0
         if self.input_map_name == "Sub:0":
             return (tensor + 0.5) * 255.0 - 128.0
