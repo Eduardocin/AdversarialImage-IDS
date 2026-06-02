@@ -26,6 +26,7 @@ DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "data" / "inceptionV3"
 CLASS_ORDER = ("zebra", "panda", "cab")
 CLASS_INDICES = {"zebra": 80, "panda": 169, "cab": 267}
 CLASS_QUOTAS = {"zebra": 40, "panda": 40, "cab": 20}
+DEFAULT_CANDIDATE_BUFFER = 25
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,18 +39,34 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Regenerate managed class folders if the subset already exists.",
     )
+    parser.add_argument(
+        "--candidate-buffer",
+        type=int,
+        default=DEFAULT_CANDIDATE_BUFFER,
+        help=(
+            "Extra sorted images to copy per class so the evaluator can replace "
+            "clean misclassifications while preserving Table 10 quotas."
+        ),
+    )
     return parser
 
 
 def main() -> int:
     """Create the deterministic Inception v3 subset."""
     args = build_parser().parse_args()
+    if int(args.candidate_buffer) < 0:
+        raise ValueError("--candidate-buffer must be non-negative.")
+    candidate_quotas = {
+        class_name: CLASS_QUOTAS[class_name] + int(args.candidate_buffer)
+        for class_name in CLASS_ORDER
+    }
     subset = materialize_class_subset(
         source_dir=Path(args.source_dir),
         output_dir=Path(args.output_dir),
         class_order=CLASS_ORDER,
         class_indices=CLASS_INDICES,
         class_quotas=CLASS_QUOTAS,
+        candidate_quotas=candidate_quotas,
         overwrite=bool(args.force),
     )
     print("Materialized Inception v3 subset: {0}".format(subset.output_dir))

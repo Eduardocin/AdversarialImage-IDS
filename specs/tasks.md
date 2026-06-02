@@ -204,3 +204,9 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Preserve row 8 with `DeepFool/CaffeNet` and blocked status until implemented.
   - [x] Write `metrics.csv`, `metrics.json`, and `manifest.json` for the CaffeNet group.
   - [x] Add automated tests for config, wrapper dispatch, and blocked manifest semantics.
+- [x] Fix Table 10 Inception v3 CW-L2 evaluation from `specs/refactor/refactor_table10_inception.md`
+  - [x] Select clean-correct Inception v3 samples until configured class quotas are filled.
+  - [x] Materialize an Inception candidate pool large enough to replace clean errors.
+  - [x] Keep Table 10 FP based on clean filtered predictions only.
+  - [x] Preserve `[-0.5, 0.5]` filter range for Inception inputs.
+  - [x] Add focused regression tests for metrics, clean sample selection, formulas, and filter range.

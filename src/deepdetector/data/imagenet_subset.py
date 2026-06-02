@@ -45,6 +45,7 @@ def select_class_subset(
     class_order: Sequence[str],
     class_indices: Mapping[str, int],
     class_quotas: Mapping[str, int],
+    candidate_quotas: Mapping[str, int] | None = None,
 ) -> tuple[ImageNetSubsetRow, ...]:
     """Select deterministic per-class ImageNet rows from class folders."""
     rows: list[ImageNetSubsetRow] = []
@@ -57,18 +58,29 @@ def select_class_subset(
         quota = int(class_quotas[class_name])
         if quota < 0:
             raise ValueError("Class quota must be non-negative for {0}.".format(class_name))
+        candidate_quota = (
+            int(candidate_quotas[class_name])
+            if candidate_quotas is not None and class_name in candidate_quotas
+            else quota
+        )
+        if candidate_quota < quota:
+            raise ValueError(
+                "Candidate quota for {0} must be at least the evaluation quota.".format(
+                    class_name
+                )
+            )
 
         class_dir = source_dir / class_name
         if not class_dir.is_dir():
             raise ValueError("Missing ImageNet class directory: {0}".format(class_dir))
 
         files = _image_files(class_dir)
-        if len(files) < quota:
+        if len(files) < candidate_quota:
             raise ValueError(
-                "Class {0} has {1} images; quota requires {2}.".format(
+                "Class {0} has {1} images; candidate quota requires {2}.".format(
                     class_name,
                     len(files),
-                    quota,
+                    candidate_quota,
                 )
             )
 
@@ -78,7 +90,7 @@ def select_class_subset(
                 class_name=class_name,
                 label_index=int(class_indices[class_name]),
             )
-            for path in files[:quota]
+            for path in files[:candidate_quota]
         )
     return tuple(rows)
 
@@ -128,12 +140,21 @@ def _write_manifest(
     rows: Sequence[ImageNetSubsetRow],
     class_order: Sequence[str],
     class_quotas: Mapping[str, int],
+    candidate_quotas: Mapping[str, int] | None,
 ) -> None:
     manifest = {
         "source_dir": str(source_dir),
         "output_dir": str(output_dir),
         "class_order": list(class_order),
         "class_quotas": {class_name: int(class_quotas[class_name]) for class_name in class_order},
+        "candidate_quotas": (
+            {
+                class_name: int(candidate_quotas.get(class_name, class_quotas[class_name]))
+                for class_name in class_order
+            }
+            if candidate_quotas is not None
+            else {class_name: int(class_quotas[class_name]) for class_name in class_order}
+        ),
         "total": len(rows),
         "rows": [
             {
@@ -157,6 +178,7 @@ def materialize_class_subset(
     class_order: Sequence[str],
     class_indices: Mapping[str, int],
     class_quotas: Mapping[str, int],
+    candidate_quotas: Mapping[str, int] | None = None,
     overwrite: bool = False,
 ) -> MaterializedImageNetSubset:
     """Copy a deterministic class-folder subset to a standalone directory."""
@@ -172,6 +194,7 @@ def materialize_class_subset(
         class_order=class_order,
         class_indices=class_indices,
         class_quotas=class_quotas,
+        candidate_quotas=candidate_quotas,
     )
     _prepare_output_dir(output_path, class_order, overwrite=overwrite)
 
@@ -188,6 +211,7 @@ def materialize_class_subset(
         rows=rows,
         class_order=class_order,
         class_quotas=class_quotas,
+        candidate_quotas=candidate_quotas,
     )
     return MaterializedImageNetSubset(
         source_dir=source_path,

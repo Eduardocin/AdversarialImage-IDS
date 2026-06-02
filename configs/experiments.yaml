@@ -593,6 +593,7 @@ experiments:
       image_shape: [299, 299, 3]
       value_range: [-0.5, 0.5]
       shuffle: false
+      require_clean_correct: true
       class_order: [zebra, panda, cab]
       class_indices:
         zebra: 80
