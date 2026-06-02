@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
@@ -11,12 +11,49 @@ from deepdetector.filters.quantization import scalar_quantization
 from deepdetector.filters.spatial_smoothing import spatial_smoothing_filter
 
 
-def _is_normalized(image: np.ndarray) -> bool:
-    """Return whether the image appears to use the normalized [0, 1] scale."""
+UNIT_SCALE = "unit"
+CENTERED_SCALE = "centered"
+UINT8_SCALE = "uint8"
+
+
+def _image_scale(image: np.ndarray) -> str:
+    """Return the image scale used by the final detector."""
     image_array = np.asarray(image, dtype=np.float32)
     if image_array.size == 0:
-        return True
-    return bool(float(np.nanmin(image_array)) >= 0.0 and float(np.nanmax(image_array)) <= 1.0)
+        return UNIT_SCALE
+
+    min_value = float(np.nanmin(image_array))
+    max_value = float(np.nanmax(image_array))
+    if min_value < 0.0 and min_value >= -0.5 and max_value <= 0.5:
+        return CENTERED_SCALE
+    if min_value >= 0.0 and max_value <= 1.0:
+        return UNIT_SCALE
+    return UINT8_SCALE
+
+
+def _to_unit_scale(image: np.ndarray, scale: str) -> np.ndarray:
+    """Convert supported image scales to [0, 1]."""
+    image_array = np.asarray(image, dtype=np.float32)
+    if scale == CENTERED_SCALE:
+        return np.clip(image_array + 0.5, 0.0, 1.0).astype(np.float32)
+    if scale == UINT8_SCALE:
+        return (np.clip(image_array, 0.0, 255.0) / 255.0).astype(np.float32)
+    return np.clip(image_array, 0.0, 1.0).astype(np.float32)
+
+
+def _to_255_scale(image: np.ndarray, scale: str) -> np.ndarray:
+    """Convert supported image scales to [0, 255]."""
+    return (_to_unit_scale(image, scale) * 255.0).astype(np.float32)
+
+
+def _restore_scale(image_255: np.ndarray, scale: str) -> np.ndarray:
+    """Restore [0, 255] data to the original image scale."""
+    restored_255 = np.asarray(image_255, dtype=np.float32)
+    if scale == CENTERED_SCALE:
+        return (np.clip(restored_255, 0.0, 255.0) / 255.0 - 0.5).astype(np.float32)
+    if scale == UINT8_SCALE:
+        return np.clip(restored_255, 0.0, 255.0).astype(np.float32)
+    return (np.clip(restored_255, 0.0, 255.0) / 255.0).astype(np.float32)
 
 
 def _layout_for_single_image(image: np.ndarray) -> str:
@@ -35,15 +72,16 @@ def _layout_for_single_image(image: np.ndarray) -> str:
 def _entropy_for_image(image: np.ndarray) -> float:
     """Compute entropy in the image's native scale."""
     image_array = np.asarray(image, dtype=np.float32)
-    if _is_normalized(image_array):
-        return one_d_entropy(image_array)
+    scale = _image_scale(image_array)
+    if scale in {UNIT_SCALE, CENTERED_SCALE}:
+        return one_d_entropy(_to_unit_scale(image_array, scale))
 
     layout = _layout_for_single_image(image_array)
     if layout == "chw":
-        return image_entropy_255_chw(image_array)
+        return image_entropy_255_chw(_to_255_scale(image_array, scale))
     if layout == "hwc":
-        return image_entropy_255_chw(np.transpose(image_array, (2, 0, 1)))
-    return one_d_entropy(np.clip(image_array, 0.0, 255.0) / 255.0)
+        return image_entropy_255_chw(np.transpose(_to_255_scale(image_array, scale), (2, 0, 1)))
+    return one_d_entropy(_to_unit_scale(image_array, scale))
 
 
 def _step_for_entropy(entropy: float) -> int:
@@ -55,23 +93,24 @@ def _step_for_entropy(entropy: float) -> int:
     return 43
 
 
-def _quantize_native_scale(image: np.ndarray, step: int) -> np.ndarray:
-    """Apply scalar quantization while preserving normalized or Caffe scale."""
+def _quantize_native_scale(image: np.ndarray, step: int, scale: Optional[str] = None) -> np.ndarray:
+    """Apply scalar quantization while preserving the input image scale."""
     image_array = np.asarray(image, dtype=np.float32)
-    if _is_normalized(image_array):
+    image_scale = scale or _image_scale(image_array)
+    if image_scale == UNIT_SCALE:
         return scalar_quantization(image_array, interval=int(step), left=True).reshape(image_array.shape)
 
-    quantized = np.clip(image_array, 0.0, 255.0)
+    quantized = _to_255_scale(image_array, image_scale)
     quantized //= int(step)
     quantized *= int(step)
-    return np.clip(quantized, 0.0, 255.0).astype(np.float32).reshape(image_array.shape)
+    return _restore_scale(quantized, image_scale).reshape(image_array.shape)
 
 
-def _to_chw_255(image: np.ndarray) -> Tuple[np.ndarray, str, bool]:
+def _to_chw_255(image: np.ndarray, scale: Optional[str] = None) -> Tuple[np.ndarray, str, str]:
     """Convert one image to CHW 0-255 data for spatial smoothing."""
     image_array = np.asarray(image, dtype=np.float32)
     layout = _layout_for_single_image(image_array)
-    normalized = _is_normalized(image_array)
+    image_scale = scale or _image_scale(image_array)
 
     if layout == "hw":
         chw = image_array.reshape((1,) + image_array.shape)
@@ -80,16 +119,12 @@ def _to_chw_255(image: np.ndarray) -> Tuple[np.ndarray, str, bool]:
     else:
         chw = image_array
 
-    if normalized:
-        chw = chw * 255.0
-    return np.clip(chw, 0.0, 255.0).astype(np.float32), layout, normalized
+    return _to_255_scale(chw, image_scale), layout, image_scale
 
 
-def _restore_from_chw_255(chw_255: np.ndarray, layout: str, normalized: bool) -> np.ndarray:
+def _restore_from_chw_255(chw_255: np.ndarray, layout: str, scale: str) -> np.ndarray:
     """Restore smoothed CHW 0-255 data to the original layout and scale."""
-    restored = np.asarray(chw_255, dtype=np.float32)
-    if normalized:
-        restored = restored / 255.0
+    restored = _restore_scale(chw_255, scale)
 
     if layout == "hw":
         restored = restored[0]
@@ -98,28 +133,28 @@ def _restore_from_chw_255(chw_255: np.ndarray, layout: str, normalized: bool) ->
     elif layout != "chw":
         raise ValueError("Unknown image layout: {0}".format(layout))
 
-    clip_max = 1.0 if normalized else 255.0
-    return np.clip(restored, 0.0, clip_max).astype(np.float32)
+    return restored.astype(np.float32)
 
 
-def _cross_smoothing_7x7_native_scale(image: np.ndarray) -> np.ndarray:
+def _cross_smoothing_7x7_native_scale(image: np.ndarray, scale: Optional[str] = None) -> np.ndarray:
     """Apply 7x7 cross smoothing while preserving layout and scale."""
-    chw_255, layout, normalized = _to_chw_255(image)
+    chw_255, layout, image_scale = _to_chw_255(image, scale=scale)
     smoothed = spatial_smoothing_filter(chw_255, mask_type="cross", size=7)
-    return _restore_from_chw_255(smoothed, layout=layout, normalized=normalized).reshape(image.shape)
+    return _restore_from_chw_255(smoothed, layout=layout, scale=image_scale).reshape(image.shape)
 
 
 def _article_final_single(image: np.ndarray) -> np.ndarray:
     """Apply the final detector filter to one image."""
     image_array = np.asarray(image, dtype=np.float32)
+    scale = _image_scale(image_array)
     entropy = _entropy_for_image(image_array)
     step = _step_for_entropy(entropy)
-    quantized = _quantize_native_scale(image_array, step=step)
+    quantized = _quantize_native_scale(image_array, step=step, scale=scale)
 
     if entropy < 5.0:
         return quantized.astype(np.float32).reshape(image_array.shape)
 
-    smoothed = _cross_smoothing_7x7_native_scale(quantized)
+    smoothed = _cross_smoothing_7x7_native_scale(quantized, scale=scale)
     use_quantized = np.abs(quantized - image_array) <= np.abs(smoothed - image_array)
     return np.where(use_quantized, quantized, smoothed).astype(np.float32).reshape(image_array.shape)
 

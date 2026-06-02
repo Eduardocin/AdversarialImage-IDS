@@ -60,6 +60,13 @@ def test_article_final_filter_is_registered_and_preserves_scales() -> None:
     assert float(normalized_output.min()) >= 0.0
     assert float(normalized_output.max()) <= 1.0
 
+    inception = np.linspace(-0.5, 0.5, 3 * 8 * 8, dtype=np.float32).reshape(8, 8, 3)
+    inception_output = article_final_detection_filter(inception)
+    assert inception_output.shape == inception.shape
+    assert inception_output.dtype == np.float32
+    assert float(inception_output.min()) >= -0.5
+    assert float(inception_output.max()) <= 0.5
+
     caffe = np.linspace(0.0, 255.0, 3 * 8 * 8, dtype=np.float32).reshape(3, 8, 8)
     caffe_output = article_final_detection_filter(caffe)
     assert caffe_output.shape == caffe.shape

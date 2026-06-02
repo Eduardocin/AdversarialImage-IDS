@@ -91,6 +91,10 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Write `metrics.csv` and `metrics.json`.
   - [x] Add automated tests for config, filter behavior, registry, aggregation, and CSV shape.
   - [x] Suppress the known legacy CleverHans MNIST deprecation warning without changing loader behavior.
+- [x] Preserve Inception v3 centered scale in the final proposed detector from `specs/features/table_9.md`
+  - [x] Update `article_final_detection_filter` to preserve `[-0.5, 0.5]` inputs.
+  - [x] Add regression coverage for Inception centered-scale filtering.
+  - [x] Run focused pytest validation.
 - [x] Implement Table 6 ImageNet adaptive quantization from `specs/features/table_6_imagenet.md` (superseded by combined Table 6)
   - [x] Fold the ImageNet component into the official `table_6` experiment.
   - [x] Remove `configs/article_reproduction/imagenet_table_6.yaml`.

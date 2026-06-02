@@ -235,14 +235,20 @@ O `cross_smoothing_7x7` deve usar máscara cross de raio `3`.
 
 ## 9. Atenção à escala das imagens
 
-A implementação deve suportar dois espaços de imagem:
+A implementação deve suportar três espaços de imagem:
 
 1. **MNIST normalizado**
 
    * formato: `HWC` ou `NHWC`
    * escala: `[0.0, 1.0]`
 
-2. **ImageNet Caffe**
+2. **ImageNet Inception v3**
+
+   * formato: `HWC` ou `NHWC`
+   * escala: `[-0.5, 0.5]`
+   * o filtro deve converter internamente para `[0.0, 255.0]` quando calcular entropia, quantização e suavização, e restaurar para `[-0.5, 0.5]` antes de retornar.
+
+3. **ImageNet Caffe**
 
    * formato: `CHW`
    * canais: `BGR`
@@ -251,11 +257,12 @@ A implementação deve suportar dois espaços de imagem:
 O filtro final deve preservar a escala de entrada:
 
 * se a imagem entra em `[0.0, 1.0]`, deve sair em `[0.0, 1.0]`;
+* se a imagem entra em `[-0.5, 0.5]`, deve sair em `[-0.5, 0.5]`;
 * se a imagem entra em `[0.0, 255.0]`, deve sair em `[0.0, 255.0]`.
 
-Para ImageNet, a quantização deve acontecer no espaço Caffe `CHW/BGR/0..255`.
+Para ImageNet, a quantização deve acontecer em espaço de pixel `0..255`, preservando o layout original no retorno.
 
-Não aplicar `step=128`, `step=64` ou `step=43` diretamente em imagem normalizada `[0,1]` sem conversão apropriada.
+Não aplicar `step=128`, `step=64` ou `step=43` diretamente em imagem normalizada `[0,1]` ou centralizada `[-0.5,0.5]` sem conversão apropriada.
 
 ---
 
@@ -528,6 +535,7 @@ Testes automatizados opcionais:
 
 ```text
 test_article_final_filter_is_registered
+test_article_final_filter_preserves_inception_centered_scale
 test_table_9_aggregation_sums_counts_before_metrics
 test_table_9_csv_schema
 ```
