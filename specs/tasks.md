@@ -210,3 +210,10 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Keep Table 10 FP based on clean filtered predictions only.
   - [x] Preserve `[-0.5, 0.5]` filter range for Inception inputs.
   - [x] Add focused regression tests for metrics, clean sample selection, formulas, and filter range.
+- [x] Implement defense-aware adaptive CW-L2 from `specs/features/defense_aware.md`
+  - [x] Add the official `defense_aware` experiment config.
+  - [x] Add the final adaptive detection filter for MNIST M2 `[0.0, 1.0]`.
+  - [x] Add adaptive CW-L2 attack dispatch that accepts the shared transform `T`.
+  - [x] Add the defense-aware evaluation and runner integration.
+  - [x] Write only `metrics.csv` and `metrics.json`.
+  - [x] Add automated tests for config, attack criteria, metrics, and output artifacts.
