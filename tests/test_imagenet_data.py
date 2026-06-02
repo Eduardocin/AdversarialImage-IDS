@@ -115,6 +115,30 @@ def test_materialize_class_subset_copies_files_and_manifest(tmp_path) -> None:
     assert (output_dir / "manifest.json").is_file()
 
 
+def test_materialize_class_subset_can_copy_candidate_pool(tmp_path) -> None:
+    """The Inception subset can include spare candidates for clean-correct selection."""
+    source_dir = tmp_path / "imagenet" / "test"
+    output_dir = tmp_path / "inceptionV3"
+    _write_class_files(source_dir, "zebra", 4)
+    _write_class_files(source_dir, "panda", 4)
+
+    subset = materialize_class_subset(
+        source_dir=source_dir,
+        output_dir=output_dir,
+        class_order=("zebra", "panda"),
+        class_indices={"zebra": 80, "panda": 169},
+        class_quotas={"zebra": 2, "panda": 1},
+        candidate_quotas={"zebra": 3, "panda": 2},
+    )
+
+    assert subset.class_counts == {"zebra": 3, "panda": 2}
+    assert sorted(path.name for path in (output_dir / "zebra").iterdir()) == [
+        "zebra_000.JPEG",
+        "zebra_001.JPEG",
+        "zebra_002.JPEG",
+    ]
+
+
 def test_materialize_class_subset_requires_force_for_existing_subset(tmp_path) -> None:
     """Existing materialized subsets should not be overwritten silently."""
     source_dir = tmp_path / "imagenet" / "test"

@@ -239,17 +239,22 @@ def _read_rgb_image(path: Path) -> np.ndarray:
         return (np.asarray(rgb_image, dtype=np.float32) / 255.0).astype(np.float32)
 
 
-def _class_folder_rows(
+def _ordered_class_names(
+    class_indices: dict[str, Any],
+    class_order: list[str] | None = None,
+) -> list[str]:
+    if class_order is None:
+        return sorted(str(class_name) for class_name in class_indices)
+    return [str(class_name) for class_name in class_order]
+
+
+def _class_folder_rows_by_class(
     images_dir: Path,
     class_indices: dict[str, Any],
     class_order: list[str] | None = None,
-    class_quotas: dict[str, Any] | None = None,
-) -> list[tuple[Path, int]]:
-    rows: list[tuple[Path, int]] = []
-    if class_order is None:
-        ordered_classes = sorted(str(class_name) for class_name in class_indices)
-    else:
-        ordered_classes = [str(class_name) for class_name in class_order]
+) -> dict[str, list[tuple[Path, int]]]:
+    rows_by_class: dict[str, list[tuple[Path, int]]] = {}
+    ordered_classes = _ordered_class_names(class_indices, class_order=class_order)
 
     for class_name in ordered_classes:
         if class_name not in class_indices:
@@ -262,11 +267,30 @@ def _class_folder_rows(
         class_dir = images_dir / str(class_name)
         if not class_dir.is_dir():
             raise ValueError("Missing Table 10 ImageNet class directory: {0}".format(class_dir))
-        class_rows = [
+        rows_by_class[class_name] = [
             (path, int(label_index))
             for path in sorted(class_dir.iterdir())
             if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
         ]
+    return rows_by_class
+
+
+def _class_folder_rows(
+    images_dir: Path,
+    class_indices: dict[str, Any],
+    class_order: list[str] | None = None,
+    class_quotas: dict[str, Any] | None = None,
+) -> list[tuple[Path, int]]:
+    rows: list[tuple[Path, int]] = []
+    rows_by_class = _class_folder_rows_by_class(
+        images_dir,
+        class_indices,
+        class_order=class_order,
+    )
+    ordered_classes = _ordered_class_names(class_indices, class_order=class_order)
+
+    for class_name in ordered_classes:
+        class_rows = rows_by_class[class_name]
         if class_quotas is not None:
             if class_name not in class_quotas:
                 raise ValueError(
@@ -288,6 +312,118 @@ def _class_folder_rows(
             class_rows = class_rows[:quota]
         rows.extend(class_rows)
     return rows
+
+
+def _requires_clean_correct_selection(config: dict[str, Any]) -> bool:
+    dataset_config = config.get("dataset", {})
+    evaluation_config = config.get("evaluation", {})
+    if "require_clean_correct" in dataset_config:
+        return bool(dataset_config["require_clean_correct"])
+    if "require_clean_correct" in evaluation_config:
+        return bool(evaluation_config["require_clean_correct"])
+    return (
+        str(config.get("model_group", "")).lower() == "inception_v3"
+        and isinstance(dataset_config.get("class_quotas"), dict)
+    )
+
+
+def _append_processed_image(
+    *,
+    images: list[np.ndarray],
+    labels: list[int],
+    processed: np.ndarray,
+    label_index: int,
+    expected_shape: tuple[int, ...] | None,
+) -> tuple[int, ...]:
+    if expected_shape is None:
+        expected_shape = processed.shape
+    elif processed.shape != expected_shape:
+        raise ValueError(
+            "Table 10 ImageNet preprocessing returned inconsistent shapes: {0} and {1}".format(
+                expected_shape,
+                processed.shape,
+            )
+        )
+    images.append(processed)
+    labels.append(int(label_index))
+    return expected_shape
+
+
+def _load_clean_correct_table_10_imagenet_class_folders(
+    *,
+    config: dict[str, Any],
+    model: Any,
+    n_samples: int | None,
+    image_size: int,
+    images_dir: Path,
+    class_indices: dict[str, Any],
+    class_order: list[str] | None,
+    class_quotas: dict[str, Any],
+) -> tuple[np.ndarray, np.ndarray]:
+    rows_by_class = _class_folder_rows_by_class(
+        images_dir,
+        class_indices,
+        class_order=class_order,
+    )
+    ordered_classes = _ordered_class_names(class_indices, class_order=class_order)
+    preprocess = _preprocess_table_10_image(model, image_size=image_size)
+    images: list[np.ndarray] = []
+    labels: list[int] = []
+    expected_shape: tuple[int, ...] | None = None
+    clean_errors = 0
+
+    for class_name in ordered_classes:
+        if class_name not in class_quotas:
+            raise ValueError(
+                "Table 10 ImageNet class_quotas must define class: {0}".format(
+                    class_name
+                )
+            )
+        quota = int(class_quotas[class_name])
+        if quota < 0:
+            raise ValueError("Table 10 ImageNet class quota must be non-negative.")
+
+        selected_for_class = 0
+        for path, label_index in rows_by_class[class_name]:
+            processed = np.asarray(preprocess(_read_rgb_image(path)), dtype=np.float32)
+            clean_pred = _predict_one(model, processed)
+            if clean_pred != int(label_index):
+                clean_errors += 1
+                continue
+
+            expected_shape = _append_processed_image(
+                images=images,
+                labels=labels,
+                processed=processed,
+                label_index=int(label_index),
+                expected_shape=expected_shape,
+            )
+            selected_for_class += 1
+            if selected_for_class == quota:
+                break
+
+        if selected_for_class < quota:
+            raise ValueError(
+                "Table 10 ImageNet class {0} has {1} clean-correct samples; quota requires {2}.".format(
+                    class_name,
+                    selected_for_class,
+                    quota,
+                )
+            )
+
+    if n_samples is not None:
+        images = images[:n_samples]
+        labels = labels[:n_samples]
+
+    logger.info(
+        "Selected %d clean-correct ImageNet samples for Table 10 %s; discarded %d clean errors.",
+        len(images),
+        config.get("model_group"),
+        clean_errors,
+    )
+    if not images:
+        return np.empty((0,), dtype=np.float32), np.empty((0,), dtype=np.int32)
+    return np.asarray(images, dtype=np.float32), np.asarray(labels, dtype=np.int32)
 
 
 def _load_table_10_imagenet_class_folders(
@@ -315,6 +451,21 @@ def _load_table_10_imagenet_class_folders(
         if isinstance(class_quotas_config, dict)
         else None
     )
+    if _requires_clean_correct_selection(config):
+        if class_quotas is None:
+            raise ValueError(
+                "Table 10 ImageNet clean-correct selection requires class_quotas."
+            )
+        return _load_clean_correct_table_10_imagenet_class_folders(
+            config=config,
+            model=model,
+            n_samples=n_samples,
+            image_size=image_size,
+            images_dir=Path(images_dir),
+            class_indices=class_indices,
+            class_order=class_order,
+            class_quotas=class_quotas,
+        )
 
     rows = _class_folder_rows(
         Path(images_dir),
@@ -335,17 +486,13 @@ def _load_table_10_imagenet_class_folders(
     expected_shape = None
     for path, label_index in rows:
         processed = np.asarray(preprocess(_read_rgb_image(path)), dtype=np.float32)
-        if expected_shape is None:
-            expected_shape = processed.shape
-        elif processed.shape != expected_shape:
-            raise ValueError(
-                "Table 10 GoogLeNet preprocessing returned inconsistent shapes: {0} and {1}".format(
-                    expected_shape,
-                    processed.shape,
-                )
-            )
-        images.append(processed)
-        labels.append(int(label_index))
+        expected_shape = _append_processed_image(
+            images=images,
+            labels=labels,
+            processed=processed,
+            label_index=int(label_index),
+            expected_shape=expected_shape,
+        )
 
     if not images:
         return np.empty((0,), dtype=np.float32), np.empty((0,), dtype=np.int32)

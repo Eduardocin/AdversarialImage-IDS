@@ -21,6 +21,7 @@ from deepdetector.evaluation.tables.table_10 import (  # noqa: E402
 )
 from deepdetector.evaluation.tables import table_10 as table_10_module  # noqa: E402
 from deepdetector.experiments import runner as experiment_runner  # noqa: E402
+from deepdetector.filters.article_final import article_final_detection_filter  # noqa: E402
 from scripts import run_experiment as run_experiment_script  # noqa: E402
 
 
@@ -256,6 +257,7 @@ def test_table10_inception_v3_config_enables_cw_rows() -> None:
     assert experiment["dataset"]["value_range"] == [-0.5, 0.5]
     assert "n_samples" not in experiment["dataset"]
     assert experiment["dataset"]["shuffle"] is False
+    assert experiment["dataset"]["require_clean_correct"] is True
     assert experiment["dataset"]["class_order"] == ["zebra", "panda", "cab"]
     assert experiment["dataset"]["class_quotas"] == {
         "zebra": 40,
@@ -685,6 +687,127 @@ def test_table10_inception_v3_row_computes_cw_metrics(monkeypatch) -> None:
     assert result["metrics"]["tp"] == 1
     assert result["metrics"]["fn"] == 0
     assert result["metrics"]["fp"] == 0
+
+
+def test_table10_metrics_use_clean_predictions_for_false_positive() -> None:
+    """Detected adversarials must not become FP unless the clean prediction changes."""
+    metrics = table_10_module._table_10_metrics_from_records(
+        [
+            {
+                "detected": True,
+                "corrected": True,
+                "false_positive": False,
+            },
+            {
+                "detected": True,
+                "corrected": False,
+                "false_positive": False,
+            },
+        ]
+    )
+
+    assert metrics["tp"] == 2
+    assert metrics["fn"] == 0
+    assert metrics["fp"] == 0
+    assert metrics["precision"] == 100.0
+
+
+def test_table10_metrics_match_line_15_formulas() -> None:
+    """Recall, precision, F1, and RTP% should match the Table 10 formulas."""
+    records = [
+        {"detected": True, "corrected": True, "false_positive": False}
+        for _ in range(98)
+    ]
+    records.extend(
+        {"detected": True, "corrected": False, "false_positive": True}
+        for _ in range(2)
+    )
+
+    metrics = table_10_module._table_10_metrics_from_records(records)
+
+    assert metrics["num_failures"] == 0
+    assert metrics["tp"] == 100
+    assert metrics["fn"] == 0
+    assert metrics["fp"] == 2
+    assert metrics["rtp"] == 98
+    assert metrics["recall"] == pytest.approx(100.0)
+    assert metrics["precision"] == pytest.approx(98.0392157)
+    assert metrics["f1"] == pytest.approx(99.0099010)
+    assert metrics["rtp_percent"] == pytest.approx(98.0)
+
+
+def test_table10_inception_loader_fills_quotas_with_clean_correct_samples(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Clean errors should be skipped without shrinking the final Inception sample."""
+    Image = pytest.importorskip("PIL.Image")
+    images_dir = tmp_path / "images"
+    class_pixels = {
+        "zebra": [9, 1, 1],
+        "panda": [2],
+        "cab": [3],
+    }
+    for class_name, pixels in class_pixels.items():
+        class_dir = images_dir / class_name
+        class_dir.mkdir(parents=True)
+        for index, pixel in enumerate(pixels):
+            image = table_10_module.np.full(
+                (1, 1, 3),
+                int(pixel),
+                dtype=table_10_module.np.uint8,
+            )
+            Image.fromarray(image, mode="RGB").save(
+                str(class_dir / "{0:03d}.png".format(index))
+            )
+
+    def fake_preprocess(model, image_size):
+        def preprocess(image):
+            pixel = int(round(float(image[0, 0, 0]) * 255.0))
+            return table_10_module.np.asarray([[[pixel]]], dtype=table_10_module.np.float32)
+
+        return preprocess
+
+    monkeypatch.setattr(table_10_module, "_preprocess_table_10_image", fake_preprocess)
+    monkeypatch.setattr(
+        table_10_module,
+        "_predict_one",
+        lambda model, image: int(round(float(image.reshape(-1)[0]))),
+    )
+
+    images, labels = table_10_module._load_table_10_imagenet_images(
+        {
+            "model_group": "inception_v3",
+            "dataset": {
+                "name": "imagenet",
+                "images_dir": str(images_dir),
+                "image_size": 1,
+                "shuffle": False,
+                "require_clean_correct": True,
+                "class_order": ["zebra", "panda", "cab"],
+                "class_indices": {"zebra": 1, "panda": 2, "cab": 3},
+                "class_quotas": {"zebra": 2, "panda": 1, "cab": 1},
+            },
+        },
+        Table10DummyModel(),
+    )
+
+    assert images.shape == (4, 1, 1, 1)
+    assert labels.tolist() == [1, 1, 2, 3]
+    assert images.reshape(-1).tolist() == [1.0, 1.0, 2.0, 3.0]
+
+
+def test_table10_inception_filter_preserves_centered_range() -> None:
+    """The proposed detector should preserve Inception's [-0.5, 0.5] domain."""
+    rng = table_10_module.np.random.RandomState(20170830)
+    image = rng.uniform(-0.5, 0.5, size=(299, 299, 3)).astype(table_10_module.np.float32)
+
+    filtered = article_final_detection_filter(image)
+
+    assert filtered.shape == image.shape
+    assert filtered.dtype == table_10_module.np.float32
+    assert float(filtered.min()) >= -0.5 - 1e-6
+    assert float(filtered.max()) <= 0.5 + 1e-6
 
 
 def test_table10_googlenet_evaluator_requires_dataset_config(monkeypatch) -> None:
