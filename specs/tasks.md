@@ -204,3 +204,29 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Preserve row 8 with `DeepFool/CaffeNet` and blocked status until implemented.
   - [x] Write `metrics.csv`, `metrics.json`, and `manifest.json` for the CaffeNet group.
   - [x] Add automated tests for config, wrapper dispatch, and blocked manifest semantics.
+- [x] Route MNIST Table 10 article reproduction outputs by dataset/model from `specs/features/Table_10.md`
+  - [x] Set `table_10_m1` output to `results/mnist/article_reproduction/table_10_m1`.
+  - [x] Set `table_10_m2` output to `results/mnist/article_reproduction/table_10_m2`.
+  - [x] Align legacy Table 10 M1/M2 script defaults with the dataset/model output folders.
+  - [x] Add automated tests for the updated output paths.
+- [x] Add explicit M2 CW regeneration mode from `specs/features/Table_10.md`
+  - [x] Add `--generate-attacks` and overwrite protection to `scripts/article_reproduction/generate_table_10_m2_cw.py`.
+  - [x] Generate configured CW L2/Linf `.npy` files before evaluation when requested.
+  - [x] Keep saved-adversarial evaluation as the default behavior.
+  - [x] Add automated tests for generation dispatch and overwrite protection.
+- [x] Require nn_robust_attacks CW backends for M2 from `specs/features/Table_10.md`
+  - [x] Rename the M2 helper to `scripts/article_reproduction/generate_table_10_m2_cw.py`.
+  - [x] Remove the optional `--attack-backend` selector.
+  - [x] Require `--nn-robust-attacks-root` for M2 CW generation.
+  - [x] Generate M2 CW-L2 with `nn_robust_attacks.CarliniL2`.
+  - [x] Generate M2 CW-Linf with `nn_robust_attacks.CarliniLi`.
+  - [x] Adapt M2 to the `nn_robust_attacks` model contract.
+  - [x] Force Keras inference mode so CW generation does not require a `keras_learning_phase` feed.
+  - [x] Add adversarial `manifest.json` files beside generated M2 `.npy` files.
+  - [x] Add automated tests for required backends, manifests, and scale conversion.
+- [x] Add targeted M2 kappa runs from `specs/features/Table_10.md`
+  - [x] Add `--only-kappa` to limit M2 generation/evaluation to one CW-L2 kappa row.
+  - [x] Add automated tests for excluding other kappas and CW-Linf during targeted runs.
+- [x] Clarify Table 10 execution paths
+  - [x] Document `scripts/run_experiment.py` as the official runner path.
+  - [x] Document `scripts/article_reproduction/generate_table_10_m2_cw.py` as the M2 helper for CW regeneration.

@@ -7,9 +7,9 @@ from pathlib import Path
 
 
 PROJECT_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "mnist" / "article_reproduction" / "table_10_m1"
 
 from deepdetector.evaluation.article_reproduction import (  # noqa: E402
-    ARTICLE_OUTPUT_DIR,
     close_graph,
     create_restored_mnist_graph,
     ensure_output_dir,
@@ -39,7 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Build command-line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--train-dir", default=str(MNIST_M1_CHECKPOINT_DIR))
-    parser.add_argument("--output-dir", default=str(PROJECT_ROOT / ARTICLE_OUTPUT_DIR))
+    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     return parser
 
 

@@ -80,13 +80,13 @@ O grupo `m1` representa os experimentos FGSM em MNIST com o modelo M1.
 Diretório:
 
 ```text
-results/experiments/table_10/m1/
+results/mnist/article_reproduction/table_10_m1/
 ```
 
 Arquivos:
 
 ```text
-results/experiments/table_10/m1/
+results/mnist/article_reproduction/table_10_m1/
 ├── metrics.csv
 ├── metrics.json
 └── manifest.json
@@ -162,6 +162,45 @@ CaffeNet ainda não está implementado.
 
 O grupo `m2` representa os experimentos CW em MNIST com o modelo M2.
 
+O recorte MNIST para reproduzir o script original `Test_CWL2_MNIST.py` é
+`start=5500` com `samples=1000`.
+
+Scripts auxiliares em `scripts/article_reproduction/` devem seguir o padrão:
+
+```text
+<acao>_table_<numero>_<escopo>.py
+```
+
+Exemplos:
+
+```text
+generate_table_10_m2_cw.py
+evaluate_table_10_m1_fgsm.py
+run_table_7_imagenet.py
+```
+
+O script `scripts/article_reproduction/generate_table_10_m2_cw.py` deve suportar
+dois modos explícitos:
+
+- avaliar adversariais CW já salvos em `artifacts/adversarial_examples/mnist/m2`;
+- regenerar os adversariais CW configurados antes da avaliação quando chamado com
+  `--generate-attacks --overwrite-attacks`.
+- limitar uma execução M2 a um único valor de `kappa` CW-L2 quando chamado com
+  `--only-kappa <valor>`.
+
+Para M2, CW-L2 deve ser gerado exclusivamente com
+`nn_robust_attacks.CarliniL2` e CW-L∞ deve ser gerado exclusivamente com
+`nn_robust_attacks.CarliniLi`. O script deve exigir
+`--nn-robust-attacks-root <path>` quando `--generate-attacks` for informado.
+Os backends CW locais/CleverHans não devem ser usados por M2.
+
+Sem `--generate-attacks`, a execução não deve sobrescrever os `.npy`
+adversariais existentes.
+
+Cada `.npy` adversarial gerado deve ser acompanhado por um `manifest.json` no
+mesmo diretório, registrando dataset, modelo, ataque, backend, recorte MNIST,
+quantidade de amostras e hiperparâmetros principais.
+
 | No. | Attack/Model | Dataset |
 |---:|---|---|
 | 9 | CW L2 (κ=0.0)/M2 | MNIST |
@@ -174,13 +213,13 @@ O grupo `m2` representa os experimentos CW em MNIST com o modelo M2.
 Diretório:
 
 ```text
-results/experiments/table_10/m2/
+results/mnist/article_reproduction/table_10_m2/
 ```
 
 Arquivos:
 
 ```text
-results/experiments/table_10/m2/
+results/mnist/article_reproduction/table_10_m2/
 ├── metrics.csv
 ├── metrics.json
 └── manifest.json
@@ -287,7 +326,7 @@ table_10:
     m1:
       model: m1
       dataset: mnist
-      output_dir: results/experiments/table_10/m1
+      output_dir: results/mnist/article_reproduction/table_10_m1
       rows:
         - no: 1
           attack_model: "FGSM (ε=0.1)/M1"
@@ -357,47 +396,47 @@ table_10:
     m2:
       model: m2
       dataset: mnist
-      output_dir: results/experiments/table_10/m2
+      output_dir: results/mnist/article_reproduction/table_10_m2
       rows:
         - no: 9
           attack_model: "CW L2 (κ=0.0)/M2"
           attack:
-            name: cw_l2
+            name: cw_l2_nn_robust
             kappa: 0.0
           status: implemented
 
         - no: 10
           attack_model: "CW L2 (κ=0.5)/M2"
           attack:
-            name: cw_l2
+            name: cw_l2_nn_robust
             kappa: 0.5
           status: planned
 
         - no: 11
           attack_model: "CW L2 (κ=1.0)/M2"
           attack:
-            name: cw_l2
+            name: cw_l2_nn_robust
             kappa: 1.0
           status: planned
 
         - no: 12
           attack_model: "CW L2 (κ=2.0)/M2"
           attack:
-            name: cw_l2
+            name: cw_l2_nn_robust
             kappa: 2.0
           status: planned
 
         - no: 13
           attack_model: "CW L2 (κ=4.0)/M2"
           attack:
-            name: cw_l2
+            name: cw_l2_nn_robust
             kappa: 4.0
           status: planned
 
         - no: 19
           attack_model: "CW L∞/M2"
           attack:
-            name: cw_linf
+            name: cw_linf_nn_robust
           status: planned
 
     inception_v3:
@@ -649,6 +688,7 @@ python scripts/run_experiment.py --experiment table_10_inception_v3
 - Cada grupo possui `metrics.csv`.
 - Cada grupo possui `metrics.json`.
 - Cada grupo possui `manifest.json`.
+- Os grupos MNIST `m1` e `m2` escrevem em `results/mnist/article_reproduction/table_10_m1/` e `results/mnist/article_reproduction/table_10_m2/`.
 - Cada linha preserva o `No.` original do artigo.
 - O schema segue os campos da Table 10.
 - Linhas não executadas aparecem com métricas vazias.
@@ -656,6 +696,16 @@ python scripts/run_experiment.py --experiment table_10_inception_v3
 - Motivos de bloqueio ficam no `manifest.json`.
 - Não há referência a resultados legacy.
 - A execução é feita por modelo.
+- O script `generate_table_10_m2_cw.py` só regenera `.npy` adversarial quando `--generate-attacks`
+  é informado.
+- A regeneração de M2 exige `--overwrite-attacks` quando o `.npy` de destino já
+  existe.
+- M2 CW-L2 sempre usa `nn_robust_attacks.CarliniL2` e M2 CW-L∞ sempre usa
+  `nn_robust_attacks.CarliniLi`.
+- M2 exige um checkout local informado por `--nn-robust-attacks-root` durante
+  geração.
+- M2 não usa os backends CW locais/CleverHans.
+- Cada adversarial M2 gerado possui um `manifest.json` ao lado do `.npy`.
 
 ---
 
@@ -664,9 +714,9 @@ python scripts/run_experiment.py --experiment table_10_inception_v3
 A estrutura estará pronta quando forem possíveis os seguintes arquivos:
 
 ```text
-results/experiments/table_10/m1/metrics.csv
-results/experiments/table_10/m1/metrics.json
-results/experiments/table_10/m1/manifest.json
+results/mnist/article_reproduction/table_10_m1/metrics.csv
+results/mnist/article_reproduction/table_10_m1/metrics.json
+results/mnist/article_reproduction/table_10_m1/manifest.json
 
 results/experiments/table_10/googlenet/metrics.csv
 results/experiments/table_10/googlenet/metrics.json
@@ -676,9 +726,9 @@ results/experiments/table_10/caffenet/metrics.csv
 results/experiments/table_10/caffenet/metrics.json
 results/experiments/table_10/caffenet/manifest.json
 
-results/experiments/table_10/m2/metrics.csv
-results/experiments/table_10/m2/metrics.json
-results/experiments/table_10/m2/manifest.json
+results/mnist/article_reproduction/table_10_m2/metrics.csv
+results/mnist/article_reproduction/table_10_m2/metrics.json
+results/mnist/article_reproduction/table_10_m2/manifest.json
 
 results/experiments/table_10/inception_v3/metrics.csv
 results/experiments/table_10/inception_v3/metrics.json

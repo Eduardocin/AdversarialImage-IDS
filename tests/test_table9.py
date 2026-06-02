@@ -16,6 +16,7 @@ from deepdetector.filters.registry import FILTER_REGISTRY  # noqa: E402
 from deepdetector.data import mnist as mnist_data  # noqa: E402
 from deepdetector.experiments import table9_runner  # noqa: E402
 from deepdetector.models import mnist_cnn  # noqa: E402
+from deepdetector.models import mnist_m2  # noqa: E402
 
 
 def test_table9_config_documents_spec_contract() -> None:
@@ -138,6 +139,29 @@ def test_mnist_latest_checkpoint_falls_back_to_local_base(monkeypatch, tmp_path)
     checkpoint = mnist_cnn.latest_checkpoint(str(checkpoint_dir))
 
     assert checkpoint == str(checkpoint_dir / "mnist.ckpt")
+
+
+def test_mnist_m2_latest_checkpoint_falls_back_to_local_base(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """M2 WSL runs should ignore stale Windows paths in checkpoint metadata."""
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    (checkpoint_dir / "mnist_m2.ckpt.index").write_text("index", encoding="utf-8")
+    (checkpoint_dir / "mnist_m2.ckpt.data-00000-of-00001").write_text(
+        "data",
+        encoding="utf-8",
+    )
+    fake_checkpoint = SimpleNamespace(model_checkpoint_path="C:\\stale\\mnist_m2.ckpt")
+    fake_tf = SimpleNamespace(
+        train=SimpleNamespace(get_checkpoint_state=lambda train_dir: fake_checkpoint)
+    )
+    monkeypatch.setitem(sys.modules, "tensorflow", fake_tf)
+
+    checkpoint = mnist_m2.latest_checkpoint(str(checkpoint_dir))
+
+    assert checkpoint == str(checkpoint_dir / "mnist_m2.ckpt")
 
 
 def test_mnist_keras_fallback_format_matches_cleverhans_shape() -> None:

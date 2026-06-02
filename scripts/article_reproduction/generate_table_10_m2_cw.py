@@ -1,8 +1,10 @@
-"""Evaluate MNIST M2 CW detector metrics for saved adversarial examples."""
+"""Generate and evaluate MNIST M2 CW detector metrics."""
 
 from __future__ import print_function
 
 import argparse
+import importlib.util
+import json
 import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -18,10 +20,10 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "article_reproduction" / "mnist_table_10_m2.yaml"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "mnist" / "article_reproduction" / "table_10_m2"
 
 from deepdetector.data.mnist import load_mnist_data  # noqa: E402
 from deepdetector.evaluation.article_reproduction import (  # noqa: E402
-    ARTICLE_OUTPUT_DIR,
     adaptive_quantization_filter,
     apply_filter_batch,
     ensure_output_dir,
@@ -44,6 +46,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
     parser.add_argument("--train-dir", default=None)
     parser.add_argument("--output-dir", default=None)
+    parser.add_argument(
+        "--generate-attacks",
+        action="store_true",
+        help="Regenerate configured CW adversarial .npy files before evaluation.",
+    )
+    parser.add_argument(
+        "--overwrite-attacks",
+        action="store_true",
+        help="Allow --generate-attacks to overwrite existing adversarial .npy files.",
+    )
+    parser.add_argument(
+        "--nn-robust-attacks-root",
+        default=None,
+        help="Path to a local carlini/nn_robust_attacks checkout. Required for CW generation.",
+    )
+    parser.add_argument(
+        "--only-kappa",
+        type=float,
+        default=None,
+        help="Run only the CW-L2 row with this kappa value.",
+    )
     return parser
 
 
@@ -66,6 +89,17 @@ def load_config(path: Path) -> Dict[str, Any]:
     return config
 
 
+def _set_keras_inference_phase() -> None:
+    """Force Keras dropout/batch-norm layers to run in inference mode."""
+    try:
+        from keras import backend as K
+
+        if hasattr(K, "set_learning_phase"):
+            K.set_learning_phase(0)
+    except Exception:
+        pass
+
+
 def format_kappa(kappa: float) -> str:
     """Format kappa for existing CW L2 result directory names."""
     value = float(kappa)
@@ -86,6 +120,7 @@ def create_restored_m2_graph(train_dir: str) -> Dict[str, Any]:
     import tensorflow as tf
 
     sess = create_tf_session()
+    _set_keras_inference_phase()
     x_placeholder = tf.compat.v1.placeholder(
         tf.float32,
         shape=(None, 28, 28, 1),
@@ -224,6 +259,210 @@ def evaluate_adversarial_path(
     )
 
 
+class M2NnRobustAdapter(object):
+    """Expose the M2 Keras model through the nn_robust_attacks model contract."""
+
+    image_size = 28
+    num_channels = 1
+    num_labels = 10
+
+    def __init__(self, model: Any) -> None:
+        self.model = model
+
+    def predict(self, data: Any) -> Any:
+        """Return M2 logits for nn_robust_attacks centered input tensors."""
+        return self.model(data + 0.5)
+
+
+def _load_nn_robust_carlini_l2(root: str) -> Any:
+    """Load CarliniL2 from a local nn_robust_attacks checkout."""
+    attack_path = Path(str(root)).expanduser() / "l2_attack.py"
+    if not attack_path.is_file():
+        raise ImportError("Missing nn_robust_attacks l2_attack.py: {0}".format(attack_path))
+
+    spec = importlib.util.spec_from_file_location(
+        "deepdetector_nn_robust_l2_attack",
+        str(attack_path),
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError("Could not load nn_robust_attacks from {0}".format(attack_path))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.CarliniL2
+
+
+def _load_nn_robust_carlini_li(root: str) -> Any:
+    """Load CarliniLi from a local nn_robust_attacks checkout."""
+    attack_path = Path(str(root)).expanduser() / "li_attack.py"
+    if not attack_path.is_file():
+        raise ImportError("Missing nn_robust_attacks li_attack.py: {0}".format(attack_path))
+
+    spec = importlib.util.spec_from_file_location(
+        "deepdetector_nn_robust_li_attack",
+        str(attack_path),
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError("Could not load nn_robust_attacks from {0}".format(attack_path))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.CarliniLi
+
+
+def generate_nn_robust_cw_l2_examples(
+    graph: Dict[str, Any],
+    clean_images: np.ndarray,
+    labels: np.ndarray,
+    attack_row: Dict[str, Any],
+    attack_config: Dict[str, Any],
+    root: str,
+) -> np.ndarray:
+    """Generate CW-L2 examples with carlini/nn_robust_attacks."""
+    CarliniL2 = _load_nn_robust_carlini_l2(root)
+    kappa = attack_row.get("kappa")
+    centered_images = np.asarray(clean_images, dtype=np.float32) - 0.5
+    _set_keras_inference_phase()
+    attack = CarliniL2(
+        graph["sess"],
+        M2NnRobustAdapter(graph["model"]),
+        batch_size=int(attack_config.get("batch_size", 1)),
+        max_iterations=int(attack_config.get("max_iterations", 2000)),
+        confidence=float(kappa if kappa is not None else attack_config.get("confidence", 0.0)),
+        binary_search_steps=int(attack_config.get("binary_search_steps", 5)),
+        initial_const=float(attack_config.get("initial_const", 1.0)),
+        learning_rate=float(attack_config.get("learning_rate", 0.1)),
+        targeted=bool(attack_config.get("targeted", False)),
+        abort_early=bool(attack_config.get("abort_early", True)),
+        boxmin=-0.5,
+        boxmax=0.5,
+    )
+    centered_adv = attack.attack(centered_images, labels)
+    return np.clip(np.asarray(centered_adv, dtype=np.float32) + 0.5, 0.0, 1.0)
+
+
+def generate_nn_robust_cw_linf_examples(
+    graph: Dict[str, Any],
+    clean_images: np.ndarray,
+    labels: np.ndarray,
+    attack_config: Dict[str, Any],
+    root: str,
+) -> np.ndarray:
+    """Generate CW-Linf examples with carlini/nn_robust_attacks."""
+    CarliniLi = _load_nn_robust_carlini_li(root)
+    centered_images = np.asarray(clean_images, dtype=np.float32) - 0.5
+    _set_keras_inference_phase()
+    attack = CarliniLi(
+        graph["sess"],
+        M2NnRobustAdapter(graph["model"]),
+        targeted=bool(attack_config.get("targeted", False)),
+        learning_rate=float(attack_config.get("learning_rate", 0.005)),
+        max_iterations=int(attack_config.get("max_iterations", 1000)),
+        abort_early=bool(attack_config.get("abort_early", True)),
+        initial_const=float(attack_config.get("initial_const", 1e-5)),
+        largest_const=float(attack_config.get("largest_const", 20.0)),
+        reduce_const=bool(attack_config.get("reduce_const", False)),
+        decrease_factor=float(attack_config.get("decrease_factor", 0.9)),
+        const_factor=float(attack_config.get("const_factor", 2.0)),
+    )
+    centered_adv = attack.attack(centered_images, labels)
+    return np.clip(np.asarray(centered_adv, dtype=np.float32) + 0.5, 0.0, 1.0)
+
+
+def generate_adversarial_path(
+    graph: Dict[str, Any],
+    clean_images: np.ndarray,
+    labels: np.ndarray,
+    attack_row: Dict[str, Any],
+    attack_config: Dict[str, Any],
+    dataset_config: Dict[str, Any],
+    evaluation_config: Dict[str, Any],
+    overwrite: bool,
+    nn_robust_attacks_root: Optional[str] = None,
+) -> Path:
+    """Generate and save one configured M2 CW adversarial array."""
+    adversarial_path = attack_row["adversarial_path"]
+    if adversarial_path is None:
+        raise ValueError("Attack row must define an adversarial output path.")
+    if adversarial_path.exists() and not overwrite:
+        raise IOError(
+            "Adversarial examples already exist: {0}. Use --overwrite-attacks to regenerate.".format(
+                adversarial_path
+            )
+        )
+
+    norm = str(attack_row["norm"]).lower()
+    if not nn_robust_attacks_root:
+        raise ValueError("--nn-robust-attacks-root is required for M2 CW generation.")
+
+    if norm == "l2":
+        adv_images = generate_nn_robust_cw_l2_examples(
+            graph=graph,
+            clean_images=clean_images,
+            labels=labels,
+            attack_row=attack_row,
+            attack_config=attack_config,
+            root=nn_robust_attacks_root,
+        )
+        backend = "nn_robust_attacks.CarliniL2"
+    elif norm == "linf":
+        adv_images = generate_nn_robust_cw_linf_examples(
+            graph=graph,
+            clean_images=clean_images,
+            labels=labels,
+            attack_config=attack_config,
+            root=nn_robust_attacks_root,
+        )
+        backend = "nn_robust_attacks.CarliniLi"
+    else:
+        raise ValueError("Unsupported CW norm for M2 generation: {0}".format(attack_row["norm"]))
+
+    adversarial_path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(str(adversarial_path), adv_images.astype(np.float32))
+    write_adversarial_manifest(
+        adversarial_path=adversarial_path,
+        attack_row=attack_row,
+        attack_config=attack_config,
+        dataset_config=dataset_config,
+        sample_count=int(len(clean_images)),
+        backend=backend,
+    )
+    print("generated_adversarial={0}".format(adversarial_path))
+    return adversarial_path
+
+
+def write_adversarial_manifest(
+    *,
+    adversarial_path: Path,
+    attack_row: Dict[str, Any],
+    attack_config: Dict[str, Any],
+    dataset_config: Dict[str, Any],
+    sample_count: int,
+    backend: str,
+) -> Path:
+    """Write metadata beside one generated M2 adversarial array."""
+    manifest_path = adversarial_path.parent / "manifest.json"
+    manifest = {
+        "dataset": dataset_config.get("name", "mnist"),
+        "split": dataset_config.get("split", "test"),
+        "dataset_start": int(dataset_config.get("start", 5500)),
+        "samples": sample_count,
+        "model": "M2",
+        "attack": attack_row.get("attack", "CW"),
+        "norm": attack_row.get("norm"),
+        "kappa": attack_row.get("kappa"),
+        "backend": backend,
+        "adversarial_examples": adversarial_path.name,
+        "parameters": {
+            key: attack_config[key]
+            for key in sorted(attack_config)
+            if key not in {"adversarial_path", "adversarial_template", "kappas"}
+        },
+    }
+    with manifest_path.open("w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    return manifest_path
+
+
 def configured_attack_rows(config: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
     """Yield concrete attack rows from the YAML config."""
     for attack_config in config.get("attacks", []):
@@ -240,7 +479,25 @@ def configured_attack_rows(config: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
                 "norm": attack_config["norm"],
                 "kappa": kappa,
                 "adversarial_path": _resolve_path(path),
+                "config": attack_config,
             }
+
+
+def filter_attack_rows(
+    rows: Iterable[Dict[str, Any]],
+    only_kappa: Optional[float],
+) -> Iterable[Dict[str, Any]]:
+    """Filter configured rows for targeted M2 runs."""
+    if only_kappa is None:
+        for row in rows:
+            yield row
+        return
+
+    target = float(only_kappa)
+    for row in rows:
+        kappa = row.get("kappa")
+        if kappa is not None and abs(float(kappa) - target) < 1e-9:
+            yield row
 
 
 def main() -> int:
@@ -258,7 +515,7 @@ def main() -> int:
     output_dir = ensure_output_dir(
         str(
             _resolve_path(args.output_dir or output_config.get("results_dir"))
-            or (PROJECT_ROOT / ARTICLE_OUTPUT_DIR)
+            or DEFAULT_OUTPUT_DIR
         )
     )
     train_dir = str(
@@ -276,8 +533,23 @@ def main() -> int:
     rows: List[Dict[str, Any]] = []
 
     try:
-        for attack_row in configured_attack_rows(config):
+        for attack_row in filter_attack_rows(
+            configured_attack_rows(config),
+            args.only_kappa,
+        ):
             adversarial_path = attack_row["adversarial_path"]
+            if args.generate_attacks:
+                adversarial_path = generate_adversarial_path(
+                    graph=graph,
+                    clean_images=clean_images,
+                    labels=labels,
+                    attack_row=attack_row,
+                    attack_config=attack_row["config"],
+                    dataset_config=dataset_config,
+                    evaluation_config=evaluation_config,
+                    overwrite=bool(args.overwrite_attacks),
+                    nn_robust_attacks_root=args.nn_robust_attacks_root,
+                )
             metrics = evaluate_adversarial_path(
                 graph=graph,
                 clean_images=clean_images,

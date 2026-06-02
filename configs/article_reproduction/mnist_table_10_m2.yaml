@@ -7,7 +7,7 @@ experiment:
 dataset:
   name: mnist
   split: test
-  start: 9000
+  start: 5500
   samples: 1000
   image_shape: [28, 28, 1]
   value_range: [0.0, 1.0]
@@ -27,11 +27,29 @@ attacks:
     norm: L2
     kappas: [0.0, 0.5, 1.0, 2.0, 4.0]
     adversarial_template: artifacts/adversarial_examples/mnist/m2/cw_l2/kappa_{kappa}/adversarial_examples.npy
+    batch_size: 1
+    max_iterations: 2000
+    learning_rate: 0.1
+    binary_search_steps: 5
+    initial_const: 1.0
+    abort_early: true
+    targeted: false
+    clip_min: 0.0
+    clip_max: 1.0
   - name: CW Linf / M2
     attack: CW
     norm: Linf
     kappas: [null]
     adversarial_path: artifacts/adversarial_examples/mnist/m2/cw_linf/adversarial_examples.npy
+    max_iterations: 1000
+    learning_rate: 0.005
+    initial_const: 0.00001
+    largest_const: 20.0
+    decrease_factor: 0.9
+    const_factor: 2.0
+    abort_early: true
+    reduce_const: false
+    targeted: false
 
 evaluation:
   batch_size: 256
@@ -66,6 +84,6 @@ metrics:
     - F1
 
 output:
-  results_dir: results/mnist/article_reproduction
+  results_dir: results/mnist/article_reproduction/table_10_m2
   csv: table_10_m2_mnist_cw.csv
   markdown: table_10_m2_mnist_cw.md

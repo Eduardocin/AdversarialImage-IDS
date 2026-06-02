@@ -56,9 +56,25 @@ def latest_checkpoint(train_dir: str) -> Optional[str]:
     import tensorflow as tf
 
     checkpoint = tf.train.get_checkpoint_state(train_dir)
+    if checkpoint is not None and _checkpoint_files_exist(checkpoint.model_checkpoint_path):
+        return checkpoint.model_checkpoint_path
+
+    local_checkpoint = checkpoint_path(train_dir, "mnist_m2.ckpt")
+    if _checkpoint_files_exist(local_checkpoint):
+        return local_checkpoint
+
     if checkpoint is None:
         return None
     return checkpoint.model_checkpoint_path
+
+
+def _checkpoint_files_exist(base_path: Optional[str]) -> bool:
+    """Return whether a TensorFlow Saver checkpoint base path is usable."""
+    if not base_path:
+        return False
+    return os.path.isfile(base_path + ".index") and os.path.isfile(
+        base_path + ".data-00000-of-00001"
+    )
 
 
 def save_mnist_m2_model(sess: Any, train_dir: str, filename: str) -> str:

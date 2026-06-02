@@ -143,6 +143,11 @@ Detalhes de fontes, espelhos e limitacoes ficam em
 
 ### Reproducao das tabelas do artigo
 
+O caminho recomendado e sempre `scripts/run_experiment.py`, que le
+`configs/experiments.yaml` e grava outputs padronizados. Os scripts em
+`scripts/article_reproduction/` sao legados ou auxiliares de diagnostico para
+casos especificos que ainda nao foram totalmente migrados para o runner unico.
+
 ```bash
 python scripts/run_experiment.py --experiment table_3
 python scripts/run_experiment.py --experiment table_4
@@ -172,9 +177,35 @@ Os resultados da Table 4 ficam sob `results/experiments/table_4/`, separados em
 `mnist/` e `imagenet/` porque os CSVs tem schemas diferentes. Table 5 nao
 aparece nesse arquivo porque nao ha fluxo correspondente no inventario atual.
 
-Table 10 e executada por grupo de modelo. Cada grupo escreve
-`metrics.csv`, `metrics.json` e `manifest.json` em
-`results/experiments/table_10/<grupo>/`.
+Table 10 e executada por grupo de modelo. O runner oficial e:
+
+```bash
+python scripts/run_experiment.py --experiment table_10_m1
+python scripts/run_experiment.py --experiment table_10_googlenet
+python scripts/run_experiment.py --experiment table_10_caffenet
+python scripts/run_experiment.py --experiment table_10_m2
+python scripts/run_experiment.py --experiment table_10_inception_v3
+```
+
+Os grupos MNIST escrevem em
+`results/mnist/article_reproduction/table_10_m1/` e
+`results/mnist/article_reproduction/table_10_m2/`. Os grupos ImageNet escrevem
+em `results/experiments/table_10/<grupo>/`.
+
+Para regenerar adversariais CW do M2 com os backends originais
+`nn_robust_attacks.CarliniL2` e `nn_robust_attacks.CarliniLi`, use o script
+especifico:
+
+```bash
+python scripts/article_reproduction/generate_table_10_m2_cw.py \
+  --generate-attacks \
+  --overwrite-attacks \
+  --nn-robust-attacks-root nn_robust_attacks \
+  --only-kappa 0.0
+```
+
+Sem `--generate-attacks`, esse script apenas avalia `.npy` ja salvos. Para M2,
+os geradores CW locais/CleverHans nao sao usados.
 
 ## Dados, Artefatos e Resultados
 
