@@ -16,8 +16,8 @@ from deepdetector.evaluation.article_reproduction import (  # noqa: E402
     evaluate_filter_predictions,
     interval_size,
 )
-from scripts.article_reproduction import generate_table_10_m2_cw as table_10_m2  # noqa: E402
-from scripts.article_reproduction import table_10  # noqa: E402
+from scripts.article_reproduction import mnist_table_10_m1_fgsm as table_10  # noqa: E402
+from scripts.article_reproduction import mnist_table_10_m2_cw as table_10_m2  # noqa: E402
 
 
 def test_interval_size_uses_article_mapping() -> None:

@@ -9,6 +9,8 @@ from typing import Optional
 
 import numpy as np
 
+from deepdetector.io.paths import resolve_project_path
+
 
 class ImageNetModelWrapper(ABC):
     """Expose preprocessing and batch prediction for ImageNet classifiers."""
@@ -494,3 +496,27 @@ class InceptionV3TensorFlowWrapper(ImageNetModelWrapper):
 
     def __call__(self, tensor: object) -> object:
         return self.get_logits(tensor)
+
+
+def build_googlenet_caffe_model(
+    config: dict,
+    project_root: Optional[Path] = None,
+) -> GoogLeNetCaffeWrapper:
+    """Instantiate the configured GoogLeNet Caffe wrapper."""
+    model_config = config.get("model", {})
+    mean_file = resolve_project_path(model_config.get("mean_file"), project_root=project_root)
+    attack_deploy = resolve_project_path(
+        model_config.get("attack_deploy_proto"),
+        project_root=project_root,
+    )
+    return GoogLeNetCaffeWrapper(
+        model_dir=str(resolve_project_path(model_config.get("model_dir"), project_root=project_root)),
+        deploy_prototxt=str(
+            resolve_project_path(model_config.get("deploy_proto"), project_root=project_root)
+        ),
+        attack_deploy_prototxt=str(attack_deploy) if attack_deploy is not None else None,
+        caffemodel=str(resolve_project_path(model_config.get("caffemodel"), project_root=project_root)),
+        mean_file=str(mean_file) if mean_file is not None else None,
+        use_gpu=bool(model_config.get("use_gpu", False)),
+        batch_size=int(model_config.get("batch_size", 32)),
+    )

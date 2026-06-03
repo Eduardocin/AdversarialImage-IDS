@@ -10,8 +10,8 @@ SRC_ROOT = PROJECT_ROOT / "src"
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SRC_ROOT))
 
-from scripts.article_reproduction.table_4_imagenet import load_subset_samples
 from deepdetector.experiments.table4_imagenet_runner import (
+    load_subset_samples,
     table4_adversarial_cache_path,
 )
 from deepdetector.evaluation.table4_imagenet import (

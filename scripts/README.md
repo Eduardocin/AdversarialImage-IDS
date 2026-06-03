@@ -59,7 +59,7 @@ Table 10 tambem e separada por grupo de modelo. Os grupos ImageNet escrevem
 Para gerar adversariais CW do M2, use o auxiliar nomeado por acao/tabela/escopo:
 
 ```bash
-python scripts/article_reproduction/generate_table_10_m2_cw.py \
+python scripts/article_reproduction/mnist_table_10_m2_cw.py \
   --generate-attacks \
   --overwrite-attacks \
   --nn-robust-attacks-root nn_robust_attacks

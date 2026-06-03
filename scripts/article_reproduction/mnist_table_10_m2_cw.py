@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 import numpy as np
-import yaml
 
 
 PROJECT_ROOT = next(
@@ -35,6 +34,8 @@ from deepdetector.evaluation.article_reproduction import (  # noqa: E402
     write_csv,
     write_markdown_table,
 )
+from deepdetector.io.config import load_yaml_config  # noqa: E402
+from deepdetector.io.paths import resolve_project_path  # noqa: E402
 from deepdetector.models.mnist_cnn import create_tf_session  # noqa: E402
 from deepdetector.models.mnist_m2 import build_mnist_m2_model, load_mnist_m2_model  # noqa: E402
 from deepdetector.paths import MNIST_M2_CHECKPOINT_DIR  # noqa: E402
@@ -72,21 +73,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _resolve_path(path_value: Optional[str]) -> Optional[Path]:
     """Resolve a config path relative to the project root."""
-    if path_value in (None, ""):
-        return None
-    path = Path(str(path_value))
-    if path.is_absolute():
-        return path
-    return PROJECT_ROOT / path
+    return resolve_project_path(path_value, project_root=PROJECT_ROOT)
 
 
 def load_config(path: Path) -> Dict[str, Any]:
     """Load the experiment YAML config."""
-    with path.open("r", encoding="utf-8") as handle:
-        config = yaml.safe_load(handle)
-    if not isinstance(config, dict):
-        raise ValueError("Config must contain a YAML mapping.")
-    return config
+    return load_yaml_config(path)
 
 
 def _set_keras_inference_phase() -> None:

@@ -197,7 +197,7 @@ Para regenerar adversariais CW do M2 com os backends originais
 especifico:
 
 ```bash
-python scripts/article_reproduction/generate_table_10_m2_cw.py \
+python scripts/article_reproduction/mnist_table_10_m2_cw.py \
   --generate-attacks \
   --overwrite-attacks \
   --nn-robust-attacks-root nn_robust_attacks \

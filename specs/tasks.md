@@ -4,6 +4,11 @@ Use this file to track implementation tasks derived from specifications in `spec
 
 ## Backlog
 
+- [x] Apply script refactor from `specs/refactor/plano_refatoracao_scripts.md`
+  - [x] Add shared ImageNet path, config, pivot CSV, model, data, evaluation, and adversarial helpers.
+  - [x] Route Table 7 and Table 8 ImageNet runners through shared helpers.
+  - [x] Add standardized article reproduction script names.
+  - [x] Remove old article reproduction script paths and update tests/docs to the new names.
 - [x] Refactor shared experiment infrastructure from `specs/refactor/refactor01.md`
   - [x] Add central path helpers in `src/deepdetector/io/paths.py`.
   - [x] Add central YAML config helpers in `src/deepdetector/io/config.py`.

@@ -7,14 +7,13 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
+from deepdetector.attacks.adversarial_loader import adversarial_images_for_run
+from deepdetector.evaluation.imagenet_utils import article_model_inputs
 from deepdetector.evaluation.table8 import evaluate_table8_filter
 from deepdetector.experiments.table7_imagenet_runner import (
-    _article_model_inputs,
-    _epsilon_normalized,
     _output_dir,
     _remove_stale_standard_outputs,
     _write_status,
-    adversarial_images_for_run,
     build_imagenet_table7_model,
     filter_clean_baseline_images,
     load_imagenet_table7_subset,
@@ -39,6 +38,11 @@ TABLE8_COLUMNS: Tuple[str, ...] = (
     "diamond_7x7",
     "box_5x5",
 )
+
+
+def _article_model_inputs(model: object, images: object) -> object:
+    """Return images in the Caffe input space used by the source article."""
+    return article_model_inputs(model, images)
 
 
 def configured_filters(config: Dict[str, Any]) -> Iterable[Tuple[str, int]]:
@@ -217,7 +221,7 @@ def run_table8_imagenet_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
         )
         return {"status": "parcial", "status_json": str(path)}
 
-    output_config = config.get("output", {})
+    output_config = config.get("output", config.get("outputs", {}))
     pivot_path = write_pivot_csv(
         output_dir / str(output_config.get("pivot_csv", "table_8_imagenet.csv")),
         rows,

@@ -3,11 +3,15 @@
 from __future__ import print_function
 
 import argparse
+import sys
 from pathlib import Path
 
 
 PROJECT_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "mnist" / "article_reproduction" / "table_10_m1"
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.evaluation.article_reproduction import (  # noqa: E402
     close_graph,
