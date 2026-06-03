@@ -95,7 +95,7 @@ Esse YAML é a fonte única de configuração operacional da Table 9.
 ```yaml
 table_9:
   kind: table_9
-  output_dir: results/experiments/table_9
+  output_dir: results/table_9
   datasets: [mnist, imagenet]
   split_order: [train, validation]
   mnist:
@@ -456,8 +456,8 @@ Não calcular média simples de métricas por fluxo.
 A execução padrão deve gerar apenas:
 
 ```text
-results/experiments/table_9/metrics.csv
-results/experiments/table_9/metrics.json
+results/table_9/metrics.csv
+results/table_9/metrics.json
 ```
 
 Não gerar por padrão:

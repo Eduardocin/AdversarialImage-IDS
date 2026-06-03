@@ -6,7 +6,7 @@ defaults:
 experiments:
   table_3:
     kind: filter_grid
-    output_dir: results/experiments/table_3
+    output_dir: results/table_3
     dataset:
       name: mnist
       split: test
@@ -35,14 +35,14 @@ experiments:
 
   table_4:
     kind: composite
-    output_dir: results/experiments/table_4
+    output_dir: results/table_4
     components:
       - table_4_mnist
       - table_4_imagenet
 
   table_4_mnist:
     kind: filter_grid
-    output_dir: results/experiments/table_4/mnist
+    output_dir: results/table_4/mnist
     dataset:
       name: mnist
       split: test
@@ -90,7 +90,7 @@ experiments:
 
   table_4_imagenet:
     kind: imagenet_table_4
-    output_dir: results/experiments/table_4/imagenet
+    output_dir: results/table_4/imagenet
     dataset:
       name: imagenet
       split: train
@@ -143,7 +143,7 @@ experiments:
   table_6:
     kind: table_6
     description: Adaptive quantization strategy
-    output_dir: results/experiments/table_6
+    output_dir: results/table_6
     datasets: [mnist, imagenet]
     split_order: [train, validation]
     entropy_thresholds:
@@ -226,7 +226,7 @@ experiments:
 
   table_7:
     kind: imagenet_table_7
-    output_dir: results/experiments/table_7
+    output_dir: results/table_7
     dataset:
       name: imagenet
       split: training
@@ -270,7 +270,7 @@ experiments:
 
   table_8:
     kind: imagenet_table_8
-    output_dir: results/experiments/table_8
+    output_dir: results/table_8
     dataset:
       name: imagenet
       split: validation
@@ -316,7 +316,7 @@ experiments:
 
   table_9:
     kind: table_9
-    output_dir: results/experiments/table_9
+    output_dir: results/table_9
     description: Final proposed detection filter against FGSM
     datasets: [mnist, imagenet]
     split_order: [train, validation]
@@ -392,7 +392,7 @@ experiments:
 
   table_10_m1:
     kind: table_10_group
-    output_dir: results/mnist/article_reproduction/table_10_m1
+    output_dir: results/table_10/m1
     dataset:
       name: mnist
     model:
@@ -429,7 +429,7 @@ experiments:
 
   table_10_googlenet:
     kind: table_10_group
-    output_dir: results/experiments/table_10/imagenet/googlenet
+    output_dir: results/table_10/imagenet/googlenet
     dataset:
       name: imagenet
       split: test
@@ -493,7 +493,7 @@ experiments:
 
   table_10_caffenet:
     kind: table_10_group
-    output_dir: results/experiments/table_10/caffenet
+    output_dir: results/table_10/caffenet
     dataset:
       name: imagenet
       split: test
@@ -536,7 +536,7 @@ experiments:
 
   table_10_m2:
     kind: table_10_group
-    output_dir: results/mnist/article_reproduction/table_10_m2
+    output_dir: results/table_10/M2_cw
     dataset:
       name: mnist
     model:
@@ -584,7 +584,7 @@ experiments:
 
   table_10_inception_v3:
     kind: table_10_group
-    output_dir: results/experiments/table_10/inception_v3
+    output_dir: results/table_10/inception_v3
     dataset:
       name: imagenet
       split: test

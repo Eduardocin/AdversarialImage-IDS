@@ -51,13 +51,13 @@ def test_table10_config_declares_one_experiment_per_model_group() -> None:
 
     for experiment_name, (model_group, dataset_label, row_numbers) in TABLE10_EXPERIMENTS.items():
         experiment = experiments[experiment_name]
-        expected_output_dir = "results/experiments/table_10/{0}".format(model_group)
-        if experiment_name in {"table_10_m1", "table_10_m2"}:
-            expected_output_dir = "results/mnist/article_reproduction/{0}".format(
-                experiment_name
-            )
+        expected_output_dir = "results/table_10/{0}".format(model_group)
+        if experiment_name == "table_10_m1":
+            expected_output_dir = "results/table_10/m1"
         if experiment_name == "table_10_googlenet":
-            expected_output_dir = "results/experiments/table_10/imagenet/googlenet"
+            expected_output_dir = "results/table_10/imagenet/googlenet"
+        if experiment_name == "table_10_m2":
+            expected_output_dir = "results/table_10/M2_cw"
 
         assert experiment["kind"] == "table_10_group"
         assert experiment["model_group"] == model_group

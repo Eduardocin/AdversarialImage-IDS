@@ -6,6 +6,7 @@ import argparse
 import importlib.util
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -19,7 +20,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "article_reproduction" / "mnist_table_10_m2.yaml"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "mnist" / "article_reproduction" / "table_10_m2"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "table_10" / "M2_cw"
 
 from deepdetector.data.mnist import load_mnist_data  # noqa: E402
 from deepdetector.evaluation.article_reproduction import (  # noqa: E402
@@ -67,6 +68,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Run only the CW-L2 row with this kappa value.",
+    )
+    parser.add_argument(
+        "--only-norm",
+        choices=["L2", "Linf", "l2", "linf"],
+        default=None,
+        help="Run only rows for one CW norm. Use Linf to debug only the CW-Linf row.",
     )
     return parser
 
@@ -355,7 +362,26 @@ def generate_nn_robust_cw_linf_examples(
         decrease_factor=float(attack_config.get("decrease_factor", 0.9)),
         const_factor=float(attack_config.get("const_factor", 2.0)),
     )
-    centered_adv = attack.attack(centered_images, labels)
+    adversarial_images = []
+    total = int(len(centered_images))
+    for index, (image, label) in enumerate(zip(centered_images, labels), start=1):
+        print("cw_linf_sample={0}/{1}".format(index, total), flush=True)
+        sample_started_at = time.perf_counter()
+        centered_adv = attack.attack(
+            image.reshape((1,) + image.shape),
+            np.asarray(label).reshape((1,) + np.asarray(label).shape),
+        )
+        elapsed_seconds = time.perf_counter() - sample_started_at
+        print(
+            "cw_linf_sample_done={0}/{1} elapsed_seconds={2:.3f}".format(
+                index,
+                total,
+                elapsed_seconds,
+            ),
+            flush=True,
+        )
+        adversarial_images.append(np.asarray(centered_adv[0], dtype=np.float32))
+    centered_adv = np.asarray(adversarial_images, dtype=np.float32)
     return np.clip(np.asarray(centered_adv, dtype=np.float32) + 0.5, 0.0, 1.0)
 
 
@@ -478,18 +504,42 @@ def configured_attack_rows(config: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
 def filter_attack_rows(
     rows: Iterable[Dict[str, Any]],
     only_kappa: Optional[float],
+    only_norm: Optional[str] = None,
 ) -> Iterable[Dict[str, Any]]:
     """Filter configured rows for targeted M2 runs."""
+    normalized_norm = str(only_norm).lower() if only_norm is not None else None
     if only_kappa is None:
         for row in rows:
+            if normalized_norm is not None and str(row.get("norm", "")).lower() != normalized_norm:
+                continue
             yield row
         return
 
     target = float(only_kappa)
     for row in rows:
+        if normalized_norm is not None and str(row.get("norm", "")).lower() != normalized_norm:
+            continue
         kappa = row.get("kappa")
         if kappa is not None and abs(float(kappa) - target) < 1e-9:
             yield row
+
+
+def output_dir_for_targeted_run(
+    base_output_dir: Path,
+    only_kappa: Optional[float],
+    only_norm: Optional[str] = None,
+) -> Path:
+    """Return a norm-specific output directory for targeted M2 CW runs."""
+    if only_norm is not None:
+        normalized_norm = str(only_norm).lower()
+        if normalized_norm == "linf":
+            return base_output_dir.parent / "M2_cw_Linf"
+        if normalized_norm == "l2":
+            return base_output_dir.parent / "M2_cw_l2"
+        raise ValueError("Unsupported CW norm for output directory: {0}".format(only_norm))
+    if only_kappa is not None:
+        return base_output_dir.parent / "M2_cw_l2"
+    return base_output_dir
 
 
 def main() -> int:
@@ -504,11 +554,12 @@ def main() -> int:
     metrics_config = config.get("metrics", {})
     output_config = config.get("output", {})
 
+    base_output_dir = Path(
+        _resolve_path(args.output_dir or output_config.get("results_dir"))
+        or DEFAULT_OUTPUT_DIR
+    )
     output_dir = ensure_output_dir(
-        str(
-            _resolve_path(args.output_dir or output_config.get("results_dir"))
-            or DEFAULT_OUTPUT_DIR
-        )
+        str(output_dir_for_targeted_run(base_output_dir, args.only_kappa, args.only_norm))
     )
     train_dir = str(
         _resolve_path(args.train_dir or model_config.get("checkpoint_dir"))
@@ -528,6 +579,7 @@ def main() -> int:
         for attack_row in filter_attack_rows(
             configured_attack_rows(config),
             args.only_kappa,
+            only_norm=args.only_norm,
         ):
             adversarial_path = attack_row["adversarial_path"]
             if args.generate_attacks:

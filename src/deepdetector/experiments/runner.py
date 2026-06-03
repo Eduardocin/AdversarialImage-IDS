@@ -105,7 +105,7 @@ def build_experiment_config(
             "kind": kind,
             "components": components,
             "output": {
-                "dir": experiment.get("output_dir", "results/experiments/{0}".format(name)),
+                "dir": experiment.get("output_dir", "results/{0}".format(name)),
                 "json": "manifest.json",
             },
         }
@@ -118,7 +118,7 @@ def build_experiment_config(
         "attack": dict(experiment.get("attack", {})),
         "evaluation": dict(experiment.get("evaluation", {})),
         "output": {
-            "dir": experiment.get("output_dir", "results/experiments/{0}".format(name)),
+            "dir": experiment.get("output_dir", "results/{0}".format(name)),
             "csv": output_defaults.get("csv", "metrics.csv"),
             "json": output_defaults.get("json", "metrics.json"),
         },

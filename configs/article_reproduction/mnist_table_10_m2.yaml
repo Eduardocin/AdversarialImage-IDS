@@ -84,6 +84,6 @@ metrics:
     - F1
 
 output:
-  results_dir: results/mnist/article_reproduction/table_10_m2
+  results_dir: results/table_10/M2_cw
   csv: table_10_m2_mnist_cw.csv
   markdown: table_10_m2_mnist_cw.md

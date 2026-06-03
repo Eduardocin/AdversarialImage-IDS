@@ -84,7 +84,7 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Reuse compatible ImageNet FGSM caches from `artifacts/adversarial_examples`.
   - [x] Generate and persist ImageNet FGSM caches when a split cache is missing.
   - [x] Aggregate TP, FN, and FP across datasets before calculating metrics.
-  - [x] Write only `metrics.csv` and `metrics.json` under `results/experiments/table_6`.
+  - [x] Write only `metrics.csv` and `metrics.json` under `results/table_6`.
   - [x] Remove the legacy public Table 6 ImageNet script and config.
 - [x] Implement Table 9 final FGSM detector from `specs/features/table_9.md`
   - [x] Add official Table 9 config to `configs/experiments.yaml`.
@@ -119,7 +119,7 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Share the same attack helper across Table 4, Table 7, and GoogLeNet FGSM scripts.
   - [x] Add tests covering clean-baseline skip, Caffe-scale epsilon, and no TensorFlow import in the main path.
 - [x] Implement Table 10 ImageNet GoogLeNet group from `specs/features/table10_googlenet.md`
-  - [x] Update `table_10_googlenet` output directory to `results/experiments/table_10/imagenet/googlenet`.
+  - [x] Update `table_10_googlenet` output directory to `results/table_10/imagenet/googlenet`.
   - [x] Add official Table 10 schema and pending-row materialization.
   - [x] Route `kind: table_10_group` through the reusable Table 10 group runner.
   - [x] Write only `metrics.csv` and `metrics.json` for the Table 10 group.
@@ -140,7 +140,7 @@ Use this file to track implementation tasks derived from specifications in `spec
 - [x] Combine Table 4 MNIST and ImageNet execution from `specs/features/table_4_combined.md`
   - [x] Add composite `table_4` with explicit `table_4_mnist` and `table_4_imagenet` components.
   - [x] Route ImageNet Table 4 through the consolidated experiment runner.
-  - [x] Write MNIST and ImageNet outputs under `results/experiments/table_4/`.
+  - [x] Write MNIST and ImageNet outputs under `results/table_4/`.
   - [x] Add tests for config fidelity and composite dispatch.
 - [x] Remove Table 4 ImageNet diagnostics output from `specs/features/table_4_combined.md`
   - [x] Remove legacy `configs/article_reproduction/imagenet_table_4.yaml`.
@@ -210,8 +210,8 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Write `metrics.csv`, `metrics.json`, and `manifest.json` for the CaffeNet group.
   - [x] Add automated tests for config, wrapper dispatch, and blocked manifest semantics.
 - [x] Route MNIST Table 10 article reproduction outputs by dataset/model from `specs/features/Table_10.md`
-  - [x] Set `table_10_m1` output to `results/mnist/article_reproduction/table_10_m1`.
-  - [x] Set `table_10_m2` output to `results/mnist/article_reproduction/table_10_m2`.
+  - [x] Set `table_10_m1` output to `results/table_10/m1`.
+  - [x] Set `table_10_m2` combined output to `results/table_10/M2_cw`.
   - [x] Align legacy Table 10 M1/M2 script defaults with the dataset/model output folders.
   - [x] Add automated tests for the updated output paths.
 - [x] Add explicit M2 CW regeneration mode from `specs/features/Table_10.md`
@@ -235,6 +235,10 @@ Use this file to track implementation tasks derived from specifications in `spec
 - [x] Clarify Table 10 execution paths
   - [x] Document `scripts/run_experiment.py` as the official runner path.
   - [x] Document `scripts/article_reproduction/generate_table_10_m2_cw.py` as the M2 helper for CW regeneration.
+- [x] Separate targeted M2 CW report outputs from `specs/features/Table_10.md`
+  - [x] Route `--only-norm L2` and `--only-kappa` reports to `results/table_10/M2_cw_l2/`.
+  - [x] Route `--only-norm Linf` reports to `results/table_10/M2_cw_Linf/`.
+  - [x] Add automated tests for norm-specific output directories.
 - [x] Fix Table 10 Inception v3 CW-L2 evaluation from `specs/refactor/refactor_table10_inception.md`
   - [x] Select clean-correct Inception v3 samples until configured class quotas are filled.
   - [x] Materialize an Inception candidate pool large enough to replace clean errors.

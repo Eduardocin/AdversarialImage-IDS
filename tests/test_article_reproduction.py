@@ -124,9 +124,9 @@ def test_table_4_config_documents_experiment_parameters() -> None:
 
     assert table4["kind"] == "composite"
     assert table4["components"] == ["table_4_mnist", "table_4_imagenet"]
-    assert table4["output_dir"] == "results/experiments/table_4"
+    assert table4["output_dir"] == "results/table_4"
     assert table4_mnist["kind"] == "filter_grid"
-    assert table4_mnist["output_dir"] == "results/experiments/table_4/mnist"
+    assert table4_mnist["output_dir"] == "results/table_4/mnist"
     assert table4_mnist["dataset"] == {
         "name": "mnist",
         "split": "test",
@@ -160,7 +160,7 @@ def test_imagenet_table_4_config_documents_spec_parameters() -> None:
     config = experiments["experiments"]["table_4_imagenet"]
 
     assert config["kind"] == "imagenet_table_4"
-    assert config["output_dir"] == "results/experiments/table_4/imagenet"
+    assert config["output_dir"] == "results/table_4/imagenet"
     assert config["dataset"]["name"] == "imagenet"
     assert config["dataset"]["split"] == "train"
     assert config["dataset"]["images_dir"] == "data/imagenet/train"
@@ -227,7 +227,7 @@ def test_table_6_config_documents_experiment_parameters() -> None:
         {"name": "jellyfish", "label": 107, "path": "data/imagenet/validation/jellyfish"},
     ]
     assert table6["imagenet"]["attack"]["epsilon_255"] == 1.0
-    assert table6["output_dir"] == "results/experiments/table_6"
+    assert table6["output_dir"] == "results/table_6"
 
 
 def test_table_10_m2_config_documents_experiment_parameters() -> None:
@@ -291,9 +291,7 @@ def test_table_10_m2_config_documents_experiment_parameters() -> None:
         "Precision",
         "F1",
     ]
-    assert config["output"]["results_dir"] == (
-        "results/mnist/article_reproduction/table_10_m2"
-    )
+    assert config["output"]["results_dir"] == "results/table_10/M2_cw"
 
 
 def test_table_10_m2_consolidated_config_uses_nn_robust_attack_names() -> None:
@@ -315,10 +313,10 @@ def test_table_10_m2_consolidated_config_uses_nn_robust_attack_names() -> None:
 def test_legacy_table_10_mnist_scripts_default_to_model_output_dirs() -> None:
     """Legacy MNIST Table 10 scripts should not write into the article root."""
     assert Path(table_10.build_parser().parse_args([]).output_dir) == (
-        PROJECT_ROOT / "results" / "mnist" / "article_reproduction" / "table_10_m1"
+        PROJECT_ROOT / "results" / "table_10" / "m1"
     )
     assert table_10_m2.DEFAULT_OUTPUT_DIR == (
-        PROJECT_ROOT / "results" / "mnist" / "article_reproduction" / "table_10_m2"
+        PROJECT_ROOT / "results" / "table_10" / "M2_cw"
     )
 
 
@@ -386,6 +384,72 @@ def test_table_10_m2_can_filter_rows_by_kappa() -> None:
     assert str(rows[0]["adversarial_path"]).endswith(
         "cw_l2/kappa_0p0/adversarial_examples.npy"
     )
+
+
+def test_table_10_m2_can_filter_rows_by_norm() -> None:
+    """Targeted M2 runs should evaluate only the requested CW norm."""
+    config = {
+        "attacks": [
+            {
+                "name": "CW L2 / M2",
+                "attack": "CW",
+                "norm": "L2",
+                "kappas": [0.0, 0.5],
+                "adversarial_template": (
+                    "artifacts/adversarial_examples/mnist/m2/cw_l2/"
+                    "kappa_{kappa}/adversarial_examples.npy"
+                ),
+            },
+            {
+                "name": "CW Linf / M2",
+                "attack": "CW",
+                "norm": "Linf",
+                "kappas": [None],
+                "adversarial_path": (
+                    "artifacts/adversarial_examples/mnist/m2/cw_linf/"
+                    "adversarial_examples.npy"
+                ),
+            },
+        ]
+    }
+
+    rows = list(
+        table_10_m2.filter_attack_rows(
+            table_10_m2.configured_attack_rows(config),
+            only_kappa=None,
+            only_norm="Linf",
+        )
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["norm"] == "Linf"
+    assert str(rows[0]["adversarial_path"]).endswith(
+        "cw_linf/adversarial_examples.npy"
+    )
+
+
+def test_table_10_m2_targeted_runs_use_norm_specific_output_dirs(tmp_path) -> None:
+    """Targeted M2 CW reports should not overwrite reports from another norm."""
+    assert table_10_m2.output_dir_for_targeted_run(
+        tmp_path,
+        only_kappa=None,
+        only_norm=None,
+    ) == tmp_path
+    assert table_10_m2.output_dir_for_targeted_run(
+        tmp_path,
+        only_kappa=None,
+        only_norm="Linf",
+    ) == tmp_path.parent / "M2_cw_Linf"
+    assert table_10_m2.output_dir_for_targeted_run(
+        tmp_path,
+        only_kappa=None,
+        only_norm="L2",
+    ) == tmp_path.parent / "M2_cw_l2"
+    assert table_10_m2.output_dir_for_targeted_run(
+        tmp_path,
+        only_kappa=0.5,
+        only_norm=None,
+    ) == tmp_path.parent / "M2_cw_l2"
 
 
 def test_table_10_m2_l2_generation_requires_nn_robust_attacks_root(
@@ -518,6 +582,7 @@ def test_table_10_m2_generation_writes_nn_robust_l2_adversarial_array(
 
 def test_table_10_m2_generation_writes_nn_robust_linf_adversarial_array(
     tmp_path,
+    capsys,
 ) -> None:
     """M2 CW-Linf generation should use the original nn_robust_attacks backend."""
     attack_root = tmp_path / "nn_robust_attacks"
@@ -549,9 +614,10 @@ def test_table_10_m2_generation_writes_nn_robust_linf_adversarial_array(
     )
 
     adversarial_path = tmp_path / "cw_linf" / "adversarial_examples.npy"
-    images = np.zeros((1, 28, 28, 1), dtype=np.float32)
-    labels = np.zeros((1, 10), dtype=np.float32)
+    images = np.zeros((2, 28, 28, 1), dtype=np.float32)
+    labels = np.zeros((2, 10), dtype=np.float32)
     labels[0, 3] = 1.0
+    labels[1, 4] = 1.0
 
     table_10_m2.generate_adversarial_path(
         graph={"sess": "session", "model": lambda data: data, "x": "x"},
@@ -581,6 +647,11 @@ def test_table_10_m2_generation_writes_nn_robust_linf_adversarial_array(
     )
 
     np.testing.assert_array_equal(np.load(str(adversarial_path)), images + 0.125)
+    captured = capsys.readouterr()
+    assert "cw_linf_sample=1/2" in captured.out
+    assert "cw_linf_sample=2/2" in captured.out
+    assert "cw_linf_sample_done=1/2 elapsed_seconds=" in captured.out
+    assert "cw_linf_sample_done=2/2 elapsed_seconds=" in captured.out
     manifest = yaml.safe_load((adversarial_path.parent / "manifest.json").read_text())
     assert manifest["backend"] == "nn_robust_attacks.CarliniLi"
     assert manifest["model"] == "M2"

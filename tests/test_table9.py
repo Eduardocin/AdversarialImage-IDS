@@ -45,7 +45,7 @@ def test_table9_config_documents_spec_contract() -> None:
         "type": "proposed_detection_filter",
     }
     assert table9["imagenet"]["filter"] == table9["mnist"]["filter"]
-    assert table9["output_dir"] == "results/experiments/table_9"
+    assert table9["output_dir"] == "results/table_9"
     assert table9["mnist"]["attack"]["epsilon"] == 0.2
     assert table9["imagenet"]["attack"]["epsilon_255"] == 1.0
 

@@ -33,7 +33,7 @@ A configuração atual esperada é equivalente a:
 ```yaml
 table_10_googlenet:
   kind: table_10_group
-  output_dir: results/experiments/table_10/googlenet
+  output_dir: results/table_10/googlenet
   dataset:
     name: imagenet
   model:
@@ -67,7 +67,7 @@ table_10_googlenet:
 Antes da implementação, ajustar o `output_dir` para seguir a organização por dataset/modelo:
 
 ```yaml
-output_dir: results/experiments/table_10/imagenet/googlenet
+output_dir: results/table_10/imagenet/googlenet
 ```
 
 ---
@@ -115,7 +115,7 @@ python scripts/run_experiment.py --experiment table_10_googlenet
 deve gerar:
 
 ```text
-results/experiments/table_10/imagenet/googlenet/
+results/table_10/imagenet/googlenet/
 ├── metrics.csv
 └── metrics.json
 ```
@@ -600,13 +600,13 @@ Atualizar apenas o necessário no grupo `table_10_googlenet`.
 De:
 
 ```yaml
-output_dir: results/experiments/table_10/googlenet
+output_dir: results/table_10/googlenet
 ```
 
 Para:
 
 ```yaml
-output_dir: results/experiments/table_10/imagenet/googlenet
+output_dir: results/table_10/imagenet/googlenet
 ```
 
 Manter:
@@ -653,8 +653,8 @@ python scripts/run_experiment.py --experiment table_10_googlenet
 Resultado esperado:
 
 ```text
-results/experiments/table_10/imagenet/googlenet/metrics.csv
-results/experiments/table_10/imagenet/googlenet/metrics.json
+results/table_10/imagenet/googlenet/metrics.csv
+results/table_10/imagenet/googlenet/metrics.json
 ```
 
 ---
@@ -793,7 +793,7 @@ kind: table_10_group
 
 ## 20. Critérios de aceite
 
-* [ ] `table_10_googlenet` usa `output_dir: results/experiments/table_10/imagenet/googlenet`.
+* [ ] `table_10_googlenet` usa `output_dir: results/table_10/imagenet/googlenet`.
 * [ ] O comando `python scripts/run_experiment.py --experiment table_10_googlenet` executa sem erro.
 * [ ] O grupo gera `metrics.csv`.
 * [ ] O grupo gera `metrics.json`.
@@ -819,7 +819,7 @@ Esta etapa estará concluída quando:
 1. `table_10_googlenet` estiver configurado com o diretório:
 
 ```text
-results/experiments/table_10/imagenet/googlenet
+results/table_10/imagenet/googlenet
 ```
 
 2. existir suporte a `kind: table_10_group` no runner;

@@ -51,7 +51,7 @@ A configuração correta deve incluir, no mínimo:
 * `model.name: inception_v3`
 * `rows` com os seis ataques CW listados
 
-A execução deve produzir em `results/experiments/table_10/inception_v3/`:
+A execução deve produzir em `results/table_10/inception_v3/`:
 
 * `metrics.csv`
 * `metrics.json`
@@ -114,7 +114,7 @@ Não implementar nesta spec:
 
 - [ ] O `configs/experiments.yaml` contém `table_10_inception_v3` com `kind: table_10_group`.
 - [ ] O experimento `table_10_inception_v3` é executável por `python scripts/run_experiment.py --experiment table_10_inception_v3`.
-- [ ] O diretório `results/experiments/table_10/inception_v3/` é criado com `metrics.csv` e `metrics.json`.
+- [ ] O diretório `results/table_10/inception_v3/` é criado com `metrics.csv` e `metrics.json`.
 - [ ] O `manifest.json` é produzido e registra o status das linhas avaliadas.
 - [ ] A configuração usa `dataset.n_samples: 100`, `dataset.shuffle: true` e `evaluation.seed: 20170830`.
 - [ ] A seleção de imagens é aleatória e reprodutível: o loader embaralha a população com o seed configurado e seleciona as primeiras 100 imagens após o embaralhamento.

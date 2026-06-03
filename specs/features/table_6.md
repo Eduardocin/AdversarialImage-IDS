@@ -447,31 +447,31 @@ Nenhuma lógica experimental deve ser implementada diretamente em scripts.
 Não criar:
 
 ```text
-results/experiments/table_6/mnist/
+results/table_6/mnist/
 ```
 
 Não criar:
 
 ```text
-results/experiments/table_6/imagenet/
+results/table_6/imagenet/
 ```
 
 Não criar:
 
 ```text
-results/experiments/table_6/debug/
+results/table_6/debug/
 ```
 
 Não criar:
 
 ```text
-results/experiments/table_6/report.md
+results/table_6/report.md
 ```
 
 Não criar:
 
 ```text
-results/experiments/table_6/diagnostic.json
+results/table_6/diagnostic.json
 ```
 
 ---
