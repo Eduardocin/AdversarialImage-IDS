@@ -24,6 +24,7 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
 
     assert "defaults" in config
     assert set(config["experiments"]) == {
+        "defense_aware",
         "table_3",
         "table_4",
         "table_4_mnist",
@@ -43,6 +44,10 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
     }
     for experiment in config["experiments"].values():
         if experiment["kind"] == "composite":
+            continue
+        if experiment["kind"] == "defense_aware":
+            assert "attacks" in experiment
+            assert "attack" not in experiment
             continue
         if experiment["kind"] in {"table_6", "table_9"}:
             assert "mnist" in experiment
@@ -64,6 +69,7 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
         ("table_4", "composite"),
         ("table_4_mnist", "filter_grid"),
         ("table_4_imagenet", "imagenet_table_4"),
+        ("defense_aware", "defense_aware"),
         ("table_10_m1", "table_10_group"),
         ("table_10_googlenet", "table_10_group"),
         ("table_10_caffenet", "table_10_group"),
