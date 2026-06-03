@@ -18,19 +18,19 @@ def build_mnist_m2_model(x_placeholder: Any) -> Tuple[Any, Any]:
     The final layer returns logits without a softmax activation.
     """
     from keras.layers import Activation, Dense, Dropout, Flatten
-    from keras.layers import Conv2D, MaxPooling2D
+    from keras.layers import Convolution2D, MaxPooling2D
     from keras.models import Sequential
 
     model = Sequential()
-    model.add(Conv2D(32, (3, 3), padding="valid", input_shape=(28, 28, 1)))
+    model.add(Convolution2D(32, 3, 3, border_mode="valid", input_shape=(28, 28, 1)))
     model.add(Activation("relu"))
-    model.add(Conv2D(32, (3, 3), padding="valid"))
+    model.add(Convolution2D(32, 3, 3, border_mode="valid"))
     model.add(Activation("relu"))
     model.add(MaxPooling2D(pool_size=(2, 2)))
 
-    model.add(Conv2D(64, (3, 3), padding="valid"))
+    model.add(Convolution2D(64, 3, 3, border_mode="valid"))
     model.add(Activation("relu"))
-    model.add(Conv2D(64, (3, 3), padding="valid"))
+    model.add(Convolution2D(64, 3, 3, border_mode="valid"))
     model.add(Activation("relu"))
     model.add(MaxPooling2D(pool_size=(2, 2)))
 
