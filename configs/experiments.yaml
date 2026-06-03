@@ -32,6 +32,9 @@ experiments:
         binary_search_steps: 5
         initial_const: 1.0
         learning_rate: 0.1
+        abort_early: true
+        clip_min: 0.0
+        clip_max: 1.0
       defense_aware:
         type: adaptive_cw_l2
         nn_robust_attacks_root: nn_robust_attacks
@@ -41,6 +44,9 @@ experiments:
         binary_search_steps: 5
         initial_const: 1.0
         learning_rate: 0.1
+        abort_early: true
+        clip_min: 0.0
+        clip_max: 1.0
     detector:
       type: final_adaptive_detection_filter
       entropy_thresholds:
