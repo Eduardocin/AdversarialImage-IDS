@@ -135,7 +135,8 @@ defense_aware:
 
   attacks:
     defense_unaware:
-      type: cw_l2
+      type: cw_l2_nn_robust
+      nn_robust_attacks_root: nn_robust_attacks
       targeted: false
       confidence: 0
       max_iterations: 2000
@@ -145,6 +146,7 @@ defense_aware:
 
     defense_aware:
       type: adaptive_cw_l2
+      nn_robust_attacks_root: nn_robust_attacks
       targeted: false
       confidence: 0
       max_iterations: 2000
@@ -805,7 +807,7 @@ Nenhuma lógica experimental deve ser implementada diretamente em scripts.
 A implementação pode criar ou reutilizar os seguintes módulos internos:
 
 ```text
-src/deepdetector/attacks/cw_l2.py
+src/deepdetector/attacks/nn_robust.py
 src/deepdetector/attacks/adaptive_cw_l2.py
 src/deepdetector/filters/adaptive_noise_reduction.py
 src/deepdetector/evaluation/defense_aware.py
@@ -953,8 +955,9 @@ python scripts/run_experiment.py --experiment defense_aware
 ```
 
 * O experimento executa internamente os cenários defense-unaware e defense-aware.
-* O defense-unaware usa CW-L2 padrão.
-* O defense-aware usa CW-L2 adaptativo.
+* O defense-unaware usa CW-L2 padrão via `nn_robust_attacks.CarliniL2`.
+* O defense-aware usa CW-L2 adaptativo com `nn_robust_attacks.CarliniL2` como
+  ataque base.
 * O ataque adaptativo conhece a transformação `T`.
 * A transformação `T` corresponde ao filtro final adaptativo de detecção do projeto.
 * A transformação `T` não é descrita nem implementada genericamente como união das Tables 7, 8 e 9.
@@ -984,4 +987,3 @@ attack,total_valid,success,detected,undetected,failures,attack_success_rate_perc
 * Nenhum diagnóstico é produzido.
 * Nenhum artefato morto é criado.
 * Toda a lógica permanece compatível com o runner centralizado do projeto.
-

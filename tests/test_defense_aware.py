@@ -55,8 +55,16 @@ def test_defense_aware_config_matches_spec() -> None:
     assert experiment["model"]["name"] == "mnist_m2"
     assert "attack" not in experiment
     assert set(experiment["attacks"]) == {"defense_unaware", "defense_aware"}
-    assert experiment["attacks"]["defense_unaware"]["type"] == "cw_l2"
+    assert experiment["attacks"]["defense_unaware"]["type"] == "cw_l2_nn_robust"
+    assert (
+        experiment["attacks"]["defense_unaware"]["nn_robust_attacks_root"]
+        == "nn_robust_attacks"
+    )
     assert experiment["attacks"]["defense_aware"]["type"] == "adaptive_cw_l2"
+    assert (
+        experiment["attacks"]["defense_aware"]["nn_robust_attacks_root"]
+        == "nn_robust_attacks"
+    )
     assert experiment["detector"]["type"] == "final_adaptive_detection_filter"
     assert experiment["detector"]["spatial_filter"] == {
         "type": "cross_mean",
@@ -376,7 +384,11 @@ def test_run_defense_aware_evaluation_uses_shared_transform_in_adaptive_attack(
         "build_final_adaptive_detection_filter",
         fake_build_filter,
     )
-    monkeypatch.setattr(defense_aware_module, "generate_cw_l2_attack", fake_cw)
+    monkeypatch.setattr(
+        defense_aware_module,
+        "generate_nn_robust_cw_l2_attack",
+        fake_cw,
+    )
     monkeypatch.setattr(
         defense_aware_module,
         "generate_adaptive_cw_l2_attack",
@@ -390,8 +402,14 @@ def test_run_defense_aware_evaluation_uses_shared_transform_in_adaptive_attack(
             "model": {},
             "evaluation": {"batch_size": 1},
             "attacks": {
-                "defense_unaware": {"type": "cw_l2"},
-                "defense_aware": {"type": "adaptive_cw_l2"},
+                "defense_unaware": {
+                    "type": "cw_l2_nn_robust",
+                    "nn_robust_attacks_root": "nn_robust_attacks",
+                },
+                "defense_aware": {
+                    "type": "adaptive_cw_l2",
+                    "nn_robust_attacks_root": "nn_robust_attacks",
+                },
             },
             "detector": {"type": "final_adaptive_detection_filter"},
         }

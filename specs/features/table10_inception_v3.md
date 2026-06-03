@@ -31,6 +31,8 @@ O código de referência do repositório original `OwenSec/DeepDetector/Test/CW`
   * `predict`/`my_predict` usando `tf.import_graph_def` e `softmax/logits:0`
   * normalização de entrada em `[-0.5, 0.5]` e escalonamento para `(0.5 + img) * 255` antes da inferência.
 * `Test_CWLi_ImageNet.py` usa a classe `ImageNet` desse wrapper para carregar imagens das classes zebra/panda/cab e invocar ataques `CarliniLi`.
+* O repositório original usa `nn_robust_attacks.CarliniL2` para CW-L2 e
+  `nn_robust_attacks.CarliniLi` para CW-L∞.
 
 O modelo Inception v3 nesta spec deve atender ao mesmo pré-processamento e saída de logits, mantendo a compatibilidade com o fluxo CW da Table 10.
 
@@ -49,6 +51,8 @@ A configuração correta deve incluir, no mínimo:
 * `dataset.shuffle: true`
 * `evaluation.seed: 20170830`
 * `model.name: inception_v3`
+* `attack.nn_robust_attacks_root` apontando para um checkout local de
+  `nn_robust_attacks`
 * `rows` com os seis ataques CW listados
 
 A execução deve produzir em `results/experiments/table_10/inception_v3/`:
@@ -67,7 +71,10 @@ Esta spec cobre:
 * implementação da integração do modelo `inception_v3` com o runner Table 10;
 * geração de `metrics.csv` e `metrics.json` no diretório oficial;
 * preservação do schema oficial da Table 10;
-* suporte a ataques `cw_l2` com κ = 0.0, 0.5, 1.0, 2.0, 4.0 e `cw_linf`;
+* suporte a ataques `cw_l2_nn_robust` com κ = 0.0, 0.5, 1.0, 2.0, 4.0 e
+  `cw_linf_nn_robust`;
+* uso dos backends `nn_robust_attacks.CarliniL2` e
+  `nn_robust_attacks.CarliniLi` para essas linhas;
 * uso de entrada 299x299 com pré-processamento de Inception;
 * uso de uma amostra reprodutível de 100 imagens ImageNet das classes zebra/panda/cab;
 * manutenção do manifest para registrar o status das linhas executadas ou bloqueadas.
@@ -91,8 +98,14 @@ Não implementar nesta spec:
 
 * Deve existir um wrapper `inception_v3` que aceite entradas de tamanho `299x299x3` e produza logits ou probabilidades compatíveis com o ataque CW.
 * O wrapper deve aplicar o mesmo pré-processamento de entrada do original: normalização centralizada em `[-0.5, 0.5]` com escalonamento para `255` antes de alimentar o grafo.
-* O ataque `cw_l2` deve aceitar parâmetros `kappa` fixos conforme as linhas da Table 10.
-* O ataque `cw_linf` deve ser suportado como outra linha do grupo.
+* O ataque `cw_l2_nn_robust` deve aceitar parâmetros `kappa` fixos conforme as linhas da Table 10.
+* O ataque `cw_linf_nn_robust` deve ser suportado como outra linha do grupo.
+* O ataque `cw_l2_nn_robust` deve ser executado via `nn_robust_attacks.CarliniL2`.
+* O ataque `cw_linf_nn_robust` deve ser executado via `nn_robust_attacks.CarliniLi`.
+* Os nomes legados `cw_l2` e `cw_linf` não devem ser expostos no registro de
+  ataques para esta reprodução.
+* O runner deve falhar ou bloquear a linha com `blocked_reason` quando o checkout
+  local de `nn_robust_attacks` não estiver disponível.
 * O `table_10_group` deve ser capaz de produzir os seis resultados conforme o schema oficial.
 * A amostragem deve embaralhar a lista de imagens com `evaluation.seed` antes de limitar a `dataset.n_samples`.
 * Com `dataset.n_samples: 100`, `dataset.shuffle: true` e `evaluation.seed: 20170830`, o experimento deve avaliar 100 imagens aleatórias de forma reprodutível.
@@ -122,6 +135,10 @@ Não implementar nesta spec:
 - [ ] O modelo Inception v3 usa entrada `299x299` e o pré-processamento descrito no repositório original.
 - [ ] As linhas 14, 15, 16, 17, 18 e 20 preservam seus números originais do artigo.
 - [ ] As linhas 14, 15, 16, 17, 18 e 20 ficam com `status: implemented`.
+- [ ] As linhas 14, 15, 16, 17 e 18 usam `attack.name: cw_l2_nn_robust`.
+- [ ] A linha 20 usa `attack.name: cw_linf_nn_robust`.
+- [ ] O experimento configura `attack.nn_robust_attacks_root`.
+- [ ] `ATTACK_REGISTRY` não registra `cw_l2` nem `cw_linf`.
 - [ ] O grupo `inception_v3` é integrado sem necessidade de um script específico fora do runner da Table 10.
 
 ---
@@ -133,3 +150,5 @@ Não implementar nesta spec:
 * O wrapper de modelo deve compatibilizar o fluxo de CW com o grafo Inception e com os ataques existentes do projeto.
 * O repositório original usa `modified_setup_inception.py` para importar `softmax/logits:0`; essa mesma abstração deve ser reproduzida de forma limpa aqui.
 * O original `Test_CWLi_ImageNet.py` carrega as classes zebra/panda/cab e usa alvos one-hot com 1008 dimensões; o suporte a esse tipo de rótulo deve ser preservado na implementação.
+* O adapter para `nn_robust_attacks` deve expor `image_size`, `num_channels`,
+  `num_labels` e `predict()` pre-softmax, mantendo entradas em `[-0.5, 0.5]`.

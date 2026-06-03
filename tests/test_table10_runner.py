@@ -270,15 +270,16 @@ def test_table10_inception_v3_config_enables_cw_rows() -> None:
         == "artifacts/models/imagenet/inceptionv3/classify_image_graph_def.pb"
     )
     assert experiment["model"]["input_map_name"] == "ResizeBilinear:0"
+    assert experiment["attack"]["nn_robust_attacks_root"] == "nn_robust_attacks"
     assert [row["no"] for row in experiment["rows"]] == [14, 15, 16, 17, 18, 20]
     assert [row["status"] for row in experiment["rows"]] == ["implemented"] * 6
     assert [row["attack"]["name"] for row in experiment["rows"]] == [
-        "cw_l2",
-        "cw_l2",
-        "cw_l2",
-        "cw_l2",
-        "cw_l2",
-        "cw_linf",
+        "cw_l2_nn_robust",
+        "cw_l2_nn_robust",
+        "cw_l2_nn_robust",
+        "cw_l2_nn_robust",
+        "cw_l2_nn_robust",
+        "cw_linf_nn_robust",
     ]
     assert [row["attack"].get("kappa") for row in experiment["rows"][:5]] == [
         0.0,
@@ -289,7 +290,7 @@ def test_table10_inception_v3_config_enables_cw_rows() -> None:
     ]
     for row in experiment["rows"][:5]:
         assert row["attack"] == {
-            "name": "cw_l2",
+            "name": "cw_l2_nn_robust",
             "kappa": row["attack"]["kappa"],
             "batch_size": 1,
             "max_iterations": 1000,
@@ -653,8 +654,9 @@ def test_table10_inception_v3_row_computes_cw_metrics(monkeypatch) -> None:
     )
 
     def fake_generate_attack(name, model, images, labels, **kwargs):
-        assert name == "cw_l2"
+        assert name == "cw_l2_nn_robust"
         assert kwargs["kappa"] == 0.5
+        assert kwargs["nn_robust_attacks_root"] == "nn_robust_attacks"
         adversarial = images.copy()
         adversarial[0, ...] = 2.0 if float(images[0].reshape(-1)[0]) == 1.0 else images[0]
         return adversarial
@@ -673,13 +675,14 @@ def test_table10_inception_v3_row_computes_cw_metrics(monkeypatch) -> None:
             "dataset": {"name": "imagenet"},
             "model_group": "inception_v3",
             "model": {"name": "inception_v3"},
+            "attack": {"nn_robust_attacks_root": "nn_robust_attacks"},
             "filter": {"name": "test_filter", "type": "proposed_detection_filter"},
         },
         {
             "no": 15,
             "attack_model": "CW L2 (κ=0.5)/Inception v3",
             "status": "implemented",
-            "attack": {"name": "cw_l2", "kappa": 0.5},
+            "attack": {"name": "cw_l2_nn_robust", "kappa": 0.5},
         },
     )
 

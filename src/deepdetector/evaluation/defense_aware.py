@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict
 import numpy as np
 
 from deepdetector.attacks.adaptive_cw_l2 import generate_adaptive_cw_l2_attack
-from deepdetector.attacks.cw_l2 import generate_cw_l2_attack
+from deepdetector.attacks.nn_robust import generate_nn_robust_cw_l2_attack
 from deepdetector.evaluation.article_reproduction import (
     label_to_int,
     load_mnist_test_slice,
@@ -257,7 +257,7 @@ def _cw_attack_fn(
     kwargs.setdefault("clip_max", 1.0)
 
     def attack(image: np.ndarray, true_label: int, clean_pred: int) -> np.ndarray:
-        adversarial = generate_cw_l2_attack(
+        adversarial = generate_nn_robust_cw_l2_attack(
             model=graph["model"],
             images=_as_batch(image),
             labels=np.asarray([true_label], dtype=np.int32),

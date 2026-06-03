@@ -6,7 +6,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from deepdetector.attacks.cw_l2 import generate_cw_l2_attack
+from deepdetector.attacks.nn_robust import generate_nn_robust_cw_l2_attack
 
 
 PredictFn = Callable[[np.ndarray], np.ndarray]
@@ -28,7 +28,7 @@ def generate_adaptive_cw_l2_attack(
     transform_fn: TransformFn | None = None,
     detector: Any = None,
     predict_fn: PredictFn | None = None,
-    base_attack_fn: Callable[..., np.ndarray] = generate_cw_l2_attack,
+    base_attack_fn: Callable[..., np.ndarray] = generate_nn_robust_cw_l2_attack,
     **kwargs: Any,
 ) -> np.ndarray:
     """Generate CW-L2 candidates and keep only defense-aware successes.

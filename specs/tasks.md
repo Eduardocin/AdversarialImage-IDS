@@ -203,6 +203,18 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Disable eager execution in `InceptionV3TensorFlowWrapper`.
   - [x] Use TF2-compatible `tf.compat.v1.graph_util.import_graph_def`.
   - [x] Add the Inception environment validation script.
+- [x] Require nn_robust_attacks CW backends for Inception v3 from `specs/features/Table_10.md`
+  - [x] Update the Inception Table 10 spec/config to use `cw_l2_nn_robust` and `cw_linf_nn_robust`.
+  - [x] Add registry-compatible `nn_robust_attacks` CW generators.
+  - [x] Adapt Inception v3 to the `nn_robust_attacks` model contract.
+  - [x] Add automated tests for config, dispatch, adapter, and backend loading.
+  - [x] Run focused pytest validation.
+- [x] Remove legacy local CW backends from `specs/features/Table_10.md`
+  - [x] Move shared TensorFlow 1 compatibility patching out of `cw_l2.py`.
+  - [x] Remove `cw_l2` and `cw_linf` from attack registry and package exports.
+  - [x] Delete legacy local CW backend modules.
+  - [x] Update tests to cover only the `nn_robust_attacks` CW backends.
+  - [x] Run focused pytest validation.
 - [x] Implement Table 10 CaffeNet from `specs/features/table10_caffenet.md`
   - [x] Add CaffeNet wrapper support for `deploy_original.prototxt` and `deploy_removeSoftmax.prototxt`.
   - [x] Integrate `table_10_caffenet` through the existing Table 10 group runner.

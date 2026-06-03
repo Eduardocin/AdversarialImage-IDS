@@ -231,6 +231,15 @@ results/mnist/article_reproduction/table_10_m2/
 
 O grupo `inception_v3` representa os experimentos CW em ImageNet com Inception v3.
 
+Para Inception v3, CW-L2 deve ser gerado com `nn_robust_attacks.CarliniL2` e
+CW-L∞ deve ser gerado com `nn_robust_attacks.CarliniLi`, usando um checkout
+local configurado no experimento. Os backends CW locais/CleverHans não devem ser
+usados por este grupo.
+
+Os backends locais `cw_l2` e `cw_linf` ficam descontinuados para a Table 10 e
+não devem permanecer no registro público de ataques. As linhas CW oficiais
+devem usar apenas os nomes `cw_l2_nn_robust` e `cw_linf_nn_robust`.
+
 | No. | Attack/Model | Dataset |
 |---:|---|---|
 | 14 | CW L2 (κ=0.0)/Inception v3 | ImageNet |
@@ -443,11 +452,13 @@ table_10:
       model: inception_v3
       dataset: imagenet
       output_dir: results/experiments/table_10/inception_v3
+      attack:
+        nn_robust_attacks_root: nn_robust_attacks
       rows:
         - no: 14
           attack_model: "CW L2 (κ=0.0)/Inception v3"
           attack:
-            name: cw_l2
+            name: cw_l2_nn_robust
             kappa: 0.0
           status: blocked
           blocked_reason: "Inception v3 ainda não está implementado."
@@ -455,7 +466,7 @@ table_10:
         - no: 15
           attack_model: "CW L2 (κ=0.5)/Inception v3"
           attack:
-            name: cw_l2
+            name: cw_l2_nn_robust
             kappa: 0.5
           status: blocked
           blocked_reason: "Inception v3 ainda não está implementado."
@@ -463,7 +474,7 @@ table_10:
         - no: 16
           attack_model: "CW L2 (κ=1.0)/Inception v3"
           attack:
-            name: cw_l2
+            name: cw_l2_nn_robust
             kappa: 1.0
           status: blocked
           blocked_reason: "Inception v3 ainda não está implementado."
@@ -471,7 +482,7 @@ table_10:
         - no: 17
           attack_model: "CW L2 (κ=2.0)/Inception v3"
           attack:
-            name: cw_l2
+            name: cw_l2_nn_robust
             kappa: 2.0
           status: blocked
           blocked_reason: "Inception v3 ainda não está implementado."
@@ -479,7 +490,7 @@ table_10:
         - no: 18
           attack_model: "CW L2 (κ=4.0)/Inception v3"
           attack:
-            name: cw_l2
+            name: cw_l2_nn_robust
             kappa: 4.0
           status: blocked
           blocked_reason: "Inception v3 ainda não está implementado."
@@ -487,7 +498,7 @@ table_10:
         - no: 20
           attack_model: "CW L∞/Inception v3"
           attack:
-            name: cw_linf
+            name: cw_linf_nn_robust
           status: blocked
           blocked_reason: "Inception v3 ainda não está implementado."
 ```
@@ -706,6 +717,11 @@ python scripts/run_experiment.py --experiment table_10_inception_v3
   geração.
 - M2 não usa os backends CW locais/CleverHans.
 - Cada adversarial M2 gerado possui um `manifest.json` ao lado do `.npy`.
+- Inception v3 CW-L2 sempre usa `nn_robust_attacks.CarliniL2` e Inception v3
+  CW-L∞ sempre usa `nn_robust_attacks.CarliniLi`.
+- Inception v3 deve apontar para um checkout local de `nn_robust_attacks`.
+- Inception v3 não usa os backends CW locais/CleverHans.
+- O registro público de ataques não expõe mais `cw_l2` nem `cw_linf`.
 
 ---
 

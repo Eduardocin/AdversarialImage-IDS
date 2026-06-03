@@ -147,7 +147,9 @@ dataset:
 
 ### Contexto
 
-O original usa `CarliniL2` do repositório `nn_robust_attacks`. A reprodução usa CW-L2 via CleverHans. O ataque é **equivalente em objetivo** (métricas agregadas TP/FP/FN/TTP), mas não idêntico pixel a pixel. Para minimizar divergências, todos os hiperparâmetros devem bater exatamente.
+O original usa `CarliniL2` do repositório `nn_robust_attacks`. A reprodução
+atual deve usar esse mesmo backend para Inception v3, conforme
+`specs/features/Table_10.md`.
 
 ### Tabela de Parâmetros
 
@@ -168,7 +170,7 @@ O original usa `CarliniL2` do repositório `nn_robust_attacks`. A reprodução u
 
 ```yaml
 attack:
-  name: cw_l2
+  name: cw_l2_nn_robust
   kappa: 0.0
   batch_size: 1
   max_iterations: 1000
@@ -297,7 +299,8 @@ Executar nesta ordem:
 
 ## Decisões de Design e Limitações
 
-**CleverHans vs. `nn_robust_attacks`:** Aceitável para reprodução de métricas agregadas (TP, FP, FN, TTP). Não é aceitável se o objetivo for comparar adversariais pixel a pixel.
+**Backend CW:** A decisão atual é usar `nn_robust_attacks` para Inception v3,
+evitando o backend CleverHans/local nas linhas CW da Table 10.
 
 **TensorFlow 2 com API TF1:** Usar `tf.compat.v1` com eager desabilitado mantém compatibilidade com o grafo congelado `.pb` original. Migrar para TF2 nativo exigiria reescrever o carregamento do grafo com `tf.saved_model` ou converter o `.pb` para SavedModel — fora do escopo desta refatoração.
 

@@ -540,8 +540,12 @@ def _table_10_filter(config: dict[str, Any]):
     return filter_fn
 
 
-def _attack_kwargs(row_config: dict[str, Any]) -> dict[str, Any]:
-    attack_config = dict(row_config.get("attack", {}))
+def _attack_kwargs(
+    row_config: dict[str, Any],
+    group_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    attack_config = dict((group_config or {}).get("attack", {}))
+    attack_config.update(dict(row_config.get("attack", {})))
     attack_config.pop("name", None)
     return attack_config
 
@@ -562,6 +566,7 @@ def _generate_table_10_adversarial(
     clean_image: np.ndarray,
     true_label: int,
     clean_pred: int,
+    group_config: dict[str, Any] | None = None,
 ) -> np.ndarray:
     attack_config = row_config.get("attack", {})
     if attack_name == "fgsm":
@@ -579,7 +584,7 @@ def _generate_table_10_adversarial(
         model=model,
         images=clean_image.reshape((1,) + clean_image.shape),
         labels=np.asarray([true_label], dtype=np.int32),
-        **_attack_kwargs(row_config),
+        **_attack_kwargs(row_config, group_config=group_config),
     )
     return np.asarray(adversarial_batch[0], dtype=np.float32)
 
@@ -676,6 +681,7 @@ def evaluate_table_10_imagenet_row(
         )
         adversarial_image = _generate_table_10_adversarial(
             attack_name=attack_name,
+            group_config=group_config,
             row_config=row_config,
             model=model,
             clean_image=clean_image,
@@ -781,7 +787,10 @@ def _is_table_10_imagenet_attack(
         and (
             (model_group == "googlenet" and attack_name in {"fgsm", "deepfool"})
             or (model_group == "caffenet" and attack_name == "deepfool")
-            or (model_group == "inception_v3" and attack_name in {"cw_l2", "cw_linf"})
+            or (
+                model_group == "inception_v3"
+                and attack_name in {"cw_l2_nn_robust", "cw_linf_nn_robust"}
+            )
         )
     )
 
