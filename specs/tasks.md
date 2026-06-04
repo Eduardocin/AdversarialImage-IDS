@@ -4,6 +4,13 @@ Use this file to track implementation tasks derived from specifications in `spec
 
 ## Backlog
 
+- [x] Add M2 TensorFlow 2 compatibility from `specs/features/m2_tf2_migration.md`
+  - [x] Add a dedicated M2 TensorFlow 2 environment file.
+  - [x] Disable eager execution before M2 graph construction.
+  - [x] Make M2 Keras layer construction compatible with legacy Keras and TF2 Keras.
+  - [x] Make MNIST TF session setup tolerant of TF2 Keras backend differences.
+  - [x] Add a direct `scripts/train_mnist_m2.py` CLI for local M2 training.
+  - [x] Add focused tests for the compatibility path.
 - [x] Apply script refactor from `specs/refactor/plano_refatoracao_scripts.md`
   - [x] Add shared ImageNet path, config, pivot CSV, model, data, evaluation, and adversarial helpers.
   - [x] Route Table 7 and Table 8 ImageNet runners through shared helpers.

@@ -16,6 +16,7 @@ from deepdetector.evaluation.article_reproduction import (  # noqa: E402
     evaluate_filter_predictions,
     interval_size,
 )
+from deepdetector.models import mnist_m2  # noqa: E402
 from scripts.article_reproduction import mnist_table_10_m1_fgsm as table_10  # noqa: E402
 from scripts.article_reproduction import mnist_table_10_m2_cw as table_10_m2  # noqa: E402
 
@@ -492,6 +493,143 @@ def test_table_10_m2_sets_keras_inference_phase(monkeypatch) -> None:
     table_10_m2._set_keras_inference_phase()
 
     assert calls == [0]
+
+
+def test_create_restored_m2_graph_disables_eager_before_placeholder(monkeypatch) -> None:
+    """M2 graph creation should enter TF1 graph mode before placeholders."""
+    calls = []
+
+    def fake_disable_eager_execution():
+        calls.append("disable_eager")
+
+    def fake_placeholder(dtype, shape, name):
+        calls.append("placeholder")
+        return (dtype, shape, name)
+
+    fake_tf = types.SimpleNamespace(
+        float32="float32",
+        compat=types.SimpleNamespace(
+            v1=types.SimpleNamespace(
+                disable_eager_execution=fake_disable_eager_execution,
+                placeholder=fake_placeholder,
+            )
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "tensorflow", fake_tf)
+    monkeypatch.setattr(table_10_m2, "create_tf_session", lambda: "session")
+    monkeypatch.setattr(table_10_m2, "_set_keras_inference_phase", lambda: None)
+    monkeypatch.setattr(
+        table_10_m2,
+        "build_mnist_m2_model",
+        lambda x_placeholder: ("model", ("predictions", x_placeholder)),
+    )
+    monkeypatch.setattr(
+        table_10_m2,
+        "load_mnist_m2_model",
+        lambda sess, train_dir: "checkpoint",
+    )
+
+    graph = table_10_m2.create_restored_m2_graph("train-dir")
+
+    assert calls == ["disable_eager", "placeholder"]
+    assert graph["checkpoint"] == "checkpoint"
+
+
+def test_m2_nn_robust_loader_patches_tf1_symbols_for_tf2(monkeypatch, tmp_path) -> None:
+    """nn_robust_attacks loaders should expose TF1 symbols before module import."""
+    calls = []
+
+    class FakeTrain:
+        pass
+
+    compat_v1 = types.SimpleNamespace(
+        disable_eager_execution=lambda: calls.append("disable_eager"),
+        placeholder="placeholder",
+        global_variables="global_variables",
+        variables_initializer="variables_initializer",
+        assign="assign",
+        assign_add="assign_add",
+        gradients="gradients",
+        Session="Session",
+        GraphKeys="GraphKeys",
+        ConfigProto="ConfigProto",
+        train=types.SimpleNamespace(AdamOptimizer="AdamOptimizer"),
+    )
+    fake_tf = types.SimpleNamespace(
+        compat=types.SimpleNamespace(v1=compat_v1),
+        train=FakeTrain(),
+    )
+    monkeypatch.setitem(sys.modules, "tensorflow", fake_tf)
+
+    attack_root = tmp_path / "nn_robust_attacks"
+    attack_root.mkdir()
+    (attack_root / "l2_attack.py").write_text(
+        "\n".join(
+            [
+                "import tensorflow as tf",
+                "assert tf.placeholder == 'placeholder'",
+                "assert tf.global_variables == 'global_variables'",
+                "assert tf.variables_initializer == 'variables_initializer'",
+                "assert tf.train.AdamOptimizer == 'AdamOptimizer'",
+                "class CarliniL2:",
+                "    pass",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    attack_class = table_10_m2._load_nn_robust_carlini_l2(str(attack_root))
+
+    assert attack_class.__name__ == "CarliniL2"
+    assert calls == ["disable_eager"]
+
+
+def test_m2_model_build_accepts_modern_keras_conv2d_arguments(monkeypatch) -> None:
+    """M2 construction should fall back to TF2/Keras Conv2D argument names."""
+    conv_calls = []
+
+    class FakeConvolution2D:
+        def __init__(self, filters, *args, **kwargs):
+            if "border_mode" in kwargs:
+                raise TypeError("border_mode is not supported")
+            conv_calls.append((filters, args, kwargs))
+
+    class FakeSequential:
+        def __init__(self):
+            self.layers = []
+
+        def add(self, layer):
+            self.layers.append(layer)
+
+        def __call__(self, x_placeholder):
+            return ("predictions", x_placeholder, len(self.layers))
+
+    layers_module = types.ModuleType("keras.layers")
+    layers_module.Convolution2D = FakeConvolution2D
+    layers_module.MaxPooling2D = lambda **kwargs: ("maxpool", kwargs)
+    layers_module.Activation = lambda name: ("activation", name)
+    layers_module.Dense = lambda units: ("dense", units)
+    layers_module.Dropout = lambda rate: ("dropout", rate)
+    layers_module.Flatten = lambda: "flatten"
+    models_module = types.ModuleType("keras.models")
+    models_module.Sequential = FakeSequential
+    keras_module = types.ModuleType("keras")
+    keras_module.layers = layers_module
+    keras_module.models = models_module
+
+    monkeypatch.setitem(sys.modules, "keras", keras_module)
+    monkeypatch.setitem(sys.modules, "keras.layers", layers_module)
+    monkeypatch.setitem(sys.modules, "keras.models", models_module)
+
+    model, predictions = mnist_m2.build_mnist_m2_model("x")
+
+    assert predictions == ("predictions", "x", len(model.layers))
+    assert conv_calls[0] == (
+        32,
+        ((3, 3),),
+        {"padding": "valid", "input_shape": (28, 28, 1)},
+    )
+    assert all(call[2]["padding"] == "valid" for call in conv_calls)
 
 
 def test_m2_nn_robust_adapter_converts_centered_inputs_to_unit_scale() -> None:

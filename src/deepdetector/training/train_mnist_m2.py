@@ -15,6 +15,29 @@ from deepdetector.paths import MNIST_M2_CHECKPOINT_DIR
 from deepdetector.training.train_mnist_m1 import smooth_one_hot_labels
 
 
+def _predict_accuracy(
+    sess: Any,
+    x: Any,
+    y_true: np.ndarray,
+    predictions: Any,
+    images: np.ndarray,
+    batch_size: int,
+    feed: Dict[Any, Any],
+) -> float:
+    """Evaluate classification accuracy without CleverHans TF1 helpers."""
+    predicted_labels = []
+    for start in range(0, len(images), batch_size):
+        batch = images[start : start + batch_size]
+        feed_dict = {x: batch}
+        if feed:
+            feed_dict.update(feed)
+        logits = sess.run(predictions, feed_dict=feed_dict)
+        predicted_labels.extend(np.argmax(logits, axis=1).astype(np.int64).tolist())
+
+    expected_labels = np.argmax(y_true, axis=1).astype(np.int64)
+    return float(np.mean(np.asarray(predicted_labels, dtype=np.int64) == expected_labels))
+
+
 def train_or_load_mnist_m2_model(
     sess: Any,
     x: Any,
@@ -30,7 +53,6 @@ def train_or_load_mnist_m2_model(
     import math
 
     import tensorflow as tf
-    from cleverhans.utils_tf import model_eval, model_loss
 
     def learning_phase_feed(value: int) -> Dict[Any, Any]:
         """Return a feed dict for Keras learning phase when needed."""
@@ -74,14 +96,13 @@ def train_or_load_mnist_m2_model(
     eval_feed = learning_phase_feed(0)
 
     def evaluate() -> float:
-        accuracy = model_eval(
+        accuracy = _predict_accuracy(
             sess,
             x,
-            y,
+            Y_test,
             predictions,
             X_test,
-            Y_test,
-            args=eval_params,
+            int(eval_params["batch_size"]),
             feed=eval_feed,
         )
         print("m2_clean_test_accuracy={0:.4f}".format(accuracy), flush=True)
@@ -98,7 +119,10 @@ def train_or_load_mnist_m2_model(
     if trained_from_scratch:
         Y_train_smooth = smooth_one_hot_labels(Y_train, label_smoothing)
         train_feed = learning_phase_feed(1)
-        loss = model_loss(y, predictions)
+        loss = tf.compat.v1.losses.softmax_cross_entropy(
+            onehot_labels=y,
+            logits=predictions,
+        )
         train_step = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
         sess.run(tf.compat.v1.global_variables_initializer())
 

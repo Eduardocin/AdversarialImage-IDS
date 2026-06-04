@@ -164,6 +164,49 @@ def test_mnist_m2_latest_checkpoint_falls_back_to_local_base(
     assert checkpoint == str(checkpoint_dir / "mnist_m2.ckpt")
 
 
+def test_create_tf_session_tolerates_tf2_keras_backend(monkeypatch) -> None:
+    """Session setup should work when Keras removed legacy backend setters."""
+    calls = []
+
+    class FakeConfig:
+        def __init__(self):
+            self.gpu_options = SimpleNamespace(allow_growth=False)
+
+    fake_session = object()
+    fake_tf_backend = SimpleNamespace(set_session=lambda sess: calls.append(("tf_set_session", sess)))
+    fake_tf = SimpleNamespace(
+        compat=SimpleNamespace(
+            v1=SimpleNamespace(
+                disable_eager_execution=lambda: calls.append(("disable_eager", None)),
+                ConfigProto=FakeConfig,
+                Session=lambda config: calls.append(("session", config.gpu_options.allow_growth))
+                or fake_session,
+            )
+        )
+    )
+    fake_tf.compat.v1.keras = SimpleNamespace(backend=fake_tf_backend)
+
+    keras_module = SimpleNamespace()
+    keras_backend = SimpleNamespace(
+        set_image_data_format=lambda value: calls.append(("image_data_format", value))
+    )
+    keras_module.backend = keras_backend
+
+    monkeypatch.setitem(sys.modules, "tensorflow", fake_tf)
+    monkeypatch.setitem(sys.modules, "keras", keras_module)
+    monkeypatch.setitem(sys.modules, "keras.backend", keras_backend)
+
+    session = mnist_cnn.create_tf_session(allow_growth=True)
+
+    assert session is fake_session
+    assert calls == [
+        ("disable_eager", None),
+        ("session", True),
+        ("tf_set_session", fake_session),
+        ("image_data_format", "channels_last"),
+    ]
+
+
 def test_mnist_keras_fallback_format_matches_cleverhans_shape() -> None:
     """The Keras fallback should preserve the legacy MNIST array contract."""
     images = np.zeros((2, 28, 28), dtype=np.uint8)

@@ -12,12 +12,20 @@ def create_tf_session(allow_growth: bool = True) -> Any:
     import tensorflow as tf
     from keras import backend as keras_backend
 
+    tf.compat.v1.disable_eager_execution()
     config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = allow_growth
 
     sess = tf.compat.v1.Session(config=config)
-    keras_backend.set_session(sess)
-    keras_backend.set_image_dim_ordering("tf")
+    if hasattr(keras_backend, "set_session"):
+        keras_backend.set_session(sess)
+    elif hasattr(tf.compat.v1.keras.backend, "set_session"):
+        tf.compat.v1.keras.backend.set_session(sess)
+
+    if hasattr(keras_backend, "set_image_dim_ordering"):
+        keras_backend.set_image_dim_ordering("tf")
+    elif hasattr(keras_backend, "set_image_data_format"):
+        keras_backend.set_image_data_format("channels_last")
     return sess
 
 

@@ -99,6 +99,35 @@ def _set_keras_inference_phase() -> None:
         pass
 
 
+def _patch_external_tensorflow_v1_symbols() -> None:
+    """Expose TF1 symbols expected by nn_robust_attacks when running on TF2."""
+    try:
+        import tensorflow as tf
+    except ImportError:
+        return
+
+    if not hasattr(tf, "compat") or not hasattr(tf.compat, "v1"):
+        return
+
+    tf.compat.v1.disable_eager_execution()
+    for name in (
+        "placeholder",
+        "global_variables",
+        "variables_initializer",
+        "assign",
+        "assign_add",
+        "gradients",
+        "Session",
+        "GraphKeys",
+        "ConfigProto",
+    ):
+        if not hasattr(tf, name) and hasattr(tf.compat.v1, name):
+            setattr(tf, name, getattr(tf.compat.v1, name))
+
+    if hasattr(tf, "train") and not hasattr(tf.train, "AdamOptimizer"):
+        tf.train.AdamOptimizer = tf.compat.v1.train.AdamOptimizer
+
+
 def format_kappa(kappa: float) -> str:
     """Format kappa for existing CW L2 result directory names."""
     value = float(kappa)
@@ -115,9 +144,10 @@ def format_attack_model_label(name: str, kappa: Optional[float]) -> str:
 
 
 def create_restored_m2_graph(train_dir: str) -> Dict[str, Any]:
-    """Create and restore the M2 TF1 graph."""
+    """Create and restore the M2 TensorFlow graph."""
     import tensorflow as tf
 
+    tf.compat.v1.disable_eager_execution()
     sess = create_tf_session()
     _set_keras_inference_phase()
     x_placeholder = tf.compat.v1.placeholder(
@@ -275,6 +305,7 @@ class M2NnRobustAdapter(object):
 
 def _load_nn_robust_carlini_l2(root: str) -> Any:
     """Load CarliniL2 from a local nn_robust_attacks checkout."""
+    _patch_external_tensorflow_v1_symbols()
     attack_path = Path(str(root)).expanduser() / "l2_attack.py"
     if not attack_path.is_file():
         raise ImportError("Missing nn_robust_attacks l2_attack.py: {0}".format(attack_path))
@@ -292,6 +323,7 @@ def _load_nn_robust_carlini_l2(root: str) -> Any:
 
 def _load_nn_robust_carlini_li(root: str) -> Any:
     """Load CarliniLi from a local nn_robust_attacks checkout."""
+    _patch_external_tensorflow_v1_symbols()
     attack_path = Path(str(root)).expanduser() / "li_attack.py"
     if not attack_path.is_file():
         raise ImportError("Missing nn_robust_attacks li_attack.py: {0}".format(attack_path))

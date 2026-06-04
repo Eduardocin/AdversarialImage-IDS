@@ -1,9 +1,25 @@
-"""TensorFlow 1.x/Keras M2 model used for MNIST CW experiments."""
+"""TensorFlow graph/Keras M2 model used for MNIST CW experiments."""
 
 from __future__ import print_function
 
 import os
 from typing import Any, Optional, Tuple
+
+
+def _conv2d(filters: int, input_shape: Optional[Tuple[int, int, int]] = None) -> Any:
+    """Return a Conv2D layer compatible with legacy and modern Keras."""
+    from keras.layers import Convolution2D
+
+    legacy_kwargs = {"border_mode": "valid"}
+    if input_shape is not None:
+        legacy_kwargs["input_shape"] = input_shape
+    try:
+        return Convolution2D(filters, 3, 3, **legacy_kwargs)
+    except TypeError:
+        modern_kwargs = {"padding": "valid"}
+        if input_shape is not None:
+            modern_kwargs["input_shape"] = input_shape
+        return Convolution2D(filters, (3, 3), **modern_kwargs)
 
 
 def build_mnist_m2_model(x_placeholder: Any) -> Tuple[Any, Any]:
@@ -18,19 +34,19 @@ def build_mnist_m2_model(x_placeholder: Any) -> Tuple[Any, Any]:
     The final layer returns logits without a softmax activation.
     """
     from keras.layers import Activation, Dense, Dropout, Flatten
-    from keras.layers import Convolution2D, MaxPooling2D
+    from keras.layers import MaxPooling2D
     from keras.models import Sequential
 
     model = Sequential()
-    model.add(Convolution2D(32, 3, 3, border_mode="valid", input_shape=(28, 28, 1)))
+    model.add(_conv2d(32, input_shape=(28, 28, 1)))
     model.add(Activation("relu"))
-    model.add(Convolution2D(32, 3, 3, border_mode="valid"))
+    model.add(_conv2d(32))
     model.add(Activation("relu"))
     model.add(MaxPooling2D(pool_size=(2, 2)))
 
-    model.add(Convolution2D(64, 3, 3, border_mode="valid"))
+    model.add(_conv2d(64))
     model.add(Activation("relu"))
-    model.add(Convolution2D(64, 3, 3, border_mode="valid"))
+    model.add(_conv2d(64))
     model.add(Activation("relu"))
     model.add(MaxPooling2D(pool_size=(2, 2)))
 
