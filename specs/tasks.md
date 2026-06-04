@@ -4,6 +4,17 @@ Use this file to track implementation tasks derived from specifications in `spec
 
 ## Backlog
 
+- [x] Implement top-k prediction detection from `specs/features/topk_detector.md`
+  - [x] Add `topk_detection` to the consolidated experiment config and runner dispatch.
+  - [x] Add reusable top-k selection, detection, aggregation, and output helpers.
+  - [x] Reuse ImageNet test `cab`/`panda`/`zebra`, GoogLeNet FGSM `epsilon=1/255`, and `article_final_detection_filter`.
+  - [x] Write only `selection.csv`, `selection.json`, `metrics.csv`, and `metrics.json`.
+  - [x] Add automated tests for acceptance criteria.
+- [x] Persist selected ambiguous images from `specs/features/topk_detector.md`
+  - [x] Save selected clean ambiguous images under `results/experiments/topk_detection/ambiguous_images/<class_name>/`.
+  - [x] Use deterministic PNG filenames based on selection order.
+  - [x] Keep adversarial images, diagnostics, and reports out of the output contract.
+  - [x] Add automated tests for saved ambiguous image artifacts.
 - [x] Apply script refactor from `specs/refactor/plano_refatoracao_scripts.md`
   - [x] Add shared ImageNet path, config, pivot CSV, model, data, evaluation, and adversarial helpers.
   - [x] Route Table 7 and Table 8 ImageNet runners through shared helpers.
