@@ -440,7 +440,7 @@ experiments:
 
   table_10_m1:
     kind: table_10_group
-    output_dir: results/experiments/table_10/m1
+    output_dir: results/mnist/article_reproduction/table_10_m1
     dataset:
       name: mnist
     model:
@@ -584,7 +584,7 @@ experiments:
 
   table_10_m2:
     kind: table_10_group
-    output_dir: results/experiments/table_10/m2
+    output_dir: results/mnist/article_reproduction/table_10_m2
     dataset:
       name: mnist
     model:
@@ -598,37 +598,37 @@ experiments:
         attack_model: "CW L2 (κ=0.0)/M2"
         status: implemented
         attack:
-          name: cw_l2
+          name: cw_l2_nn_robust
           kappa: 0.0
       - "no": 10
         attack_model: "CW L2 (κ=0.5)/M2"
         status: planned
         attack:
-          name: cw_l2
+          name: cw_l2_nn_robust
           kappa: 0.5
       - "no": 11
         attack_model: "CW L2 (κ=1.0)/M2"
         status: planned
         attack:
-          name: cw_l2
+          name: cw_l2_nn_robust
           kappa: 1.0
       - "no": 12
         attack_model: "CW L2 (κ=2.0)/M2"
         status: planned
         attack:
-          name: cw_l2
+          name: cw_l2_nn_robust
           kappa: 2.0
       - "no": 13
         attack_model: "CW L2 (κ=4.0)/M2"
         status: planned
         attack:
-          name: cw_l2
+          name: cw_l2_nn_robust
           kappa: 4.0
       - "no": 19
         attack_model: "CW L∞/M2"
         status: planned
         attack:
-          name: cw_linf
+          name: cw_linf_nn_robust
 
   table_10_inception_v3:
     kind: table_10_group

@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional
 
 import yaml
 
+from deepdetector.io.paths import resolve_project_path
+
 
 def load_yaml_config(path: Path) -> Dict[str, Any]:
     """Load a YAML config and ensure the root object is a mapping."""
@@ -28,4 +30,16 @@ def get_config_section(
 ) -> Any:
     """Return a config section with an optional default."""
     return config.get(section, default)
+
+
+def output_dir_from_config(
+    config: Dict[str, Any],
+    override: Optional[str],
+    project_root: Path,
+    default_output_dir: Path,
+) -> Path:
+    """Resolve an experiment output directory from CLI, YAML, or default."""
+    outputs = config.get("outputs", config.get("output", {}))
+    configured = override or outputs.get("results_dir") or outputs.get("dir")
+    return resolve_project_path(configured, project_root=project_root) or default_output_dir
 

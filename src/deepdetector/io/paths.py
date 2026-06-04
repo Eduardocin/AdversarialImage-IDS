@@ -14,7 +14,10 @@ def get_project_root() -> Path:
     raise RuntimeError("Could not find project root containing pyproject.toml.")
 
 
-def resolve_project_path(path_value: Optional[Union[str, Path]]) -> Optional[Path]:
+def resolve_project_path(
+    path_value: Optional[Union[str, Path]],
+    project_root: Optional[Path] = None,
+) -> Optional[Path]:
     """Resolve a path relative to the project root when it is not absolute."""
     if path_value in (None, ""):
         return None
@@ -22,7 +25,8 @@ def resolve_project_path(path_value: Optional[Union[str, Path]]) -> Optional[Pat
     path = Path(path_value)
     if path.is_absolute():
         return path
-    return get_project_root() / path
+    root = Path(project_root) if project_root is not None else get_project_root()
+    return root / path
 
 
 def ensure_dir(path: Union[str, Path]) -> Path:

@@ -5,14 +5,17 @@ from __future__ import annotations
 import csv
 import logging
 from pathlib import Path
-from typing import Callable, List, Tuple
+from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
+
+from deepdetector.io.paths import resolve_project_path
 
 
 logger = logging.getLogger(__name__)
 
 PreprocessFn = Callable[[np.ndarray], np.ndarray]
+IMAGE_EXTENSIONS = (".jpeg", ".jpg", ".png")
 
 
 def resize_normalized_image(image: np.ndarray, image_size: int = 224) -> np.ndarray:
@@ -32,7 +35,7 @@ def resize_normalized_image(image: np.ndarray, image_size: int = 224) -> np.ndar
     return (np.asarray(resized, dtype=np.float32) / 255.0).astype(np.float32)
 
 
-def _read_rgb_image(path: Path) -> np.ndarray:
+def read_rgb_image(path: Path) -> np.ndarray:
     """Load one image as normalized RGB float32 data."""
     if not path.is_file():
         raise FileNotFoundError(str(path))
@@ -42,6 +45,31 @@ def _read_rgb_image(path: Path) -> np.ndarray:
     with Image.open(str(path)) as image:
         rgb_image = image.convert("RGB")
         return (np.asarray(rgb_image, dtype=np.float32) / 255.0).astype(np.float32)
+
+
+def _read_rgb_image(path: Path) -> np.ndarray:
+    """Backward-compatible private alias for read_rgb_image."""
+    return read_rgb_image(path)
+
+
+def class_image_rows(
+    class_configs: Sequence[dict[str, Any]],
+    project_root: Optional[Path] = None,
+    image_extensions: Iterable[str] = IMAGE_EXTENSIONS,
+) -> List[Tuple[Path, int]]:
+    """Return sorted ImageNet class-folder image paths and integer labels."""
+    extensions = {extension.lower() for extension in image_extensions}
+    rows: List[Tuple[Path, int]] = []
+    for class_config in class_configs:
+        class_dir = resolve_project_path(class_config.get("path"), project_root=project_root)
+        if class_dir is None or not class_dir.is_dir():
+            raise IOError("Missing ImageNet class directory: {0}".format(class_dir))
+
+        label = int(class_config["label"])
+        for path in sorted(class_dir.iterdir()):
+            if path.is_file() and path.suffix.lower() in extensions:
+                rows.append((path, label))
+    return rows
 
 
 def _read_rows_with_pandas(csv_path: Path) -> List[Tuple[str, int]]:

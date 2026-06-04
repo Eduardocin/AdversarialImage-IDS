@@ -12,11 +12,11 @@ sys.path.insert(0, str(SRC_ROOT))
 from deepdetector.evaluation import table7 as table7_module
 from deepdetector.evaluation.table7 import Table7FilterResult
 from deepdetector.experiments import table7_imagenet_runner
-from scripts.article_reproduction.table_7_imagenet import (
-    filter_clean_baseline_images,
+from deepdetector.attacks.adversarial_loader import (
     generate_adversarial_images,
     load_adversarial_images,
 )
+from deepdetector.evaluation.imagenet_utils import filter_clean_baseline_images
 
 
 class SequenceModel:
