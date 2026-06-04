@@ -265,8 +265,13 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
         scores = self.predict_preprocessed_batch(preprocessed_images)
         return np.asarray(np.argmax(scores, axis=1), dtype=np.int32)
 
-    def gradient(self, image: np.ndarray, class_id: int) -> np.ndarray:
-        """Return the Caffe input gradient for one class id.
+    def _gradient_from_net(
+        self,
+        gradient_net: object,
+        image: np.ndarray,
+        class_id: int,
+    ) -> np.ndarray:
+        """Return the Caffe input gradient from the selected network.
 
         NHWC RGB images are preprocessed with this wrapper. A direct Caffe NCHW
         tensor can also be passed when the caller is already operating in
@@ -286,7 +291,6 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
         if len(preprocessed) != 1:
             raise ValueError("gradient expects exactly one image.")
 
-        gradient_net = self.attack_net
         gradient_net.blobs[self.input_blob].reshape(*preprocessed.shape)
         gradient_net.reshape()
         gradient_net.blobs[self.input_blob].data[...] = preprocessed
@@ -338,6 +342,18 @@ class GoogLeNetCaffeWrapper(ImageNetModelWrapper):
             resized_channels.append(np.asarray(resized, dtype=np.float32))
 
         return np.stack(resized_channels, axis=2).astype(np.float32)
+
+    def prediction_gradient(self, image: np.ndarray, class_id: int) -> np.ndarray:
+        """Return gradients from the original prediction network."""
+        return self._gradient_from_net(self.net, image, class_id)
+
+    def attack_gradient(self, image: np.ndarray, class_id: int) -> np.ndarray:
+        """Return gradients from the attack network, falling back to prediction."""
+        return self._gradient_from_net(self.attack_net, image, class_id)
+
+    def gradient(self, image: np.ndarray, class_id: int) -> np.ndarray:
+        """Return the attack-gradient path used by DeepFool."""
+        return self.attack_gradient(image, class_id)
 
 
 class CaffeNetCaffeWrapper(GoogLeNetCaffeWrapper):

@@ -212,6 +212,8 @@ run.log
 /data
 /material
 /src/original
+/results 
+/nn_robust_attack
 
 # Local planning scratch files
 /specs/**/*.local.md

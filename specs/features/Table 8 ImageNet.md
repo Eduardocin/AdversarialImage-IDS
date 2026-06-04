@@ -11,6 +11,9 @@
 - The detector compares model predictions before and after applying one spatial smoothing filter to clean and successful FGSM adversarial examples.
 - The ImageNet path must stay consistent with the existing GoogLeNet/Caffe
   reproduction flow used by Table 4 and Table 7.
+- Table 8 reuses the Table 7 spatial smoothing filter and TP/FN/FP detector
+  semantics, but it is a validation experiment for the five fixed filters. It
+  must not rerun the Table 7 12-filter search.
 
 ## Business rules
 - The five Table 8 filters are fixed from the article and must not be selected dynamically from local Table 7 results.
@@ -29,6 +32,12 @@
   - TP: adversarial prediction changes after the filter.
   - FN: adversarial prediction does not change after the filter.
   - FP: clean prediction changes after the filter.
+- Table 8 must not apply Table 7 high-entropy selection unless a future spec
+  explicitly changes this behavior. Validation eligibility is based on the
+  clean-baseline and successful-FGSM rules above.
+- Table 8 must apply only the selected spatial smoothing filter. It must not
+  call scalar quantization, adaptive quantization, or final-filter selection
+  logic.
 - Recall, Precision, and F1 Score must use zero-safe division.
 
 ## Functional requirements
@@ -46,6 +55,8 @@
 - The experiment must support pre-generated adversarial arrays when configured
   or passed by CLI, using the same compatibility behavior as Table 7.
 - The experiment must evaluate only the five fixed Table 8 filters.
+- The experiment must not accept `mask_types`/`sizes` config as a way to
+  re-search or override the fixed Table 8 filter list.
 - The output directory must be configurable.
 - The main CSV output must be a pivot CSV named table_8_imagenet.csv.
 - The pivot CSV columns must be:
@@ -83,6 +94,9 @@
   diamond_5x5, diamond_7x7, and box_5x5.
 - The experiment filters out images with clean_pred != true_label before attack evaluation.
 - The experiment excludes disturbed failures from TP, FN, and FP.
+- The experiment does not perform entropy-based inclusion or exclusion for
+  Table 8 validation samples.
+- Table 8 applies only spatial smoothing and does not call quantization helpers.
 - The output CSV is named table_8_imagenet.csv.
 - The output CSV has exactly three metric rows: Recall, Precision, F1 Score.
 - The output CSV has one metric column for each of the five fixed filters.
@@ -106,6 +120,7 @@
 ## Out of scope
 - Re-selecting the five filters based on local Table 7 results.
 - Changing Table 7 filter definitions or metric calculations.
+- Adding Table 7 high-entropy filtering to Table 8 without a new spec.
 - Implementing the final adaptive filtering rule from later tables.
 - Adding raw per-image or per-filter CSV outputs unless a future spec requires it.
 - Changing ImageNet labels, moving dataset files, or deleting images.

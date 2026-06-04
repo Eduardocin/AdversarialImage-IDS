@@ -121,10 +121,17 @@ def generate_fgsm_caffe_image(
     image_array = np.asarray(image, dtype=np.float32)
     if image_array.ndim != 3:
         raise ValueError("image must have shape (C,H,W) or (H,W,C).")
-    if not hasattr(model, "gradient"):
-        raise ValueError("ImageNet FGSM reproduction requires a model.gradient method.")
+    if not (hasattr(model, "prediction_gradient") or hasattr(model, "gradient")):
+        raise ValueError(
+            "ImageNet FGSM reproduction requires model.prediction_gradient "
+            "or model.gradient."
+        )
 
-    gradient = np.asarray(model.gradient(image_array, int(class_id)), dtype=np.float32)
+    if hasattr(model, "prediction_gradient"):
+        gradient_values = model.prediction_gradient(image_array, int(class_id))
+    else:
+        gradient_values = model.gradient(image_array, int(class_id))
+    gradient = np.asarray(gradient_values, dtype=np.float32)
     if gradient.shape != image_array.shape:
         raise ValueError("Gradient shape does not match image shape.")
 

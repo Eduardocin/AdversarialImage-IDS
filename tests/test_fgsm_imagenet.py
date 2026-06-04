@@ -34,6 +34,21 @@ class CaffeStyleModel:
         return np.ones_like(image, dtype=np.float32)
 
 
+class DualGradientCaffeStyleModel(CaffeStyleModel):
+    """Track whether FGSM uses prediction or attack gradients."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def prediction_gradient(self, image: np.ndarray, class_id: int) -> np.ndarray:
+        self.calls.append("prediction")
+        return np.ones_like(image, dtype=np.float32)
+
+    def gradient(self, image: np.ndarray, class_id: int) -> np.ndarray:
+        self.calls.append("attack")
+        return -np.ones_like(image, dtype=np.float32)
+
+
 def test_generate_fgsm_caffe_image_uses_raw_epsilon_255() -> None:
     """The article path applies epsilon as a raw 0-255 pixel step."""
     image = np.full((3, 2, 2), 128.0, dtype=np.float32)
@@ -45,6 +60,22 @@ def test_generate_fgsm_caffe_image_uses_raw_epsilon_255() -> None:
         epsilon_255=1.0,
     )
 
+    np.testing.assert_array_equal(adv, np.full((3, 2, 2), 129.0, dtype=np.float32))
+
+
+def test_generate_fgsm_caffe_image_prefers_prediction_gradient() -> None:
+    """FGSM should follow the original softmax/prob gradient path."""
+    model = DualGradientCaffeStyleModel()
+    image = np.full((3, 2, 2), 128.0, dtype=np.float32)
+
+    adv = generate_fgsm_caffe_image(
+        model=model,
+        image=image,
+        class_id=1,
+        epsilon_255=1.0,
+    )
+
+    assert model.calls == ["prediction"]
     np.testing.assert_array_equal(adv, np.full((3, 2, 2), 129.0, dtype=np.float32))
 
 
