@@ -22,7 +22,7 @@ def load_adversarial_images(
     expected_shape: Tuple[int, ...],
     selected_indices: Optional[np.ndarray] = None,
 ) -> np.ndarray:
-    """Load adversarial images and validate their shape."""
+    """Load adversarial images and align them to the current sample count."""
     adv_images = np.load(str(path)).astype(np.float32)
     if (
         selected_indices is not None
@@ -33,6 +33,20 @@ def load_adversarial_images(
         and int(np.max(selected_indices)) < len(adv_images)
     ):
         adv_images = adv_images[selected_indices]
+
+    if (
+        adv_images.ndim == len(expected_shape)
+        and adv_images.shape[1:] == expected_shape[1:]
+        and len(adv_images) > expected_shape[0]
+    ):
+        return adv_images[: expected_shape[0]]
+
+    if (
+        adv_images.ndim == len(expected_shape)
+        and adv_images.shape[1:] == expected_shape[1:]
+        and len(adv_images) < expected_shape[0]
+    ):
+        return adv_images
 
     if adv_images.shape != expected_shape:
         raise ValueError(
@@ -76,6 +90,10 @@ def adversarial_images_for_run(
         override_path or attack_config.get("adversarial_path"),
         project_root=project_root,
     )
+    save_path = resolve_project_path(
+        attack_config.get("save_adversarial_path"),
+        project_root=project_root,
+    )
     if adv_path is not None and adv_path.is_file():
         logger.info("Loaded ImageNet adversarial cache: %s", adv_path)
         return load_adversarial_images(
@@ -88,10 +106,6 @@ def adversarial_images_for_run(
     if adv_images is None:
         return None
 
-    save_path = resolve_project_path(
-        attack_config.get("save_adversarial_path"),
-        project_root=project_root,
-    )
     if save_path is not None:
         save_path.parent.mkdir(parents=True, exist_ok=True)
         np.save(str(save_path), adv_images)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import sys
 
@@ -103,6 +104,29 @@ def test_generate_fgsm_imagenet_filters_wrong_clean_baseline() -> None:
     assert result.clean_images.shape == (1, 3, 2, 2)
     assert result.adversarial_images.shape == (1, 3, 2, 2)
     assert result.diagnostics[1]["skip_reason"] == "wrong_clean_prediction"
+
+
+def test_generate_fgsm_imagenet_logs_progress(caplog) -> None:
+    """ImageNet FGSM generation should expose progress for long runs."""
+    images = np.asarray(
+        [
+            np.full((2, 2, 3), 0.5, dtype=np.float32),
+            np.full((2, 2, 3), 0.6, dtype=np.float32),
+        ]
+    )
+
+    with caplog.at_level(logging.INFO, logger="deepdetector.attacks.fgsm_imagenet"):
+        generate_fgsm_imagenet(
+            model=CaffeStyleModel(),
+            images=images,
+            labels=None,
+            epsilon_255=1.0,
+        )
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("ImageNet FGSM generation started" in message for message in messages)
+    assert any("ImageNet FGSM progress 1/2" in message for message in messages)
+    assert any("ImageNet FGSM generation completed" in message for message in messages)
 
 
 def test_main_fgsm_path_does_not_import_tensorflow(monkeypatch) -> None:

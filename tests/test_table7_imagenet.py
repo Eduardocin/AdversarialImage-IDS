@@ -1,7 +1,9 @@
+import json
 from pathlib import Path
 import sys
 
 import numpy as np
+import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +15,7 @@ from deepdetector.evaluation import table7 as table7_module
 from deepdetector.evaluation.table7 import Table7FilterResult
 from deepdetector.experiments import table7_imagenet_runner
 from deepdetector.attacks.adversarial_loader import (
+    adversarial_images_for_run,
     generate_adversarial_images,
     load_adversarial_images,
 )
@@ -121,8 +124,43 @@ def test_table7_loads_full_adversarial_array_with_selected_clean_indices(tmp_pat
     np.testing.assert_array_equal(loaded, full_adv[[0, 2]])
 
 
-def test_table7_counts_fp_only_for_valid_high_entropy_adversarial_pairs(monkeypatch) -> None:
-    """FP must use the same selected adversarial high-entropy population as TP/FN."""
+def test_imagenet_adversarial_cache_trims_extra_rows(tmp_path) -> None:
+    """A cache with extra examples should load the current run prefix."""
+    cache_path = tmp_path / "adversarial_examples.npy"
+    cached = np.arange(3 * 2 * 2 * 3, dtype=np.float32).reshape((3, 2, 2, 3))
+    np.save(str(cache_path), cached)
+    images = np.ones((2, 2, 2, 3), dtype=np.float32)
+
+    loaded = adversarial_images_for_run(
+        config={
+            "attack": {
+                "adversarial_path": str(cache_path),
+                "save_adversarial_path": str(cache_path),
+            }
+        },
+        model=object(),
+        images=images,
+    )
+
+    assert loaded.shape == images.shape
+    np.testing.assert_array_equal(loaded, cached[:2])
+
+
+def test_imagenet_adversarial_cache_per_image_shape_mismatch_still_fails(tmp_path) -> None:
+    """A cache with incompatible per-image shape should fail explicitly."""
+    cache_path = tmp_path / "external.npy"
+    np.save(str(cache_path), np.zeros((2, 3, 2, 2), dtype=np.float32))
+
+    with pytest.raises(ValueError, match="Expected adversarial array shape"):
+        adversarial_images_for_run(
+            config={"attack": {"adversarial_path": str(cache_path)}},
+            model=object(),
+            images=np.ones((2, 2, 2, 3), dtype=np.float32),
+        )
+
+
+def test_table7_uses_adversarial_entropy_as_diagnostic_only(monkeypatch) -> None:
+    """Clean high-entropy samples must be evaluated even if adversarial entropy is low."""
     dataset = (
         np.asarray([_marker_image(10), _marker_image(11)], dtype=np.float32),
         np.asarray([1, 1], dtype=np.int32),
@@ -140,7 +178,7 @@ def test_table7_counts_fp_only_for_valid_high_entropy_adversarial_pairs(monkeypa
     ) -> np.ndarray:
         del mask_type, size
         marker = int(round(float(image[0, 0, 0])))
-        marker_after_filter = {10: 9, 20: 3, 11: 9}.get(marker, marker)
+        marker_after_filter = {10: 9, 20: 3, 11: 9, 4: 3}.get(marker, marker)
         filtered = np.array(image, copy=True)
         filtered[0, 0, 0] = float(marker_after_filter)
         return filtered
@@ -157,11 +195,108 @@ def test_table7_counts_fp_only_for_valid_high_entropy_adversarial_pairs(monkeypa
         entropy_threshold=5.0,
     )
 
+    assert result.attack_success == 2
+    assert result.skipped_low_entropy_clean == 0
+    assert result.n_high_entropy_clean == 2
     assert result.n_high_entropy_adversarial == 1
-    assert result.tp == 1
+    assert result.tp == 2
     assert result.fn == 0
-    assert result.fp == 1
+    assert result.fp == 2
     assert result.precision == 0.5
+
+
+def test_table7_filters_by_clean_entropy_not_adversarial_entropy(monkeypatch) -> None:
+    """A low-entropy clean image must be skipped even when its adversarial is high entropy."""
+    dataset = (
+        np.asarray([_marker_image(11)], dtype=np.float32),
+        np.asarray([1], dtype=np.int32),
+        np.asarray([_marker_image(20)], dtype=np.float32),
+    )
+
+    def fake_entropy(image: np.ndarray) -> float:
+        marker = int(round(float(image[0, 0, 0])))
+        return 4.0 if marker == 11 else 6.0
+
+    def fail_filter(
+        image: np.ndarray,
+        mask_type: str,
+        size: int,
+    ) -> np.ndarray:
+        raise AssertionError("low clean-entropy samples must not be filtered")
+
+    monkeypatch.setattr(table7_module, "_entropy_for_image", fake_entropy)
+    monkeypatch.setattr(table7_module, "_apply_table7_filter_to_model_input", fail_filter)
+
+    result = table7_module.evaluate_table7_filter(
+        model=MarkerModel(),
+        dataset=dataset,
+        mask_type="box",
+        size=3,
+        epsilon=1.0 / 255.0,
+        entropy_threshold=5.0,
+    )
+
+    assert result.attack_success == 1
+    assert result.skipped_low_entropy_clean == 1
+    assert result.n_high_entropy_clean == 0
+    assert result.n_high_entropy_adversarial == 0
+    assert result.tp == 0
+    assert result.fn == 0
+    assert result.fp == 0
+
+
+def test_table7_default_entropy_threshold_is_five(monkeypatch) -> None:
+    """Omitting the threshold should keep the official clean entropy cutoff at 5.0."""
+    dataset = (
+        np.asarray([_marker_image(10)], dtype=np.float32),
+        np.asarray([1], dtype=np.int32),
+        np.asarray([_marker_image(20)], dtype=np.float32),
+    )
+
+    monkeypatch.setattr(table7_module, "_entropy_for_image", lambda image: 5.0)
+    monkeypatch.setattr(
+        table7_module,
+        "_apply_table7_filter_to_model_input",
+        lambda image, mask_type, size: image,
+    )
+
+    result = table7_module.evaluate_table7_filter(
+        model=MarkerModel(),
+        dataset=dataset,
+        mask_type="box",
+        size=3,
+        epsilon=1.0 / 255.0,
+    )
+
+    assert result.skipped_low_entropy_clean == 1
+    assert result.n_high_entropy_clean == 0
+
+
+def test_table7_metrics_use_zero_safe_detector_formulas() -> None:
+    """Recall, precision, and F1 should use Table 7 TP/FN/FP definitions."""
+    recall, precision, f1 = table7_module._metrics(tp=8, fn=2, fp=4)
+
+    assert recall == 0.8
+    assert round(precision, 4) == 0.6667
+    assert round(f1, 4) == 0.7273
+
+
+def test_table7_default_configured_masks_cover_all_twelve_article_candidates() -> None:
+    """The default Table 7 grid should contain the 12 article smoothing candidates."""
+    assert list(table7_imagenet_runner.configured_masks({})) == [
+        ("cross", 3),
+        ("cross", 5),
+        ("cross", 7),
+        ("cross", 9),
+        ("diamond", 3),
+        ("diamond", 5),
+        ("diamond", 7),
+        ("diamond", 9),
+        ("box", 3),
+        ("box", 5),
+        ("box", 7),
+        ("box", 9),
+    ]
 
 
 def test_run_table7_experiment_writes_pivot_and_status(monkeypatch, tmp_path) -> None:
@@ -215,8 +350,12 @@ def test_run_table7_experiment_writes_pivot_and_status(monkeypatch, tmp_path) ->
             recall=0.5,
             precision=1.0,
             f1=2.0 / 3.0,
+            total_images=1,
+            clean_correct=1,
+            attack_success=1,
             n_high_entropy_clean=1,
             n_high_entropy_adversarial=1,
+            skipped_low_entropy_clean=0,
             disturbed_failure=0,
             skipped_wrong_baseline=0,
         )
@@ -251,3 +390,9 @@ def test_run_table7_experiment_writes_pivot_and_status(monkeypatch, tmp_path) ->
         "Precision,1.000000,,,,,,,,,,,",
         "F1 Score,0.666667,,,,,,,,,,,",
     ]
+    status = json.loads((tmp_path / "table_7_status.json").read_text(encoding="utf-8"))
+    assert status["attack_success"] == 1
+    assert status["disturbed_failure"] == 0
+    assert status["skipped_low_entropy_clean"] == 0
+    assert status["n_high_entropy_clean"] == 1
+    assert status["n_high_entropy_adversarial"] == 1

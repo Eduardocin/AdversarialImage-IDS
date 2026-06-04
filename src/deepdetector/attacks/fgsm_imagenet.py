@@ -165,6 +165,13 @@ def fgsm_changed_pixels(clean_image: np.ndarray, adversarial_image: np.ndarray) 
     return int(np.count_nonzero(delta > 1e-6))
 
 
+def _progress_interval(total: int) -> int:
+    """Return a progress logging interval for an ImageNet FGSM run."""
+    if total <= 0:
+        return 1
+    return max(1, min(100, total // 10 or 1))
+
+
 def generate_fgsm_imagenet(
     model: Any,
     images: np.ndarray,
@@ -193,6 +200,15 @@ def generate_fgsm_imagenet(
     n_attack_success = 0
     disturbed_failure = 0
     skipped_wrong_baseline = 0
+    total_images = len(clean_images)
+    progress_interval = _progress_interval(total_images)
+
+    logger.info(
+        "ImageNet FGSM generation started: total=%d epsilon_255=%s skip_wrong_baseline=%s",
+        total_images,
+        float(epsilon_255),
+        bool(skip_wrong_baseline),
+    )
 
     for index, clean_image in enumerate(clean_images):
         clean_pred = predict_caffe_label(model, clean_image)
@@ -216,6 +232,16 @@ def generate_fgsm_imagenet(
                     "fgsm_changed_pixels": "",
                 }
             )
+            if (index + 1) % progress_interval == 0 or index + 1 == total_images:
+                logger.info(
+                    "ImageNet FGSM progress %d/%d | clean_correct=%d attack_success=%d disturbed_failure=%d skipped=%d",
+                    index + 1,
+                    total_images,
+                    len(selected_indices),
+                    n_attack_success,
+                    disturbed_failure,
+                    skipped_wrong_baseline,
+                )
             continue
 
         adversarial_image = generate_fgsm_caffe_image(
@@ -252,6 +278,16 @@ def generate_fgsm_imagenet(
                 "fgsm_changed_pixels": fgsm_changed_pixels(clean_image, adversarial_image),
             }
         )
+        if (index + 1) % progress_interval == 0 or index + 1 == total_images:
+            logger.info(
+                "ImageNet FGSM progress %d/%d | clean_correct=%d attack_success=%d disturbed_failure=%d skipped=%d",
+                index + 1,
+                total_images,
+                len(selected_indices),
+                n_attack_success,
+                disturbed_failure,
+                skipped_wrong_baseline,
+            )
 
     selected_indices_array = np.asarray(selected_indices, dtype=np.int64)
     if adversarial_images:
@@ -263,7 +299,7 @@ def generate_fgsm_imagenet(
 
     selected_labels = None if labels_array is None else labels_array[selected_indices_array]
 
-    return ImageNetFGSMResult(
+    result = ImageNetFGSMResult(
         clean_images=selected_clean.astype(np.float32),
         adversarial_images=adversarial_array.astype(np.float32),
         labels=selected_labels,
@@ -277,3 +313,12 @@ def generate_fgsm_imagenet(
         disturbed_failure=int(disturbed_failure),
         skipped_wrong_baseline=int(skipped_wrong_baseline),
     )
+    logger.info(
+        "ImageNet FGSM generation completed: total=%d clean_correct=%d attack_success=%d disturbed_failure=%d skipped=%d",
+        result.n_total,
+        result.n_clean_correct,
+        result.n_attack_success,
+        result.disturbed_failure,
+        result.skipped_wrong_baseline,
+    )
+    return result

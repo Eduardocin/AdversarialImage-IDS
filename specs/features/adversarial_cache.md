@@ -33,7 +33,9 @@ The official experiment runner regenerates FGSM adversarial examples every time 
 
 - Cache files must have deterministic names.
 - Cache metadata must be human-readable.
-- Cache loading must validate the basic array shape before reuse.
+- Cache loading must validate the per-image array shape before reuse.
+- ImageNet cache loading must not reject a cache only because the number of
+  cached examples differs from the current clean-baseline count.
 - Generated cache files must remain out of git.
 
 ## Acceptance Criteria
@@ -48,6 +50,14 @@ The official experiment runner regenerates FGSM adversarial examples every time 
 
 - If a cache file is missing, the experiment regenerates it.
 - If a cache file is malformed or incompatible with the loaded samples, the experiment regenerates it.
+- If an ImageNet adversarial cache has the expected per-image shape but more
+  rows than the current run requires, the experiment loads the prefix needed for
+  the current run instead of regenerating.
+- If an ImageNet adversarial cache has fewer rows than the current run requires,
+  the experiment uses the available cached rows and the evaluator processes the
+  aligned prefix.
+- If an ImageNet adversarial cache has an incompatible per-image shape, the
+  experiment fails explicitly.
 - If `attack.cache` is false, no cache read or write occurs.
 
 ## Out of Scope

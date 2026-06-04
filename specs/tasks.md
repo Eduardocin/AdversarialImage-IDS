@@ -137,16 +137,21 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Apply masked mean values only where the full mask fits inside the image.
   - [x] Preserve border pixels exactly instead of using reflect padding.
   - [x] Add a regression test for unchanged spatial borders.
-- [ ] Align Table 7 ImageNet high-entropy selection with `specs/features/Table 7 ImageNet.md`.
-  - [ ] Filter Table 7 samples by clean/original image entropy, not adversarial image entropy.
-  - [ ] Add `skipped_low_entropy_clean`, `attack_success`, and high-entropy diagnostic counters to Table 7 results/status.
-  - [ ] Keep adversarial entropy as diagnostic only.
-  - [ ] Preserve spatial-smoothing-only behavior without quantization.
-  - [ ] Add regression tests for clean entropy selection, adversarial entropy diagnostic behavior, default threshold, metrics, and all 12 filter combinations.
-- [ ] Verify Table 8 ImageNet validation behavior after Table 7 entropy correction.
-  - [ ] Confirm Table 8 does not apply entropy-based sample inclusion or exclusion.
-  - [ ] Confirm Table 8 applies only the five fixed spatial smoothing filters without quantization.
-  - [ ] Add or update regression tests if the existing coverage does not lock these rules.
+- [x] Align Table 7 ImageNet high-entropy selection with `specs/features/Table 7 ImageNet.md`.
+  - [x] Filter Table 7 samples by clean/original image entropy, not adversarial image entropy.
+  - [x] Add `skipped_low_entropy_clean`, `attack_success`, and high-entropy diagnostic counters to Table 7 results/status.
+  - [x] Keep adversarial entropy as diagnostic only.
+  - [x] Preserve spatial-smoothing-only behavior without quantization.
+  - [x] Add regression tests for clean entropy selection, adversarial entropy diagnostic behavior, default threshold, metrics, and all 12 filter combinations.
+- [x] Verify Table 8 ImageNet validation behavior after Table 7 entropy correction.
+  - [x] Confirm Table 8 does not apply entropy-based sample inclusion or exclusion.
+  - [x] Confirm Table 8 applies only the five fixed spatial smoothing filters without quantization.
+  - [x] Add or update regression tests if the existing coverage does not lock these rules.
+- [x] Allow ImageNet adversarial caches with different sample counts.
+  - [x] Load caches when the per-image shape is compatible even if the number of examples differs.
+  - [x] Align Table 7 and Table 8 evaluation to the available clean/adversarial prefix.
+  - [x] Preserve explicit failure for incompatible per-image cache shapes.
+  - [x] Add regression tests for extra cached rows and per-image mismatch failure.
 - [x] Combine Table 4 MNIST and ImageNet execution from `specs/features/table_4_combined.md`
   - [x] Add composite `table_4` with explicit `table_4_mnist` and `table_4_imagenet` components.
   - [x] Route ImageNet Table 4 through the consolidated experiment runner.

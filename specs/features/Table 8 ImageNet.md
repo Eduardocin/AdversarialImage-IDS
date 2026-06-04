@@ -113,7 +113,11 @@
   experiment must write a partial status.
 - If FGSM cannot produce or load adversarial examples, the experiment must write a partial status with a diagnostic message.
 - If the adversarial array shape is incompatible with the selected validation
-  images, the experiment must fail explicitly.
+  images and the file is a managed experiment cache, the cache must be
+  regenerated.
+- If the adversarial array shape is incompatible with the selected validation
+  images and the file is not the managed experiment cache, the experiment must
+  fail explicitly.
 - If no successful adversarial examples are available for evaluation, the
   experiment must not report completed Table 8 metrics.
 
