@@ -266,7 +266,7 @@ def _class_folder_rows_by_class(
         label_index = class_indices[class_name]
         class_dir = images_dir / str(class_name)
         if not class_dir.is_dir():
-            raise ValueError("Missing Table 10 ImageNet class directory: {0}".format(class_dir))
+            raise ValueError("Missing ImageNet class directory: {0}".format(class_dir))
         rows_by_class[class_name] = [
             (path, int(label_index))
             for path in sorted(class_dir.iterdir())
@@ -371,6 +371,17 @@ def _load_clean_correct_table_10_imagenet_class_folders(
     labels: list[int] = []
     expected_shape: tuple[int, ...] | None = None
     clean_errors = 0
+    summary: dict[str, Any] = {
+        "classes": ordered_classes,
+        "quotas": {class_name: int(class_quotas[class_name]) for class_name in ordered_classes},
+        "candidate_counts": {
+            class_name: len(rows_by_class[class_name]) for class_name in ordered_classes
+        },
+        "candidates_read": {},
+        "clean_errors": {},
+        "clean_correct": {},
+    }
+    config["_table_10_dataset_summary"] = summary
 
     for class_name in ordered_classes:
         if class_name not in class_quotas:
@@ -382,13 +393,25 @@ def _load_clean_correct_table_10_imagenet_class_folders(
         quota = int(class_quotas[class_name])
         if quota < 0:
             raise ValueError("Table 10 ImageNet class quota must be non-negative.")
+        if len(rows_by_class[class_name]) < quota:
+            raise ValueError(
+                "Insufficient ImageNet candidates for class {0}: required at least {1}, found {2}.".format(
+                    class_name,
+                    quota,
+                    len(rows_by_class[class_name]),
+                )
+            )
 
         selected_for_class = 0
+        read_for_class = 0
+        clean_errors_for_class = 0
         for path, label_index in rows_by_class[class_name]:
+            read_for_class += 1
             processed = np.asarray(preprocess(_read_rgb_image(path)), dtype=np.float32)
             clean_pred = _predict_one(model, processed)
             if clean_pred != int(label_index):
                 clean_errors += 1
+                clean_errors_for_class += 1
                 continue
 
             expected_shape = _append_processed_image(
@@ -402,12 +425,17 @@ def _load_clean_correct_table_10_imagenet_class_folders(
             if selected_for_class == quota:
                 break
 
+        summary["candidates_read"][class_name] = read_for_class
+        summary["clean_errors"][class_name] = clean_errors_for_class
+        summary["clean_correct"][class_name] = selected_for_class
+        config["_table_10_dataset_summary"] = summary
         if selected_for_class < quota:
             raise ValueError(
-                "Table 10 ImageNet class {0} has {1} clean-correct samples; quota requires {2}.".format(
+                "Insufficient clean-correct ImageNet samples for class {0} and model {1}: required {2}, found {3}.".format(
                     class_name,
-                    selected_for_class,
+                    str(config.get("model_group", "")).lower() or "unknown",
                     quota,
+                    selected_for_class,
                 )
             )
 
@@ -424,6 +452,20 @@ def _load_clean_correct_table_10_imagenet_class_folders(
     if not images:
         return np.empty((0,), dtype=np.float32), np.empty((0,), dtype=np.int32)
     return np.asarray(images, dtype=np.float32), np.asarray(labels, dtype=np.int32)
+
+
+def _dataset_summary_for_manifest(config: dict[str, Any]) -> dict[str, Any] | None:
+    summary = config.get("_table_10_dataset_summary")
+    if isinstance(summary, dict):
+        return {
+            "classes": list(summary.get("classes", [])),
+            "quotas": dict(summary.get("quotas", {})),
+            "candidate_counts": dict(summary.get("candidate_counts", {})),
+            "candidates_read": dict(summary.get("candidates_read", {})),
+            "clean_errors": dict(summary.get("clean_errors", {})),
+            "clean_correct": dict(summary.get("clean_correct", {})),
+        }
+    return None
 
 
 def _load_table_10_imagenet_class_folders(
@@ -803,6 +845,8 @@ def save_table_10_outputs(
     output_dir: Path,
     dataset_group: str,
     model_group: str,
+    experiment_id: str | None = None,
+    dataset_summary: dict[str, Any] | None = None,
     manifest_entries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Path]:
     """Write the official CSV and JSON outputs for one Table 10 group."""
@@ -819,14 +863,19 @@ def save_table_10_outputs(
     )
     outputs = {"csv": csv_path, "json": json_path}
     if manifest_entries is not None:
+        manifest_payload: dict[str, Any] = {
+            "table": 10,
+            "dataset_group": dataset_group,
+            "model_group": model_group,
+            "rows": manifest_entries,
+        }
+        if experiment_id:
+            manifest_payload["experiment_id"] = experiment_id
+        if dataset_summary is not None:
+            manifest_payload["dataset"] = dataset_summary
         outputs["manifest"] = write_metrics_json(
             output_path / "manifest.json",
-            {
-                "table": 10,
-                "dataset_group": dataset_group,
-                "model_group": model_group,
-                "rows": manifest_entries,
-            },
+            manifest_payload,
         )
     return outputs
 
@@ -845,13 +894,18 @@ def run_table_10_group(config: dict[str, Any]) -> list[dict[str, Any]]:
     if not dataset_label:
         raise ValueError("Table 10 group must define dataset_label.")
 
-    dataset_group = str(config.get("dataset", {}).get("name", "")).strip()
+    dataset_group = str(
+        config.get("dataset_group") or config.get("dataset", {}).get("name", "")
+    ).strip()
     if not dataset_group:
-        raise ValueError("Table 10 group must define dataset.name.")
+        raise ValueError("Table 10 group must define dataset.name or dataset_group.")
 
     rows: list[dict[str, Any]] = []
     manifest_entries: list[dict[str, Any]] = []
-    write_manifest = model_group in {"caffenet", "inception_v3"}
+    write_manifest = bool(config.get("output", {}).get("manifest", False)) or model_group in {
+        "caffenet",
+        "inception_v3",
+    }
     for row_config in rows_config:
         no = int(row_config["no"])
         attack_model = str(row_config["attack_model"])
@@ -920,6 +974,8 @@ def run_table_10_group(config: dict[str, Any]) -> list[dict[str, Any]]:
         output_dir=_output_dir(config),
         dataset_group=dataset_group,
         model_group=model_group,
+        experiment_id=str(config.get("experiment_id", "")).strip() or None,
+        dataset_summary=_dataset_summary_for_manifest(config),
         manifest_entries=manifest_entries if write_manifest else None,
     )
     return rows

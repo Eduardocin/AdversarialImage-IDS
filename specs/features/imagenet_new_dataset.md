@@ -1,105 +1,200 @@
-# SPEC — New Dataset Evaluation: ImageNet Ambulance, School Bus and Soccer Ball
+# SPEC — ImageNet New Classes Separate Selected Table 10 Evaluation
 
 ## Objective
 
-Cumprir o requisito do projeto de obter resultados do sistema proposto no artigo reproduzido em **outro conjunto de dados**, avaliando o DeepDetector em um novo subconjunto do ImageNet composto pelas classes:
+Cumprir o requisito do projeto de avaliar o sistema reproduzido em um conjunto de dados novo, executando uma seleção de **três experimentos da Table 10** sobre um novo subconjunto ImageNet composto pelas classes:
 
 ```text
 ambulance
-school_bus
+scholar_bus
 soccer_ball
-````
-
-O objetivo deste experimento é verificar se o comportamento observado nos experimentos reproduzidos do artigo também aparece em classes ImageNet diferentes das utilizadas originalmente no projeto.
-
-A implementação deve seguir a arquitetura atual do projeto, utilizando exclusivamente o runner centralizado:
-
-```bash
-python scripts/run_experiment.py --experiment imagenet_new_classes
 ```
 
----
+Os três experimentos devem ser o mais próximo possível das respectivas linhas da Table 10 original, mudando apenas a população avaliada. Cada combinação deve ter uma execução pública separada:
 
-## Scope
+```bash
+python scripts/run_experiment.py --experiment imagenet_new_classes_fgsm_googlenet
+python scripts/run_experiment.py --experiment imagenet_new_classes_deepfool_caffenet
+python scripts/run_experiment.py --experiment imagenet_new_classes_cw_l2_inception_v3
+```
 
-Este experimento deve:
-
-* utilizar ImageNet como dataset;
-* utilizar apenas as classes `ambulance`, `school_bus` e `soccer_ball`;
-* executar o pipeline de detecção adversarial reproduzido do artigo;
-* gerar exemplos adversariais para as novas classes;
-* aplicar a transformação adaptativa do DeepDetector;
-* calcular métricas de detecção para o novo conjunto de dados;
-* produzir resultados agregados por classe e resultados globais;
-* gerar somente os artefatos oficiais definidos pelo projeto.
-
-Este experimento não deve:
-
-* reutilizar as classes ImageNet já usadas nos experimentos originais do projeto;
-* executar MNIST;
-* executar Table 6;
-* executar Table 7;
-* executar Table 8;
-* executar Table 9;
-* executar defense-aware CW-L2;
-* alterar a implementação oficial dos filtros;
-* gerar diagnósticos públicos;
-* gerar relatórios em Markdown;
-* criar experimentos auxiliares públicos.
+Estes experimentos não substituem a reprodução oficial da Table 10. Eles formam uma extensão comparativa enxuta que reutiliza o mesmo schema, os mesmos modelos ImageNet compatíveis, a mesma lógica de detecção e a mesma forma de contagem, mas executa somente as três combinações definidas nesta spec.
 
 ---
 
-## Background
+## Context
 
-O artigo reproduzido propõe detectar exemplos adversariais por meio de uma transformação adaptativa baseada em redução de ruído. A ideia central é comparar a predição da imagem adversarial antes e depois da transformação:
+A Table 10 do artigo avalia o DeepDetector com combinações de ataque, modelo e dataset. Para esta extensão, somente três combinações ImageNet devem ser repetidas no novo subconjunto:
+
+| No. | Attack/Model                         | Dataset |
+| --: | ------------------------------------ | ------- |
+|   5 | `FGSM (ε=1/255)/GoogLeNet`           | ImageNet |
+|   8 | `DeepFool/CaffeNet`                  | ImageNet |
+|  14 | `CW L2 (κ=0.0)/Inception v3`         | ImageNet |
+
+Todas as outras linhas da Table 10 ficam fora desta extensão. As linhas MNIST ficam fora porque o novo conjunto de dados é ImageNet; as demais linhas ImageNet ficam fora para manter o experimento restrito às três combinações escolhidas.
+
+A regra central de detecção permanece:
 
 ```text
 C(x_adv) != C(T(x_adv))
 ```
 
-Quando a transformação altera a predição do adversarial, o exemplo é considerado detectado.
+Se a predição da imagem adversarial muda após a transformação `T`, o exemplo é considerado detectado.
 
-Para cumprir o requisito do projeto, este experimento avalia o sistema em um novo subconjunto do ImageNet. ImageNet é um benchmark amplamente usado para avaliação de modelos de classificação visual em larga escala, e trabalhos posteriores também discutem sua importância como referência para estudar generalização de classificadores.
+---
+
+## Dataset Choice Justification
 
 As classes escolhidas foram:
 
-| Classe        | Tipo visual                                            | Justificativa                                                                                          |
-| ------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `ambulance`   | Objeto/veículo com formato estruturado                 | Classe com padrões visuais fortes, como veículo, janelas, rodas, luzes e cores contrastantes           |
-| `school_bus`  | Objeto/veículo com estrutura semelhante à ambulance    | Permite avaliar se o detector se comporta de forma consistente entre classes visualmente próximas      |
-| `soccer_ball` | Objeto não veicular, compacto e com textura geométrica | Introduz uma classe visualmente distinta das duas anteriores, aumentando a diversidade do novo dataset |
+| Classe        | Papel no novo subconjunto | Justificativa |
+| ------------- | ------------------------- | ------------- |
+| `ambulance`   | substitui a primeira classe estrutural da Table 10 | veículo com estrutura visual bem definida, rodas, janelas, luzes e padrões de cor |
+| `scholar_bus`  | substitui a segunda classe estrutural da Table 10 | veículo visualmente relacionado a `ambulance`, útil para avaliar classes semanticamente próximas |
+| `soccer_ball` | substitui a classe visualmente distinta da Table 10 | objeto compacto, não veicular, com formato e textura diferentes |
 
-A escolha dessas três classes é justificada por combinar:
+A Table 10/Inception v3 usa uma população de três classes com quotas `40/40/20`. Esta extensão deve preservar essa forma experimental:
 
-* duas classes visualmente relacionadas: `ambulance` e `school_bus`;
-* uma classe visualmente distinta: `soccer_ball`;
-* objetos comuns e semanticamente bem definidos;
-* classes ImageNet compatíveis com modelos pré-treinados de classificação;
-* um subconjunto pequeno o suficiente para execução viável no ambiente do projeto.
+| Classe nova   | Quota clean-correct |
+| ------------- | ------------------: |
+| `ambulance`   | 40 |
+| `scholar_bus`  | 40 |
+| `soccer_ball` | 20 |
+
+Cada experimento deve tentar avaliar 100 imagens limpas corretamente classificadas, preenchendo as quotas a partir de candidatos adicionais quando houver erros de classificação limpa.
+
+---
+
+## Business Rules
+
+1. Devem existir exatamente três experimentos públicos: `imagenet_new_classes_fgsm_googlenet`, `imagenet_new_classes_deepfool_caffenet` e `imagenet_new_classes_cw_l2_inception_v3`.
+2. Cada experimento público deve executar somente uma combinação ataque/modelo.
+3. A população avaliada deve conter somente `ambulance`, `scholar_bus` e `soccer_ball`.
+4. As quotas devem ser `40/40/20`, na ordem `ambulance`, `scholar_bus`, `soccer_ball`.
+5. Cada experimento deve selecionar amostras clean-correct até preencher suas quotas, quando candidatos suficientes existirem.
+6. Clean errors podem ser registrados no `manifest.json`, mas não devem reduzir a avaliação final abaixo de 100 imagens se houver candidatos de reposição disponíveis.
+7. As linhas executadas devem corresponder somente às linhas selecionadas da Table 10: `5`, `8` e `14`.
+8. O campo `no` deve preservar o número da linha original da Table 10.
+9. O campo `dataset` no CSV/JSON deve ser `ImageNet-NewClasses`, para diferenciar esta extensão da reprodução oficial.
+10. O schema de `metrics.csv` e `metrics.json` deve ser o schema oficial da Table 10.
+11. O cálculo de TP, FN, FP, RTP, recall, precision e F1 deve reutilizar os helpers atuais da Table 10 sempre que possível.
+12. A transformação `T` deve ser o filtro oficial usado pela Table 10 no projeto, por padrão `proposed_detection_filter`.
+13. A mesma transformação `T` deve ser usada para imagens limpas e adversariais.
+14. Cada linha deve usar o mesmo ataque, modelo, hiperparâmetros principais, domínio de entrada e pré-processamento da linha correspondente da Table 10.
+15. Não deve haver médias simples por classe ou por experimento; métricas agregadas devem ser derivadas da soma dos contadores.
+
+---
+
+## Scope
+
+Esta spec cobre:
+
+* configuração e execução separada dos três experimentos públicos;
+* execução das linhas selecionadas da Table 10 sobre `ambulance`, `scholar_bus` e `soccer_ball`;
+* seleção reprodutível de amostras com quotas `40/40/20`;
+* uso de GoogLeNet, CaffeNet e Inception v3 nos mesmos papéis da Table 10;
+* uso de FGSM, DeepFool e CW L2 nos mesmos papéis da Table 10;
+* geração de outputs separados por experimento;
+* preservação do schema oficial da Table 10;
+* registro de status e erros por linha em `manifest.json`.
+
+---
+
+## Out of Scope
+
+Não implementar nesta spec:
+
+* linhas MNIST da Table 10;
+* linhas ImageNet não selecionadas da Table 10;
+* M1;
+* M2;
+* `FGSM (ε=2/255)/GoogLeNet`;
+* `DeepFool/GoogLeNet`;
+* `CW L2` com `κ=0.5`, `κ=1.0`, `κ=2.0` ou `κ=4.0`;
+* `CW L∞/Inception v3`;
+* novos ataques;
+* alteração da matemática dos ataques;
+* alteração da matemática do filtro;
+* download automático de datasets ou pesos;
+* relatórios Markdown;
+* diagnósticos públicos fora do `manifest.json`;
+* comparação automática com os resultados oficiais do artigo;
+* agregação final em um CSV único;
+* experimento público composto que rode as três combinações de uma vez.
 
 ---
 
 ## Public Execution Interface
 
-A única interface pública permitida é:
+As únicas interfaces públicas permitidas são:
 
 ```bash
+python scripts/run_experiment.py --experiment imagenet_new_classes_fgsm_googlenet
+python scripts/run_experiment.py --experiment imagenet_new_classes_deepfool_caffenet
+python scripts/run_experiment.py --experiment imagenet_new_classes_cw_l2_inception_v3
+```
+
+Não deve existir um experimento público agregado ou comandos por classe:
+
+```bash
+python scripts/run_experiment.py --experiment imagenet_new_classes_image_models
 python scripts/run_experiment.py --experiment imagenet_new_classes
-```
-
-Não devem existir comandos adicionais como:
-
-```bash
 python scripts/run_experiment.py --experiment ambulance
-python scripts/run_experiment.py --experiment school_bus
+python scripts/run_experiment.py --experiment scholar_bus
 python scripts/run_experiment.py --experiment soccer_ball
-python scripts/run_experiment.py --experiment imagenet_ambulance
-python scripts/run_experiment.py --experiment imagenet_school_bus
-python scripts/run_experiment.py --experiment imagenet_soccer_ball
-python scripts/run_experiment.py --experiment new_dataset
 ```
 
-As três classes devem ser tratadas como componentes internos do mesmo experimento.
+---
+
+## Dataset
+
+### Expected Structure
+
+```text
+data/
+└── imagenet/
+    └── new_test/
+        ├── ambulance/
+        ├── scholar_bus/
+        └── soccer_ball/
+```
+
+Cada diretório deve conter apenas imagens pertencentes à respectiva classe.
+
+### Dataset Validation
+
+Antes da execução, validar:
+
+* se as três classes existem localmente;
+* se cada classe possui pelo menos 40, 40 e 20 candidatos respectivamente, antes do filtro clean-correct;
+* se os arquivos possuem extensão de imagem suportada;
+* se a configuração declara labels compatíveis com cada família de modelo;
+* se os modelos selecionados são compatíveis com ImageNet.
+
+Se uma classe estiver ausente:
+
+```text
+Missing ImageNet class directory: data/imagenet/new_test/ambulance
+```
+
+Se uma classe não tiver candidatos suficientes:
+
+```text
+Insufficient ImageNet candidates for class soccer_ball: required at least 20, found 12.
+```
+
+Se não houver clean-correct suficiente para preencher uma quota:
+
+```text
+Insufficient clean-correct ImageNet samples for class scholar_bus and model googlenet: required 40, found 37.
+```
+
+Se houver par modelo/dataset incompatível:
+
+```text
+Invalid model-domain pair: m1 is not compatible with imagenet.
+```
 
 ---
 
@@ -111,704 +206,258 @@ A configuração deve residir em:
 configs/experiments.yaml
 ```
 
-Estrutura sugerida:
+Estrutura esperada:
 
 ```yaml
-imagenet_new_classes:
-  description: Evaluation of DeepDetector on new ImageNet classes
-
-  seed: 42
-
+imagenet_new_classes_fgsm_googlenet:
+  kind: table_10_group
+  output_dir: results/experiments/imagenet_new_classes/fgsm_googlenet
   dataset:
     name: imagenet
-    split: test
-    classes:
-      - ambulance
-      - school_bus
-      - soccer_ball
-    samples_per_class: all
-    value_range:
-      min: 0.0
-      max: 1.0
-
+    split: new_test
+    images_dir: data/imagenet/new_test
+    image_size: 224
+    image_shape: [224, 224, 3]
+    value_range: [0.0, 1.0]
+    shuffle: false
+    require_clean_correct: true
+    class_order: [ambulance, scholar_bus, soccer_ball]
+    class_quotas:
+      ambulance: 40
+      scholar_bus: 40
+      soccer_ball: 20
+    class_indices:
+      ambulance: 407
+      scholar_bus: 779
+      soccer_ball: 805
   model:
-    name: imagenet_classifier
+    name: googlenet_caffe
+  evaluation:
+    seed: 20170830
+  filter:
+    name: proposed_detection_filter
+    type: proposed_detection_filter
+  model_group: googlenet
+  dataset_label: ImageNet-NewClasses
+  rows:
+    - "no": 5
+      attack_model: "FGSM (ε=1/255)/GoogLeNet"
+      status: implemented
+      attack:
+        name: fgsm
+        epsilon: 0.00392156862745098
+        clip_min: 0.0
+        clip_max: 255.0
 
-  attack:
-    type: fgsm
-    epsilon: 0.00392156862745098  # 1/255
+imagenet_new_classes_deepfool_caffenet:
+  kind: table_10_group
+  output_dir: results/experiments/imagenet_new_classes/deepfool_caffenet
+  dataset:
+    name: imagenet
+    split: new_test
+    images_dir: data/imagenet/new_test
+    image_size: 227
+    image_shape: [227, 227, 3]
+    value_range: [0.0, 1.0]
+    shuffle: false
+    require_clean_correct: true
+    class_order: [ambulance, scholar_bus, soccer_ball]
+    class_quotas:
+      ambulance: 40
+      scholar_bus: 40
+      soccer_ball: 20
+    class_indices:
+      ambulance: 407
+      scholar_bus: 779
+      soccer_ball: 805
+  model:
+    name: caffenet
+  evaluation:
+    seed: 20170830
+  filter:
+    name: proposed_detection_filter
+    type: proposed_detection_filter
+  model_group: caffenet
+  dataset_label: ImageNet-NewClasses
+  rows:
+    - "no": 8
+      attack_model: "DeepFool/CaffeNet"
+      status: implemented
+      attack:
+        name: deepfool
 
-  detector:
-    type: final_adaptive_detection_filter
-    entropy_thresholds:
-      low: 4.0
-      medium: 5.0
-    quantization:
-      low_entropy_step: 128
-      medium_entropy_step: 64
-      high_entropy_step: 43
-    spatial_filter:
-      type: cross_mean
-      radius: 3
-
-  output:
-    aggregate_by_class: true
-    aggregate_global: true
+imagenet_new_classes_cw_l2_inception_v3:
+  kind: table_10_group
+  output_dir: results/experiments/imagenet_new_classes/cw_l2_inception_v3
+  dataset:
+    name: imagenet
+    split: new_test
+    images_dir: data/imagenet/new_test
+    image_size: 299
+    image_shape: [299, 299, 3]
+    value_range: [-0.5, 0.5]
+    shuffle: false
+    require_clean_correct: true
+    class_order: [ambulance, scholar_bus, soccer_ball]
+    class_quotas:
+      ambulance: 40
+      scholar_bus: 40
+      soccer_ball: 20
+    class_indices:
+      ambulance: <inception_v3_label_index>
+      scholar_bus: <inception_v3_label_index>
+      soccer_ball: <inception_v3_label_index>
+  model:
+    name: inception_v3
+  evaluation:
+    seed: 20170830
+  filter:
+    name: proposed_detection_filter
+    type: proposed_detection_filter
+  model_group: inception_v3
+  dataset_label: ImageNet-NewClasses
+  rows:
+    - "no": 14
+      attack_model: "CW L2 (κ=0.0)/Inception v3"
+      status: implemented
+      attack:
+        name: cw_l2
+        kappa: 0.0
+        clip_min: -0.5
+        clip_max: 0.5
 ```
 
-Não devem existir configurações independentes:
-
-```yaml
-imagenet_ambulance:
-imagenet_school_bus:
-imagenet_soccer_ball:
-```
+Os índices Caffe/GoogLeNet acima usam a convenção ImageNet 1000 classes já usada pelo projeto. Os índices Inception v3 devem ser preenchidos a partir do label map compatível com o grafo TensorFlow usado localmente, porque esse wrapper usa saída de 1008 dimensões.
 
 ---
 
-# Dataset
+## Processing Flow
 
-## ImageNet New Classes
+Para cada experimento:
 
-O dataset deve conter apenas imagens das seguintes classes:
+1. Carregar candidatos das classes `ambulance`, `scholar_bus` e `soccer_ball`.
+2. Aplicar a ordem determinística por classe.
+3. Executar predição limpa `clean_pred = C(x)`.
+4. Descartar candidatos em que `clean_pred != y_true`.
+5. Continuar lendo candidatos até preencher as quotas `40/40/20`.
+6. Gerar `x_adv` com o ataque configurado para a única row do experimento.
+7. Calcular `adv_pred = C(x_adv)`.
+8. Se `adv_pred == clean_pred`, contar `num_failures += 1` e excluir a amostra de TP/FN/RTP.
+9. Aplicar `T(x_adv)` e calcular `filtered_adv_pred`.
+10. Aplicar `T(x)` e calcular `filtered_clean_pred`.
+11. Agregar as métricas da row com os helpers de Table 10.
 
-```text
-ambulance
-school_bus
-soccer_ball
-```
-
-A estrutura esperada dos dados locais é:
-
-```text
-data/
-└── imagenet/
-    └── new_test/
-        ├── ambulance/
-        ├── school_bus/
-        └── soccer_ball/
-```
-
-Cada diretório deve conter apenas imagens pertencentes à respectiva classe.
+Para GoogLeNet e CaffeNet, respeitar o domínio de ataque já usado pela reprodução Caffe. Para Inception v3, preservar o domínio `[-0.5, 0.5]` e `299x299`.
 
 ---
 
-## Dataset Validation
+## Counting Rules
 
-Antes da execução do experimento, o sistema deve validar:
+As métricas devem seguir a semântica da Table 10:
 
-* se as três classes existem localmente;
-* se cada classe possui pelo menos uma imagem;
-* se os arquivos possuem extensão de imagem suportada;
-* se as classes configuradas correspondem aos diretórios esperados.
+| Campo | Regra |
+| ----- | ----- |
+| `num_failures` | número de ataques que não alteram a predição limpa, isto é, `adv_pred == clean_pred` |
+| `tp` | adversarial bem-sucedido detectado por `filtered_adv_pred != adv_pred` |
+| `fn` | adversarial bem-sucedido não detectado por `filtered_adv_pred == adv_pred` |
+| `fp` | imagem limpa cuja predição muda após o filtro, isto é, `filtered_clean_pred != clean_pred` |
+| `rtp` | true positives em que `filtered_adv_pred == y_true` |
+| `rtp_percent` | `rtp / tp * 100`, zero-safe |
+| `recall` | `tp / (tp + fn) * 100`, zero-safe |
+| `precision` | `tp / (tp + fp) * 100`, zero-safe |
+| `f1` | `2 * precision * recall / (precision + recall)`, zero-safe |
 
-Se alguma classe estiver ausente, a execução deve falhar com erro claro.
-
-Exemplo de erro permitido:
-
-```text
-Missing ImageNet class directory: data/imagenet/test/ambulance
-```
-
----
-
-## Class Selection Justification
-
-A justificativa da escolha do novo dataset deve ser preservada para uso posterior no relatório.
-
-Resumo da justificativa:
-
-```text
-As classes ambulance, school_bus e soccer_ball foram escolhidas por permitirem avaliar o sistema em um subconjunto ImageNet novo, visualmente diverso e não utilizado nos experimentos originais do projeto. Ambulance e school_bus representam objetos veiculares com estruturas visuais semelhantes, enquanto soccer_ball representa um objeto compacto com textura geométrica distinta. Essa combinação permite observar se o comportamento do detector se mantém tanto em classes visualmente próximas quanto em uma classe visualmente diferente.
-```
-
-Essa justificativa deve ser usada no relatório, mas não precisa ser salva como artefato do experimento.
+Clean errors não entram em `num_failures`, `tp`, `fn`, `fp` ou `rtp`.
 
 ---
 
-# Attack Definition
+## Output Artifacts
 
-## FGSM
-
-O ataque utilizado deve ser FGSM.
-
-Para ImageNet, utilizar:
-
-```text
-epsilon = 1/255
-```
-
-Valor decimal:
-
-```text
-0.00392156862745098
-```
-
-O ataque deve gerar uma imagem adversarial `x_adv` a partir da imagem original `x`.
-
-Critério de sucesso do ataque:
-
-```python
-C(x_adv) != y_original
-```
-
-Se o ataque não alterar a classificação, a amostra deve ser contabilizada como falha de perturbação.
-
----
-
-# DeepDetector Transformation
-
-A transformação `T` deve corresponder ao filtro final adaptativo de detecção usado pelo projeto.
-
-A intenção deste experimento é aplicar a transformação composta por:
-
-1. cálculo de entropia;
-2. quantização adaptativa;
-3. filtro espacial para imagens de alta entropia;
-4. escolha entre imagem quantizada e imagem filtrada quando aplicável.
-
----
-
-## Step 1 — Clamp
-
-Garantir que os valores estejam no intervalo esperado pelo modelo ImageNet atual do projeto:
-
-```python
-x = clamp(x, min_value=0.0, max_value=1.0)
-```
-
----
-
-## Step 2 — Entropy Calculation
-
-Calcular a entropia da imagem.
-
-Para imagens RGB:
-
-```python
-entropy = mean(
-    entropy(red),
-    entropy(green),
-    entropy(blue)
-)
-```
-
----
-
-## Step 3 — Adaptive Quantization Selection
-
-Selecionar a transformação conforme a entropia.
-
-| Condição        | Transformação                                         |
-| --------------- | ----------------------------------------------------- |
-| `H < 4.0`       | Scalar Quantization com step `128`                    |
-| `4.0 ≤ H < 5.0` | Scalar Quantization com step `64`                     |
-| `H ≥ 5.0`       | Scalar Quantization com step `43` + Cross Mean Filter |
-
----
-
-## Step 4 — Low Entropy Transformation
-
-Quando `H < 4.0`:
-
-```python
-input_final = scalar_quantization(input, step=128)
-```
-
----
-
-## Step 5 — Medium Entropy Transformation
-
-Quando `4.0 ≤ H < 5.0`:
-
-```python
-input_final = scalar_quantization(input, step=64)
-```
-
----
-
-## Step 6 — High Entropy Transformation
-
-Quando `H ≥ 5.0`, aplicar:
-
-```python
-input_after_q = scalar_quantization(input, step=43)
-input_after_q_and_f = cross_mean_filter(input_after_q, radius=3)
-input_final = choose_closer_filter(input, input_after_q, input_after_q_and_f)
-```
-
-A chamada do filtro espacial deve seguir a API atual do projeto:
-
-```python
-cross_mean_filter(image, radius=3)
-```
-
-Não utilizar diretamente a assinatura antiga do código original:
-
-```python
-cross_mean_filter(image, start=3, end=25, coefficient=13)
-```
-
----
-
-# Processing Flow
-
-## Step 1 — Load Class Images
-
-Para cada classe configurada:
-
-```python
-for class_name in ["ambulance", "school_bus", "soccer_ball"]:
-    load_images(class_name)
-```
-
----
-
-## Step 2 — Clean Prediction
-
-Executar inferência na imagem original.
-
-Se a classificação original estiver incorreta:
-
-```python
-original_classified_wrong += 1
-```
-
-A amostra não participa da avaliação de detecção adversarial.
-
-Caso contrário:
-
-```python
-total_valid += 1
-```
-
----
-
-## Step 3 — Generate Adversarial Example
-
-Gerar amostra adversarial utilizando FGSM:
-
-```python
-x_adv = fgsm(model, x, y_original, epsilon=1/255)
-```
-
----
-
-## Step 4 — Attack Validation
-
-Executar inferência na amostra adversarial:
-
-```python
-adv_pred = C(x_adv)
-```
-
-Se o ataque não alterar a classificação:
-
-```python
-disturbed_failure += 1
-```
-
-A amostra não participa do cálculo de TP/FN.
-
-Se o ataque alterar a classificação:
-
-```python
-test_number += 1
-```
-
----
-
-## Step 5 — Apply DeepDetector Transformation
-
-Aplicar a transformação adaptativa:
-
-```python
-x_adv_transformed = T(x_adv)
-```
-
-Executar nova inferência:
-
-```python
-adv_transformed_pred = C(x_adv_transformed)
-```
-
----
-
-## Step 6 — Detection
-
-Se a predição da imagem adversarial mudar após a transformação:
-
-```python
-TP += 1
-```
-
-Condição:
-
-```python
-C(x_adv) != C(T(x_adv))
-```
-
-Caso contrário:
-
-```python
-FN += 1
-```
-
-Condição:
-
-```python
-C(x_adv) == C(T(x_adv))
-```
-
----
-
-## Step 7 — False Positive Evaluation
-
-Aplicar a transformação também na imagem limpa:
-
-```python
-x_transformed = T(x)
-```
-
-Executar nova inferência:
-
-```python
-clean_transformed_pred = C(x_transformed)
-```
-
-Se a imagem limpa mudar de classe após a transformação:
-
-```python
-FP += 1
-```
-
-Condição:
-
-```python
-C(x) != C(T(x))
-```
-
----
-
-# Counting Rules
-
-Os contadores devem ser mantidos por classe e também de forma global.
-
-## Original Classified Wrong
-
-Imagem limpa classificada incorretamente:
-
-```python
-original_classified_wrong += 1
-```
-
----
-
-## Disturbed Failure
-
-Ataque adversarial não altera a classificação:
-
-```python
-disturbed_failure += 1
-```
-
----
-
-## Test Number
-
-Número de exemplos adversariais válidos gerados:
-
-```python
-test_number += 1
-```
-
----
-
-## True Positive
-
-Exemplo adversarial detectado:
-
-```python
-TP += 1
-```
-
-Condição:
-
-```python
-C(x_adv) != C(T(x_adv))
-```
-
----
-
-## False Negative
-
-Exemplo adversarial não detectado:
-
-```python
-FN += 1
-```
-
-Condição:
-
-```python
-C(x_adv) == C(T(x_adv))
-```
-
----
-
-## False Positive
-
-Imagem limpa alterada pela transformação:
-
-```python
-FP += 1
-```
-
-Condição:
-
-```python
-C(x) != C(T(x))
-```
-
----
-
-# Aggregation Strategy
-
-O experimento deve produzir métricas:
-
-1. por classe;
-2. globais.
-
-As métricas globais devem ser calculadas pela soma dos contadores das três classes.
-
-```python
-TP_total = TP_ambulance + TP_school_bus + TP_soccer_ball
-FN_total = FN_ambulance + FN_school_bus + FN_soccer_ball
-FP_total = FP_ambulance + FP_school_bus + FP_soccer_ball
-```
-
----
-
-## Forbidden Aggregation
-
-Não utilizar média simples das métricas por classe.
-
-Proibido:
-
-```python
-recall_global = mean([
-    recall_ambulance,
-    recall_school_bus,
-    recall_soccer_ball
-])
-```
-
-Proibido:
-
-```python
-precision_global = mean([
-    precision_ambulance,
-    precision_school_bus,
-    precision_soccer_ball
-])
-```
-
-Proibido:
-
-```python
-f1_global = mean([
-    f1_ambulance,
-    f1_school_bus,
-    f1_soccer_ball
-])
-```
-
----
-
-## Correct Aggregation
-
-Após somar os contadores:
-
-```python
-recall = TP / (TP + FN)
-precision = TP / (TP + FP)
-f1 = (2 * recall * precision) / (recall + precision)
-```
-
-Se algum denominador for zero, registrar a métrica como:
-
-```text
-0.0
-```
-
----
-
-# Metrics
-
-## Recall
-
-```text
-TP / (TP + FN)
-```
-
----
-
-## Precision
-
-```text
-TP / (TP + FP)
-```
-
----
-
-## F1 Score
-
-```text
-2 * Recall * Precision
-----------------------
- Recall + Precision
-```
-
----
-
-## Attack Success Rate
-
-```text
-test_number / total_valid
-```
-
----
-
-## Original Accuracy on Selected Samples
-
-```text
-total_valid / total_loaded
-```
-
----
-
-# Output Artifacts
-
-A execução deve gerar apenas:
+A execução deve gerar somente:
 
 ```text
 results/
 └── experiments/
     └── imagenet_new_classes/
-        ├── metrics.csv
-        └── metrics.json
+        ├── fgsm_googlenet/
+        │   ├── metrics.csv
+        │   ├── metrics.json
+        │   └── manifest.json
+        ├── deepfool_caffenet/
+        │   ├── metrics.csv
+        │   ├── metrics.json
+        │   └── manifest.json
+        └── cw_l2_inception_v3/
+            ├── metrics.csv
+            ├── metrics.json
+            └── manifest.json
 ```
 
----
+Não deve existir `metrics.csv` agregado na raiz de `results/experiments/imagenet_new_classes/`.
 
-## CSV Format
+### CSV Format
+
+Cada `metrics.csv` deve seguir exatamente:
 
 ```csv
-class,total_loaded,total_valid,original_classified_wrong,disturbed_failure,test_number,TP,FN,FP,recall_percent,precision_percent,f1_percent,attack_success_rate_percent,original_accuracy_percent
+no,attack_model,dataset,num_failures,tp,fn,fp,rtp,rtp_percent,recall,precision,f1
 ```
 
-Exemplo:
+Exemplo ilustrativo para `fgsm_googlenet/metrics.csv`:
 
 ```csv
-class,total_loaded,total_valid,original_classified_wrong,disturbed_failure,test_number,TP,FN,FP,recall_percent,precision_percent,f1_percent,attack_success_rate_percent,original_accuracy_percent
-ambulance,50,47,3,5,42,36,6,2,85.71,94.74,90.00,89.36,94.00
-school_bus,50,48,2,4,44,38,6,3,86.36,92.68,89.41,91.67,96.00
-soccer_ball,50,45,5,6,39,30,9,4,76.92,88.24,82.19,86.67,90.00
-global,150,140,10,15,125,104,21,9,83.20,92.04,87.40,89.29,93.33
+no,attack_model,dataset,num_failures,tp,fn,fp,rtp,rtp_percent,recall,precision,f1
+5,FGSM (ε=1/255)/GoogLeNet,ImageNet-NewClasses,4,82,14,3,79,96.34,85.42,96.47,90.62
 ```
 
-Os números acima são apenas ilustrativos. (vamos seguir a mesma proporção dos testes 40/40/20)
+Os números são apenas ilustrativos.
 
----
+### JSON Format
 
-## JSON Format
-
-O arquivo `metrics.json` deve conter os mesmos valores semânticos do CSV.
+Cada `metrics.json` deve usar a estrutura da Table 10:
 
 ```json
 {
-  "ambulance": {
-    "total_loaded": 0,
-    "total_valid": 0,
-    "original_classified_wrong": 0,
-    "disturbed_failure": 0,
-    "test_number": 0,
-    "TP": 0,
-    "FN": 0,
-    "FP": 0,
-    "recall_percent": 0.0,
-    "precision_percent": 0.0,
-    "f1_percent": 0.0,
-    "attack_success_rate_percent": 0.0,
-    "original_accuracy_percent": 0.0
-  },
-  "school_bus": {
-    "total_loaded": 0,
-    "total_valid": 0,
-    "original_classified_wrong": 0,
-    "disturbed_failure": 0,
-    "test_number": 0,
-    "TP": 0,
-    "FN": 0,
-    "FP": 0,
-    "recall_percent": 0.0,
-    "precision_percent": 0.0,
-    "f1_percent": 0.0,
-    "attack_success_rate_percent": 0.0,
-    "original_accuracy_percent": 0.0
-  },
-  "soccer_ball": {
-    "total_loaded": 0,
-    "total_valid": 0,
-    "original_classified_wrong": 0,
-    "disturbed_failure": 0,
-    "test_number": 0,
-    "TP": 0,
-    "FN": 0,
-    "FP": 0,
-    "recall_percent": 0.0,
-    "precision_percent": 0.0,
-    "f1_percent": 0.0,
-    "attack_success_rate_percent": 0.0,
-    "original_accuracy_percent": 0.0
-  },
-  "global": {
-    "total_loaded": 0,
-    "total_valid": 0,
-    "original_classified_wrong": 0,
-    "disturbed_failure": 0,
-    "test_number": 0,
-    "TP": 0,
-    "FN": 0,
-    "FP": 0,
-    "recall_percent": 0.0,
-    "precision_percent": 0.0,
-    "f1_percent": 0.0,
-    "attack_success_rate_percent": 0.0,
-    "original_accuracy_percent": 0.0
-  }
+  "table": 10,
+  "dataset_group": "imagenet_new_classes",
+  "model_group": "googlenet",
+  "rows": [
+    {
+      "no": 5,
+      "attack_model": "FGSM (ε=1/255)/GoogLeNet",
+      "dataset": "ImageNet-NewClasses",
+      "num_failures": 4,
+      "tp": 82,
+      "fn": 14,
+      "fp": 3,
+      "rtp": 79,
+      "rtp_percent": 96.34,
+      "recall": 85.42,
+      "precision": 96.47,
+      "f1": 90.62
+    }
+  ]
 }
 ```
 
+### Manifest
+
+Cada `manifest.json` deve registrar, no mínimo:
+
+* `dataset_group: imagenet_new_classes`;
+* `model_group`;
+* identificador do experimento público;
+* classes avaliadas;
+* quotas requeridas;
+* quantidade de candidatos lidos por classe;
+* quantidade de clean errors por classe;
+* quantidade final clean-correct por classe;
+* status de cada row;
+* `blocked_reason` ou `error` quando uma row não puder ser avaliada.
+
 ---
 
-# Reproducibility
-
-A execução deve usar a seed definida em configuração:
-
-```yaml
-seed: 42
-```
-
-A seed deve ser aplicada sempre que o projeto já possuir suporte para controle determinístico.
-
-Não adicionar metadados de reprodutibilidade ao `metrics.json`.
-
----
-
-# Architecture Constraints
-
-O experimento deve seguir o padrão arquitetural do projeto.
+## Architecture Constraints
 
 Toda execução deve partir de:
 
@@ -822,192 +471,90 @@ A lógica deve residir em:
 src/deepdetector/
 ```
 
-Nenhuma lógica experimental deve ser implementada diretamente em scripts.
+Os experimentos devem reutilizar o runner e os helpers existentes da Table 10 sempre que possível. Nenhuma lógica experimental deve ser implementada diretamente em scripts.
 
----
-
-## Suggested Internal Modules
-
-A implementação pode reutilizar os módulos internos:
+Módulos esperados ou reutilizáveis:
 
 ```text
-src/deepdetector/attacks/fgsm.py
 src/deepdetector/data/imagenet.py
-src/deepdetector/filters/adaptive_noise_reduction.py
-src/deepdetector/evaluation/detection.py
-src/deepdetector/experiments/imagenet_new_classes.py
-```
-
-O script público deve apenas resolver a configuração e chamar o experimento interno.
-
----
-
-# Implementation Requirements
-
-## Dataset Requirement
-
-O loader ImageNet deve aceitar uma lista explícita de classes:
-
-```python
-classes = ["ambulance", "school_bus", "soccer_ball"]
-```
-
-O experimento não deve carregar automaticamente todas as classes disponíveis em:
-
-```text
-data/imagenet/test/
+src/deepdetector/data/imagenet_subset.py
+src/deepdetector/evaluation/tables/table_10.py
+src/deepdetector/filters/
+src/deepdetector/attacks/
+src/deepdetector/models/imagenet_wrappers.py
 ```
 
 ---
 
-## Detector Consistency Requirement
+## Non-functional Requirements
 
-A mesma transformação `T` deve ser usada em:
-
-1. avaliação de imagens limpas;
-2. avaliação de imagens adversariais;
-3. cálculo de FP, TP e FN.
-
-Não podem existir versões divergentes da transformação dentro do experimento.
-
----
-
-## Attack Requirement
-
-O ataque FGSM deve usar o mesmo modelo utilizado na inferência limpa.
-
-A amostra adversarial deve preservar o intervalo válido:
-
-```text
-[0.0, 1.0]
-```
-
-Após a perturbação, aplicar clamp:
-
-```python
-x_adv = clamp(x_adv, min_value=0.0, max_value=1.0)
-```
+* A seleção de dados deve ser determinística.
+* A seed padrão deve ser `20170830`, como na reprodução da Table 10.
+* A execução deve preservar o padrão de artefatos pequenos do projeto.
+* O código deve evitar duplicação entre este experimento e a Table 10 oficial.
+* A implementação deve manter os dados gerados, pesos e outputs grandes fora do git.
+* Testes devem cobrir o schema, a seleção `40/40/20`, o descarte clean-correct e a ausência de artefatos proibidos.
 
 ---
 
-## Aggregation Requirement
-
-As métricas globais devem ser calculadas por soma dos contadores.
-
-Não calcular métricas globais por média simples das métricas por classe.
-
----
-
-## Report Requirement
-
-O relatório final do projeto deve justificar a escolha das classes.
-
-A justificativa mínima deve mencionar:
-
-* uso de um subconjunto ImageNet novo;
-* duas classes veiculares visualmente relacionadas;
-* uma classe visualmente distinta;
-* diversidade visual;
-* viabilidade computacional.
-
----
-
-# Forbidden Artifacts
+## Forbidden Artifacts
 
 Não criar:
 
 ```text
-results/experiments/imagenet_new_classes/debug/
-```
-
-Não criar:
-
-```text
+results/experiments/imagenet_new_classes_image_models/metrics.csv
+results/experiments/imagenet_new_classes_image_models/metrics.json
+results/experiments/imagenet_new_classes_image_models/report.md
+results/experiments/imagenet_new_classes_image_models/diagnostic.json
+results/experiments/imagenet_new_classes_image_models/debug/
+results/experiments/imagenet_new_classes_image_models/ambulance/
+results/experiments/imagenet_new_classes_image_models/scholar_bus/
+results/experiments/imagenet_new_classes_image_models/soccer_ball/
+results/experiments/imagenet_new_classes/metrics.csv
+results/experiments/imagenet_new_classes/metrics.json
 results/experiments/imagenet_new_classes/report.md
-```
-
-Não criar:
-
-```text
 results/experiments/imagenet_new_classes/diagnostic.json
-```
-
-Não criar:
-
-```text
+results/experiments/imagenet_new_classes/debug/
 results/experiments/imagenet_new_classes/ambulance/
-```
-
-Não criar:
-
-```text
-results/experiments/imagenet_new_classes/school_bus/
-```
-
-Não criar:
-
-```text
+results/experiments/imagenet_new_classes/scholar_bus/
 results/experiments/imagenet_new_classes/soccer_ball/
 ```
 
-Não criar:
+---
 
-```text
-results/experiments/ambulance/
-```
+## Acceptance Criteria
 
-Não criar:
-
-```text
-results/experiments/school_bus/
-```
-
-Não criar:
-
-```text
-results/experiments/soccer_ball/
-```
+- [ ] O experimento FGSM/GoogLeNet é executado por `python scripts/run_experiment.py --experiment imagenet_new_classes_fgsm_googlenet`.
+- [ ] O experimento DeepFool/CaffeNet é executado por `python scripts/run_experiment.py --experiment imagenet_new_classes_deepfool_caffenet`.
+- [ ] O experimento CW L2/Inception v3 é executado por `python scripts/run_experiment.py --experiment imagenet_new_classes_cw_l2_inception_v3`.
+- [ ] Nenhum experimento público agregado executa as três combinações de uma vez.
+- [ ] Cada experimento usa exclusivamente as classes `ambulance`, `scholar_bus` e `soccer_ball`.
+- [ ] Cada experimento tenta preencher as quotas clean-correct `40/40/20`.
+- [ ] Clean errors são repostos por candidatos adicionais quando disponíveis.
+- [ ] `imagenet_new_classes_fgsm_googlenet` executa somente a linha 5 da Table 10: `FGSM (ε=1/255)/GoogLeNet`.
+- [ ] `imagenet_new_classes_deepfool_caffenet` executa somente a linha 8 da Table 10: `DeepFool/CaffeNet`.
+- [ ] `imagenet_new_classes_cw_l2_inception_v3` executa somente a linha 14 da Table 10: `CW L2 (κ=0.0)/Inception v3`.
+- [ ] Nenhuma linha MNIST da Table 10 é executada.
+- [ ] Nenhuma linha ImageNet fora de `5`, `8` e `14` é executada.
+- [ ] O campo `no` preserva os números originais da Table 10.
+- [ ] O campo `dataset` é `ImageNet-NewClasses`.
+- [ ] Cada experimento escreve `metrics.csv`, `metrics.json` e `manifest.json`.
+- [ ] Cada `metrics.csv` possui exatamente o schema `no,attack_model,dataset,num_failures,tp,fn,fp,rtp,rtp_percent,recall,precision,f1`.
+- [ ] Cada `metrics.json` possui os mesmos valores semânticos do CSV.
+- [ ] `num_failures`, `tp`, `fn`, `fp`, `rtp`, `rtp_percent`, `recall`, `precision` e `f1` seguem as regras da Table 10.
+- [ ] A implementação valida compatibilidade entre modelo e dataset.
+- [ ] A implementação usa o filtro oficial `proposed_detection_filter` salvo configuração equivalente já aceita pela Table 10.
+- [ ] A implementação não cria CSV/JSON agregado na raiz de `results/experiments/imagenet_new_classes/`.
+- [ ] Nenhum relatório Markdown, diagnóstico público ou diretório por classe é produzido.
 
 ---
 
-# Acceptance Criteria
+## Error Cases
 
-* O experimento é executado por:
-
-```bash
-python scripts/run_experiment.py --experiment imagenet_new_classes
-```
-
-* Apenas um experimento público existe.
-* O experimento usa exclusivamente as classes:
-
-```text
-ambulance
-school_bus
-soccer_ball
-```
-
-* As três classes são executadas internamente pelo mesmo experimento.
-* O experimento não reutiliza as classes ImageNet originais do projeto.
-* O loader valida a existência das três classes.
-* Amostras limpas classificadas incorretamente são ignoradas na avaliação adversarial.
-* O ataque usado é FGSM.
-* O epsilon usado é `1/255`.
-* A transformação `T` corresponde ao filtro final adaptativo de detecção do projeto.
-* A mesma transformação `T` é usada para imagens limpas e adversariais.
-* O experimento calcula resultados por classe.
-* O experimento calcula resultado global.
-* O resultado global é calculado por soma dos contadores.
-* O resultado global não é calculado por média simples das métricas por classe.
-* O CSV possui exatamente:
-
-```csv
-class,total_loaded,total_valid,original_classified_wrong,disturbed_failure,test_number,TP,FN,FP,recall_percent,precision_percent,f1_percent,attack_success_rate_percent,original_accuracy_percent
-```
-
-* O JSON possui os mesmos valores semânticos do CSV.
-* O JSON não contém metadados extras.
-* Nenhum relatório adicional é produzido.
-* Nenhum diagnóstico é produzido.
-* Nenhum artefato morto é criado.
-* Toda a lógica permanece compatível com o runner centralizado do projeto.
+* Classe ausente deve falhar com erro claro.
+* Classe sem candidatos suficientes deve falhar com erro claro.
+* Quota clean-correct impossível de preencher deve falhar com erro claro e registrar contexto no manifest quando o manifest já puder ser escrito.
+* Modelo incompatível com ImageNet deve falhar antes da execução das rows.
+* Row sem ataque registrado deve falhar com erro claro.
+* Modelo sem método necessário para o ataque, como gradiente para DeepFool, deve falhar com erro claro.
+* Configuração sem label index compatível com o modelo deve falhar antes de selecionar amostras.

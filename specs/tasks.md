@@ -248,3 +248,11 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Add the defense-aware evaluation and runner integration.
   - [x] Write only `metrics.csv` and `metrics.json`.
   - [x] Add automated tests for config, attack criteria, metrics, and output artifacts.
+- [x] Implement ImageNet new classes selected Table 10 evaluation from `specs/features/imagenet_new_dataset.md`
+  - [x] Add the public experiment `imagenet_new_classes_fgsm_googlenet`.
+  - [x] Add the public experiment `imagenet_new_classes_deepfool_caffenet`.
+  - [x] Add the public experiment `imagenet_new_classes_cw_l2_inception_v3`.
+  - [x] Configure the new ImageNet classes `ambulance`, `scholar_bus`, and `soccer_ball` with quotas `40/40/20`.
+  - [x] Reuse Table 10 row schema, metrics helpers, detector filter, and separate output layout.
+  - [x] Preserve only selected Table 10 ImageNet rows 5, 8, and 14 on `ImageNet-NewClasses`.
+  - [x] Add tests for config, clean-correct quota filling, metrics schema, manifest contents, and forbidden artifacts.

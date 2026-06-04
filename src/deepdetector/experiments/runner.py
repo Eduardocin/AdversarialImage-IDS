@@ -169,6 +169,7 @@ def build_experiment_config(
 
     if kind == "table_10_group":
         base_config["model_group"] = str(experiment.get("model_group", ""))
+        base_config["dataset_group"] = str(experiment.get("dataset_group", ""))
         base_config["dataset_label"] = str(experiment.get("dataset_label", ""))
         base_config["rows"] = [dict(row) for row in experiment.get("rows", [])]
         base_config["filter"] = dict(experiment.get("filter", {}))

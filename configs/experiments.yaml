@@ -747,3 +747,167 @@ experiments:
         status: implemented
         attack:
           name: cw_linf
+
+  imagenet_new_classes_fgsm_googlenet:
+    kind: table_10_group
+    output_dir: results/experiments/imagenet_new_classes/fgsm_googlenet
+    dataset:
+      name: imagenet
+      split: new_test
+      images_dir: data/imagenet/new_test
+      image_size: 224
+      image_shape: [224, 224, 3]
+      value_range: [0.0, 1.0]
+      shuffle: false
+      require_clean_correct: true
+      class_order: [ambulance, scholar_bus, soccer_ball]
+      class_indices:
+        ambulance: 407
+        scholar_bus: 779
+        soccer_ball: 805
+      class_quotas:
+        ambulance: 40
+        scholar_bus: 40
+        soccer_ball: 20
+    model:
+      name: googlenet_caffe
+      family: caffe
+      reference: BVLC GoogLeNet
+      model_dir: artifacts/models/imagenet/googlenet/
+      deploy_proto: artifacts/models/imagenet/googlenet/deploy_original.prototxt
+      attack_deploy_proto: artifacts/models/imagenet/googlenet/deploy_removeSoftmax.prototxt
+      caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+      mean_file: null
+      use_gpu: true
+      batch_size: 32
+    attack: {}
+    evaluation:
+      seed: 20170830
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
+    output:
+      manifest: true
+    model_group: googlenet
+    dataset_group: imagenet_new_classes
+    dataset_label: ImageNet-NewClasses
+    rows:
+      - "no": 5
+        attack_model: "FGSM (ε=1/255)/GoogLeNet"
+        status: implemented
+        attack:
+          name: fgsm
+          epsilon: 0.00392156862745098
+          clip_min: 0.0
+          clip_max: 255.0
+
+  imagenet_new_classes_deepfool_caffenet:
+    kind: table_10_group
+    output_dir: results/experiments/imagenet_new_classes/deepfool_caffenet
+    dataset:
+      name: imagenet
+      split: new_test
+      images_dir: data/imagenet/new_test
+      image_size: 227
+      image_shape: [227, 227, 3]
+      value_range: [0.0, 1.0]
+      shuffle: false
+      require_clean_correct: true
+      class_order: [ambulance, scholar_bus, soccer_ball]
+      class_indices:
+        ambulance: 407
+        scholar_bus: 779
+        soccer_ball: 805
+      class_quotas:
+        ambulance: 40
+        scholar_bus: 40
+        soccer_ball: 20
+    model:
+      name: caffenet
+      family: caffe
+      reference: BVLC CaffeNet
+      model_dir: artifacts/models/imagenet/caffenet/
+      deploy_proto: artifacts/models/imagenet/caffenet/deploy_original.prototxt
+      attack_deploy_proto: artifacts/models/imagenet/caffenet/deploy_removeSoftmax.prototxt
+      caffemodel: artifacts/models/imagenet/caffenet/bvlc_reference_caffenet.caffemodel
+      mean_file: null
+      use_gpu: true
+      batch_size: 32
+    attack: {}
+    evaluation:
+      seed: 20170830
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
+    output:
+      manifest: true
+    model_group: caffenet
+    dataset_group: imagenet_new_classes
+    dataset_label: ImageNet-NewClasses
+    rows:
+      - "no": 8
+        attack_model: "DeepFool/CaffeNet"
+        status: implemented
+        attack:
+          name: deepfool
+          max_iter: 50
+          overshoot: 0.02
+          clip_min: 0.0
+          clip_max: 1.0
+          num_classes: 10
+
+  imagenet_new_classes_cw_l2_inception_v3:
+    kind: table_10_group
+    output_dir: results/experiments/imagenet_new_classes/cw_l2_inception_v3
+    dataset:
+      name: imagenet
+      split: new_test
+      images_dir: data/imagenet/new_test
+      image_size: 299
+      image_shape: [299, 299, 3]
+      value_range: [-0.5, 0.5]
+      shuffle: false
+      require_clean_correct: true
+      class_order: [ambulance, scholar_bus, soccer_ball]
+      class_indices:
+        ambulance: 265
+        scholar_bus: 962
+        soccer_ball: 222
+      class_quotas:
+        ambulance: 40
+        scholar_bus: 40
+        soccer_ball: 20
+    model:
+      name: inception_v3
+      family: tensorflow
+      graph_path: artifacts/models/imagenet/inceptionv3/classify_image_graph_def.pb
+      input_map_name: "ResizeBilinear:0"
+      output_tensor: "softmax/logits:0"
+      batch_size: 1
+    attack: {}
+    evaluation:
+      seed: 20170830
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
+    output:
+      manifest: true
+    model_group: inception_v3
+    dataset_group: imagenet_new_classes
+    dataset_label: ImageNet-NewClasses
+    rows:
+      - "no": 14
+        attack_model: "CW L2 (κ=0.0)/Inception v3"
+        status: implemented
+        attack:
+          name: cw_l2
+          kappa: 0.0
+          batch_size: 1
+          max_iterations: 1000
+          learning_rate: 0.01
+          binary_search_steps: 9
+          initial_const: 0.001
+          abort_early: true
+          targeted: false
+          clip_min: -0.5
+          clip_max: 0.5
