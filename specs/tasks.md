@@ -265,3 +265,19 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Add a standalone Fashion-MNIST checkpoint helper for M1/M2 training.
   - [x] Declare and validate the Fashion-MNIST checkpoint training sample in experiment config.
   - [x] Treat Fashion-MNIST class quotas as evaluation candidates and discard clean errors without blocking.
+- [x] Update Fashion-MNIST evaluation to use M3 from `specs/features/fmnist_new_dataset.md`
+  - [x] Add the M3 model module under `src/deepdetector/models`.
+  - [x] Replace public FGSM/M1 Fashion-MNIST config with `fashion_mnist_fgsm_m3`.
+  - [x] Train or restore M3 checkpoints from the balanced Fashion-MNIST training partition.
+  - [x] Route the checkpoint helper default for `--model m3` to `fashion_mnist_fgsm_m3`.
+  - [x] Add tests for M3 architecture, config, runner dispatch, manifest, and output paths.
+- [x] Restore initial M3 architecture for Fashion-MNIST from `specs/features/fmnist_new_dataset.md`
+  - [x] Restore convolutional dropout to 0.25.
+  - [x] Restore dense dropout to 0.5.
+  - [x] Preserve M3 layer order, variable names, and tensor shapes.
+  - [x] Update focused M3 architecture tests.
+- [x] Restore initial M3 training defaults for Fashion-MNIST from `specs/features/fmnist_new_dataset.md`
+  - [x] Restore default M3 checkpoint training to 10 epochs.
+  - [x] Keep default M3 learning rate at 0.001.
+  - [x] Keep default M3 label smoothing at 0.1.
+  - [x] Update focused checkpoint helper tests.

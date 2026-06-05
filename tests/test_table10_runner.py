@@ -60,7 +60,7 @@ IMAGENET_NEW_CLASS_EXPERIMENTS = {
 }
 
 FASHION_MNIST_EXPERIMENTS = {
-    "fashion_mnist_fgsm_m1": ("fgsm_m1", "m1", [1], ["fgsm"]),
+    "fashion_mnist_fgsm_m3": ("fgsm_m3", "m3", [1], ["fgsm"]),
     "fashion_mnist_cw_l2_m2": ("cw_l2_m2", "m2", [9], ["cw_l2_nn_robust"]),
 }
 
@@ -520,7 +520,7 @@ def test_table10_fashion_mnist_row_computes_metrics(monkeypatch) -> None:
             "class_quotas": {"first": 2, "second": 2},
             "require_clean_correct": True,
         },
-        "model_group": "m1",
+        "model_group": "m3",
         "model": {"family": "mnist", "dataset_name": "fashion_mnist"},
         "evaluation": {"batch_size": 2},
     }
@@ -529,7 +529,7 @@ def test_table10_fashion_mnist_row_computes_metrics(monkeypatch) -> None:
         group_config,
         {
             "no": 1,
-            "attack_model": "FGSM (ε=0.2)/M1",
+            "attack_model": "FGSM (ε=0.2)/M3",
             "status": "implemented",
             "attack": {"name": "fgsm", "epsilon": 0.2},
         },
@@ -634,7 +634,7 @@ def test_table10_fashion_mnist_manifest_records_dataset_and_attack(
 
     run_table_10_group(
         {
-            "experiment_id": "fashion_mnist_fgsm_m1",
+            "experiment_id": "fashion_mnist_fgsm_m3",
             "kind": "table_10_group",
             "dataset": {"name": "fashion_mnist"},
             "checkpoint_training": {
@@ -657,14 +657,14 @@ def test_table10_fashion_mnist_manifest_records_dataset_and_attack(
                     "excludes_training": True,
                 },
             },
-            "model_group": "m1",
+            "model_group": "m3",
             "dataset_group": "fashion_mnist",
             "dataset_label": "Fashion-MNIST",
             "output": {"dir": str(tmp_path), "manifest": True},
             "rows": [
                 {
                     "no": 1,
-                    "attack_model": "FGSM (ε=0.2)/M1",
+                    "attack_model": "FGSM (ε=0.2)/M3",
                     "status": "implemented",
                     "attack": {"name": "fgsm", "epsilon": 0.2},
                 }
@@ -673,7 +673,7 @@ def test_table10_fashion_mnist_manifest_records_dataset_and_attack(
     )
 
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["experiment_id"] == "fashion_mnist_fgsm_m1"
+    assert manifest["experiment_id"] == "fashion_mnist_fgsm_m3"
     assert manifest["dataset_group"] == "fashion_mnist"
     assert manifest["dataset"]["csv_path"] == "data/fashion_mnist/fashion-mnist_test.csv"
     assert manifest["dataset"]["split_strategy"]["train_samples"] == 9000
@@ -685,7 +685,7 @@ def test_table10_fashion_mnist_manifest_records_dataset_and_attack(
     assert manifest["rows"] == [
         {
             "no": 1,
-            "attack_model": "FGSM (ε=0.2)/M1",
+            "attack_model": "FGSM (ε=0.2)/M3",
             "status": "completed",
             "attack": {"name": "fgsm", "epsilon": 0.2},
         }

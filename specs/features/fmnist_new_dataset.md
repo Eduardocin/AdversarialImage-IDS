@@ -1,4 +1,4 @@
-# SPEC — Fashion-MNIST New Dataset Evaluation with M1 and M2
+# SPEC — Fashion-MNIST New Dataset Evaluation with M3 and M2
 
 ## Objective
 
@@ -8,13 +8,13 @@ Os experimentos devem ser:
 
 | No. | Attack/Model       | Dataset       |
 | --: | ------------------ | ------------- |
-|   1 | `FGSM (ε=0.2)/M1`  | Fashion-MNIST |
+|   1 | `FGSM (ε=0.2)/M3`  | Fashion-MNIST |
 |   9 | `CW L2 (κ=0.0)/M2` | Fashion-MNIST |
 
 Cada combinação deve ter uma execução pública separada via runner centralizado:
 
 ```bash
-python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m1
+python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m3
 python scripts/run_experiment.py --experiment fashion_mnist_cw_l2_m2
 ```
 
@@ -32,8 +32,8 @@ Este experimento deve:
 * validar que o dataset é `mnist_compatible`;
 * usar imagens grayscale;
 * usar imagens `28x28x1`;
-* usar escala de valores compatível com os modelos M1 e M2;
-* executar `FGSM (ε=0.2)/M1`;
+* usar escala de valores compatível com os modelos M3 e M2;
+* executar `FGSM (ε=0.2)/M3`;
 * executar `CW L2 (κ=0.0)/M2`;
 * aplicar a transformação adaptativa do DeepDetector;
 * calcular métricas agregadas no schema oficial da Table 10;
@@ -55,13 +55,13 @@ Este experimento não deve:
 * gerar diagnósticos públicos;
 * gerar relatórios em Markdown como output do runner;
 * criar scripts paralelos de experimento fora do runner central;
-* misturar resultados de M1 e M2 no mesmo diretório de experimento.
+* misturar resultados de M3 e M2 no mesmo diretório de experimento.
 
 ---
 
 ## Background
 
-Os modelos `M1` e `M2` pertencem ao fluxo MNIST do projeto. Por isso, eles esperam entradas compatíveis com MNIST:
+Os modelos `M2` e `M3` pertencem ao fluxo MNIST-compatible do projeto. Por isso, eles esperam entradas compatíveis com MNIST:
 
 ```text
 grayscale
@@ -73,9 +73,11 @@ escala de valores compatível com o treinamento do modelo
 
 O Fashion-MNIST é compatível em **formato** com MNIST, pois também possui imagens grayscale `28x28` e 10 classes. Entretanto, ele não é semanticamente igual ao MNIST original: MNIST contém dígitos manuscritos, enquanto Fashion-MNIST contém itens de vestuário.
 
-Portanto, para que a avaliação seja semanticamente válida, os modelos M1 e M2 devem ser treinados ou restaurados a partir de checkpoints compatíveis com Fashion-MNIST. Se forem usados checkpoints treinados em MNIST dígitos, o experimento deve ser explicitamente descrito como uma avaliação fora de domínio, não como uma avaliação plenamente compatível.
+Portanto, para que a avaliação seja semanticamente válida, os modelos M3 e M2 devem ser treinados ou restaurados a partir de checkpoints compatíveis com Fashion-MNIST. Se forem usados checkpoints treinados em MNIST dígitos, o experimento deve ser explicitamente descrito como uma avaliação fora de domínio, não como uma avaliação plenamente compatível.
 
-A spec anterior já indicava que o novo dataset deveria ser compatível com os modelos MNIST em formato, usando imagens grayscale `28x28` e escala esperada pelos modelos M1/M2. 
+A spec anterior já indicava que o novo dataset deveria ser compatível com os modelos MNIST em formato, usando imagens grayscale `28x28` e escala esperada pelos modelos M2/M3.
+
+O modelo `M1` atual não deve ser usado como classificador principal do experimento FGSM em Fashion-MNIST, pois sua arquitetura é considerada insuficiente para obter boa performance limpa nesse dataset. O experimento FGSM deve usar um novo modelo `M3`, definido em `src/deepdetector/models`, com arquitetura CNN simples, mais adequada ao Fashion-MNIST, mantendo entrada `28x28x1` e saída de 10 classes.
 
 ---
 
@@ -89,7 +91,7 @@ O Fashion-MNIST foi escolhido porque preserva as propriedades estruturais do flu
 | Canais                     | 1 canal, grayscale              |
 | Número de classes          | 10                              |
 | Tipo de entrada            | imagem pequena, baixa resolução |
-| Compatibilidade estrutural | compatível com M1/M2            |
+| Compatibilidade estrutural | compatível com M2/M3            |
 
 A escolha permite avaliar se a estratégia de detecção baseada em redução adaptativa de ruído mantém comportamento consistente em um domínio visual diferente do MNIST original, mas sem exigir o pipeline ImageNet.
 
@@ -99,7 +101,7 @@ O arquivo local `data/fashion_mnist/fashion-mnist_test.csv` deve ser tratado com
 
 | Uso | Total | Por classe |
 | --- | ----: | ---------: |
-| Treino dos checkpoints Fashion-MNIST M1/M2 | 9000 | 900 |
+| Treino dos checkpoints Fashion-MNIST M2/M3 | 9000 | 900 |
 | Avaliação dos experimentos públicos | 1000 | 100 |
 
 Os 1000 exemplos de avaliação não devem ser usados no treinamento dos checkpoints Fashion-MNIST.
@@ -129,16 +131,16 @@ O experimento deve usar as 10 classes oficiais do Fashion-MNIST:
 
 Devem existir dois experimentos públicos separados.
 
-### Experiment 1 — Fashion-MNIST FGSM/M1
+### Experiment 1 — Fashion-MNIST FGSM/M3
 
 ```bash
-python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m1
+python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m3
 ```
 
 Este experimento executa:
 
 ```text
-FGSM (ε=0.2)/M1
+FGSM (ε=0.2)/M3
 ```
 
 sobre Fashion-MNIST.
@@ -282,13 +284,13 @@ Se algum denominador for zero, o runner deve usar o comportamento zero-safe já 
 
 A implementação deve adicionar dois experimentos ao `configs/experiments.yaml`.
 
-### `fashion_mnist_fgsm_m1`
+### `fashion_mnist_fgsm_m3`
 
 ```yaml
-fashion_mnist_fgsm_m1:
+fashion_mnist_fgsm_m3:
   kind: table_10_group
-  description: Fashion-MNIST new dataset evaluation with FGSM epsilon 0.2 against M1
-  output_dir: results/experiments/fashion_mnist/fgsm_m1
+  description: Fashion-MNIST new dataset evaluation with FGSM epsilon 0.2 against M3
+  output_dir: results/experiments/fashion_mnist/fgsm_m3
 
   dataset:
     name: fashion_mnist
@@ -341,9 +343,9 @@ fashion_mnist_fgsm_m1:
       ankle_boot: 100
 
   model:
-    name: m1
+    name: m3
     family: mnist
-    checkpoint_dir: artifacts/models/fashion_mnist/m1/checkpoints
+    checkpoint_dir: artifacts/models/fashion_mnist/m3/checkpoints
     dataset_name: fashion_mnist
     input_shape: [28, 28, 1]
     num_classes: 10
@@ -366,13 +368,13 @@ fashion_mnist_fgsm_m1:
       total_samples: 1000
       excludes_training: true
 
-  model_group: m1
+  model_group: m3
   dataset_group: fashion_mnist
   dataset_label: Fashion-MNIST
 
   rows:
     - "no": 1
-      attack_model: "FGSM (ε=0.2)/M1"
+      attack_model: "FGSM (ε=0.2)/M3"
       status: implemented
       attack:
         name: fgsm
@@ -530,9 +532,45 @@ O loader não deve:
 
 ## Model Requirements
 
-Os modelos M1 e M2 usados neste experimento devem ser compatíveis com Fashion-MNIST.
+Os modelos M3 e M2 usados neste experimento devem ser compatíveis com Fashion-MNIST.
 
-Os checkpoints Fashion-MNIST de M1 e M2 devem ser treinados usando somente a partição balanceada de treino definida nesta spec:
+O modelo M3 deve ser criado como um novo módulo em `src/deepdetector/models`, separado de `mnist_cnn.py` e `mnist_m2.py`. Ele deve ser a arquitetura padrão para o experimento `fashion_mnist_fgsm_m3`.
+
+O M3 deve:
+
+* aceitar tensores `28x28x1` em escala `[0.0, 1.0]`;
+* produzir predições para exatamente 10 classes Fashion-MNIST;
+* ser uma CNN simples e mais expressiva que o M1 atual para imagens Fashion-MNIST;
+* usar blocos convolucionais com ativações não lineares, pooling e camadas densas finais;
+* usar regularização moderada, evitando dropout excessivo que prejudique acurácia limpa no Fashion-MNIST;
+* ser compatível com o fluxo TensorFlow 1.x/Keras legado usado pelos modelos MNIST do projeto;
+* expor helpers de build, save, load e latest checkpoint consistentes com o padrão dos modelos existentes;
+* usar checkpoints próprios em `artifacts/models/fashion_mnist/m3/checkpoints`;
+* não substituir nem modificar o comportamento público do M1 usado nos experimentos MNIST oficiais.
+
+Arquitetura mínima esperada para M3:
+
+```text
+Conv2D(32, 3x3) -> ReLU
+Conv2D(32, 3x3) -> ReLU
+MaxPool(2x2)
+Dropout(0.25)
+Conv2D(64, 3x3) -> ReLU
+Conv2D(64, 3x3) -> ReLU
+MaxPool(2x2)
+Dropout(0.25)
+Flatten
+Dense(256) -> ReLU
+Dropout(0.5)
+Dense(10)
+Softmax
+```
+
+A camada final deve expor `softmax` para compatibilidade com o `KerasModelWrapper` usado pelo FGSM/CleverHans; o ataque pode recuperar os logits pré-softmax a partir dessa camada. As taxas de dropout devem permanecer na configuração inicial `0.25/0.25/0.5`, que apresentou melhor comportamento agregado no detector Fashion-MNIST/FGSM, sem introduzir uma arquitetura pesada ou dependências novas.
+
+O treino padrão inicial do checkpoint M3 deve usar 10 épocas, learning rate `0.001` e label smoothing `0.1`, salvo override explícito por CLI. Essa configuração corresponde ao baseline M3 inicial que apresentou melhor comportamento agregado no detector Fashion-MNIST/FGSM, sem alterar nomes ou shapes de variáveis do checkpoint.
+
+Os checkpoints Fashion-MNIST de M3 e M2 devem ser treinados usando somente a partição balanceada de treino definida nesta spec:
 
 ```text
 total_train = 9000
@@ -573,14 +611,14 @@ fail-fast se número de classes do modelo for diferente de 10
 A implementação pode fornecer um script utilitário para materializar os checkpoints Fashion-MNIST antes da execução pública dos experimentos:
 
 ```bash
-python scripts/train_fashion_mnist_checkpoint.py --model m1
+python scripts/train_fashion_mnist_checkpoint.py --model m3
 python scripts/train_fashion_mnist_checkpoint.py --model m2
 ```
 
 Esse script deve:
 
 * ler `configs/experiments.yaml`;
-* usar `fashion_mnist_fgsm_m1` como configuração padrão para `--model m1`;
+* usar `fashion_mnist_fgsm_m3` como configuração padrão para `--model m3`;
 * usar `fashion_mnist_cw_l2_m2` como configuração padrão para `--model m2`;
 * exigir o bloco `checkpoint_training` no experimento selecionado;
 * carregar `data/fashion_mnist/fashion-mnist_test.csv`;
@@ -591,6 +629,9 @@ Esse script deve:
 * validar que a amostra de avaliação configurada corresponde às posições `[900, 1000)` dentro de cada classe;
 * gravar o checkpoint no `model.checkpoint_dir` configurado para o modelo selecionado;
 * permitir sobrescrever `--config`, `--experiment`, `--train-dir`, `--filename`, `--epochs`, `--batch-size`, `--learning-rate`, `--label-smoothing` e `--load-model`;
+* usar 10 épocas como padrão para `--model m3` quando `--epochs` não for informado;
+* usar learning rate `0.001` como padrão para `--model m3` quando `--learning-rate` não for informado;
+* usar label smoothing `0.1` como padrão para `--model m3` quando `--label-smoothing` não for informado;
 * imprimir um resumo JSON do checkpoint gerado/restaurado.
 
 Esse script não deve:
@@ -604,7 +645,7 @@ Esse script não deve:
 
 ## Attack Requirements
 
-### FGSM/M1
+### FGSM/M3
 
 O ataque FGSM deve usar:
 
@@ -657,10 +698,10 @@ Se internamente o filtro precisar operar em escala `0-255`, a conversão deve se
 
 Cada experimento deve gerar apenas os artefatos oficiais abaixo.
 
-### FGSM/M1
+### FGSM/M3
 
 ```text
-results/experiments/fashion_mnist/fgsm_m1/
+results/experiments/fashion_mnist/fgsm_m3/
   metrics.csv
   metrics.json
   manifest.json
@@ -710,11 +751,11 @@ O arquivo `metrics.json` deve conter:
 {
   "table": 10,
   "dataset_group": "fashion_mnist",
-  "model_group": "m1",
+  "model_group": "m3",
   "rows": [
     {
       "no": 1,
-      "attack_model": "FGSM (ε=0.2)/M1",
+      "attack_model": "FGSM (ε=0.2)/M3",
       "dataset": "Fashion-MNIST",
       "num_failures": 0,
       "tp": 0,
@@ -743,9 +784,9 @@ O `manifest.json` deve registrar:
 ```json
 {
   "table": 10,
-  "experiment_id": "fashion_mnist_fgsm_m1",
+  "experiment_id": "fashion_mnist_fgsm_m3",
   "dataset_group": "fashion_mnist",
-  "model_group": "m1",
+  "model_group": "m3",
   "dataset": {
     "name": "fashion_mnist",
     "domain": "mnist_compatible",
@@ -848,7 +889,7 @@ O `manifest.json` deve registrar:
   "rows": [
     {
       "no": 1,
-      "attack_model": "FGSM (ε=0.2)/M1",
+      "attack_model": "FGSM (ε=0.2)/M3",
       "attack": {
         "name": "fgsm",
         "epsilon": 0.2
@@ -892,6 +933,9 @@ A implementação deve falhar com erro claro se:
 * `checkpoint_dir` do modelo não existir;
 * checkpoint do modelo não for compatível com Fashion-MNIST;
 * modelo tiver número de classes diferente de 10;
+* `fashion_mnist_fgsm_m3` tentar usar `model.name` diferente de `m3`;
+* `fashion_mnist_fgsm_m3` tentar carregar checkpoint de M1 ou MNIST dígitos;
+* o módulo M3 não estiver disponível em `src/deepdetector/models`;
 * `kind` não for `table_10_group`;
 * o ataque configurado não estiver implementado;
 * o filtro configurado não existir;
@@ -905,10 +949,10 @@ A implementação deve falhar com erro claro se:
 
 A implementação será aceita se:
 
-1. O comando abaixo executar somente o experimento FGSM/M1:
+1. O comando abaixo executar somente o experimento FGSM/M3:
 
 ```bash
-python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m1
+python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m3
 ```
 
 2. O comando abaixo executar somente o experimento CW L2/M2:
@@ -929,9 +973,9 @@ python scripts/run_experiment.py --experiment fashion_mnist_cw_l2_m2
 
 8. Cada classe Fashion-MNIST contribuir com 900 exemplos para treino e 100 exemplos para avaliação.
 
-9. Os 1000 exemplos de avaliação não forem usados para treinar M1 ou M2.
+9. Os 1000 exemplos de avaliação não forem usados para treinar M3 ou M2.
 
-10. O experimento FGSM usar M1.
+10. O experimento FGSM usar M3.
 
 11. O experimento CW L2 usar M2.
 
@@ -955,15 +999,23 @@ python scripts/run_experiment.py --experiment fashion_mnist_cw_l2_m2
 
 21. Os outputs forem gravados apenas nos diretórios oficiais definidos nesta spec.
 
-22. O script `scripts/train_fashion_mnist_checkpoint.py --model m1` usar a partição balanceada de treino Fashion-MNIST e gravar no checkpoint configurado para M1.
+22. O script `scripts/train_fashion_mnist_checkpoint.py --model m3` usar a partição balanceada de treino Fashion-MNIST e gravar no checkpoint configurado para M3.
 
 23. O script `scripts/train_fashion_mnist_checkpoint.py --model m2` usar a partição balanceada de treino Fashion-MNIST e gravar no checkpoint configurado para M2.
 
-24. `configs/experiments.yaml` declarar explicitamente a amostra de treino do checkpoint em `checkpoint_training` para M1 e M2.
+24. `configs/experiments.yaml` declarar explicitamente a amostra de treino do checkpoint em `checkpoint_training` para M3 e M2.
 
 25. O script de checkpoint falhar se `checkpoint_training` divergir da separação balanceada usada pelo loader.
 
 26. Os experimentos Fashion-MNIST descartarem erros limpos da partição de avaliação e registrarem esses descartes no `manifest.json`, sem exigir 100 clean-correct por classe.
+
+27. O módulo M3 existir em `src/deepdetector/models` e expor helpers de construção e checkpoint compatíveis com o padrão dos modelos MNIST existentes.
+
+28. O M3 aceitar entrada `28x28x1`, produzir 10 classes e usar checkpoints em `artifacts/models/fashion_mnist/m3/checkpoints`.
+
+29. Nenhum experimento Fashion-MNIST público usar M1 como classificador.
+
+30. O M3 usar a configuração inicial com dropout `0.25/0.25/0.5`, 10 épocas, learning rate `0.001` e label smoothing `0.1` por padrão para `--model m3`.
 
 ---
 
@@ -980,13 +1032,13 @@ e não como reprodução oficial da Table 10.
 Texto sugerido:
 
 ```text
-Além da reprodução principal, avaliamos o DeepDetector em um novo dataset compatível em formato com o fluxo MNIST. Utilizamos Fashion-MNIST por possuir imagens grayscale 28x28 e 10 classes, preservando a estrutura de entrada dos modelos M1 e M2. Foram executadas duas combinações: FGSM (ε=0.2)/M1 e CW L2 (κ=0.0)/M2. Os experimentos mantiveram a regra de detecção original, baseada na comparação entre a predição da imagem adversarial e a predição após a transformação adaptativa.
+Além da reprodução principal, avaliamos o DeepDetector em um novo dataset compatível em formato com o fluxo MNIST. Utilizamos Fashion-MNIST por possuir imagens grayscale 28x28 e 10 classes, preservando a estrutura de entrada dos modelos M3 e M2. Foram executadas duas combinações: FGSM (ε=0.2)/M3 e CW L2 (κ=0.0)/M2. Os experimentos mantiveram a regra de detecção original, baseada na comparação entre a predição da imagem adversarial e a predição após a transformação adaptativa.
 ```
 
 Se os modelos tiverem sido treinados em Fashion-MNIST:
 
 ```text
-Os modelos M1 e M2 foram treinados/restaurados com checkpoints específicos para Fashion-MNIST, permitindo interpretar as métricas agregadas de forma semanticamente válida.
+Os modelos M3 e M2 foram treinados/restaurados com checkpoints específicos para Fashion-MNIST, permitindo interpretar as métricas agregadas de forma semanticamente válida.
 ```
 
 Se os modelos forem os checkpoints originais de MNIST:
@@ -1021,6 +1073,7 @@ Recomenda-se criar ou adaptar:
 ```text
 scripts/train_fashion_mnist_checkpoint.py
 src/deepdetector/data/fashion_mnist.py
+src/deepdetector/models/mnist_m3.py
 src/deepdetector/evaluation/tables/table_10.py
 ```
 
@@ -1030,7 +1083,7 @@ O runner central deve reutilizar o kind já existente:
 kind: table_10_group
 ```
 
-O fluxo `table_10_group` deve ser estendido para avaliar `dataset.name: fashion_mnist` com `model_group: m1` e `model_group: m2`, sem criar um novo kind público.
+O fluxo `table_10_group` deve ser estendido para avaliar `dataset.name: fashion_mnist` com `model_group: m3` e `model_group: m2`, sem criar um novo kind público.
 
 O código deve reutilizar, sempre que possível:
 

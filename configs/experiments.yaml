@@ -748,10 +748,10 @@ experiments:
         attack:
           name: cw_linf
 
-  fashion_mnist_fgsm_m1:
+  fashion_mnist_fgsm_m3:
     kind: table_10_group
-    description: Fashion-MNIST new dataset evaluation with FGSM epsilon 0.2 against M1
-    output_dir: results/experiments/fashion_mnist/fgsm_m1
+    description: Fashion-MNIST new dataset evaluation with FGSM epsilon 0.2 against M3
+    output_dir: results/experiments/fashion_mnist/fgsm_m3
     dataset:
       name: fashion_mnist
       domain: mnist_compatible
@@ -802,9 +802,9 @@ experiments:
         bag: 100
         ankle_boot: 100
     model:
-      name: m1
+      name: m3
       family: mnist
-      checkpoint_dir: artifacts/models/fashion_mnist/m1/checkpoints
+      checkpoint_dir: artifacts/models/fashion_mnist/m3/checkpoints
       dataset_name: fashion_mnist
       input_shape: [28, 28, 1]
       num_classes: 10
@@ -831,12 +831,12 @@ experiments:
     filter:
       name: proposed_detection_filter
       type: proposed_detection_filter
-    model_group: m1
+    model_group: m3
     dataset_group: fashion_mnist
     dataset_label: Fashion-MNIST
     rows:
       - "no": 1
-        attack_model: "FGSM (ε=0.2)/M1"
+        attack_model: "FGSM (ε=0.2)/M3"
         status: implemented
         attack:
           name: fgsm

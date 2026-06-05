@@ -1,4 +1,4 @@
-"""Train or restore Fashion-MNIST checkpoints for the M1/M2 experiments."""
+"""Train or restore Fashion-MNIST checkpoints for the M3/M2 experiments."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -21,23 +21,24 @@ if str(SRC_ROOT) not in sys.path:
 from deepdetector.data.fashion_mnist import split_fashion_mnist_balanced
 from deepdetector.io.config import load_yaml_config
 from deepdetector.io.paths import resolve_project_path
-from deepdetector.models.mnist_cnn import build_mnist_model, create_tf_session
+from deepdetector.models.mnist_cnn import create_tf_session
 from deepdetector.models.mnist_m2 import build_mnist_m2_model
-from deepdetector.training.train_mnist_m1 import train_or_load_mnist_model
+from deepdetector.models.mnist_m3 import build_mnist_m3_model
 from deepdetector.training.train_mnist_m2 import train_or_load_mnist_m2_model
+from deepdetector.training.train_mnist_m3 import train_or_load_mnist_m3_model
 
 
 DEFAULT_CONFIG = resolve_project_path("configs/experiments.yaml")
 DEFAULT_EXPERIMENT_BY_MODEL = {
-    "m1": "fashion_mnist_fgsm_m1",
+    "m3": "fashion_mnist_fgsm_m3",
     "m2": "fashion_mnist_cw_l2_m2",
 }
 DEFAULT_FILENAME_BY_MODEL = {
-    "m1": "mnist.ckpt",
+    "m3": "mnist_m3.ckpt",
     "m2": "mnist_m2.ckpt",
 }
 DEFAULT_EPOCHS_BY_MODEL = {
-    "m1": 6,
+    "m3": 10,
     "m2": 10,
 }
 
@@ -65,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def build_training_graph(model_name: str) -> dict[str, Any]:
+def build_training_graph(model_name: str) -> Dict[str, Any]:
     """Create the TensorFlow graph for a Fashion-MNIST-compatible model."""
     import tensorflow as tf
 
@@ -74,8 +75,8 @@ def build_training_graph(model_name: str) -> dict[str, Any]:
     x = tf.compat.v1.placeholder(tf.float32, shape=(None, 28, 28, 1), name="x")
     y = tf.compat.v1.placeholder(tf.float32, shape=(None, 10), name="y")
 
-    if model_name == "m1":
-        model, predictions = build_mnist_model(x)
+    if model_name == "m3":
+        model, predictions = build_mnist_m3_model(x)
     elif model_name == "m2":
         model, predictions = build_mnist_m2_model(x)
     else:
@@ -90,7 +91,7 @@ def build_training_graph(model_name: str) -> dict[str, Any]:
     }
 
 
-def _experiment_id_for_model(model_name: str, experiment_id: str | None) -> str:
+def _experiment_id_for_model(model_name: str, experiment_id: Optional[str]) -> str:
     if experiment_id:
         return experiment_id
     return DEFAULT_EXPERIMENT_BY_MODEL[model_name]
@@ -98,9 +99,9 @@ def _experiment_id_for_model(model_name: str, experiment_id: str | None) -> str:
 
 def _experiment_config(
     model_name: str,
-    consolidated_config: dict[str, Any],
-    experiment_id: str | None,
-) -> tuple[str, dict[str, Any]]:
+    consolidated_config: Dict[str, Any],
+    experiment_id: Optional[str],
+) -> Tuple[str, Dict[str, Any]]:
     resolved_experiment_id = _experiment_id_for_model(model_name, experiment_id)
     experiments = consolidated_config.get("experiments", {})
     if resolved_experiment_id not in experiments:
@@ -125,15 +126,15 @@ def _experiment_config(
 
 def _training_config(
     model_name: str,
-    experiment: dict[str, Any],
-    train_dir_override: str | None,
-    filename: str | None,
-    epochs: int | None,
+    experiment: Dict[str, Any],
+    train_dir_override: Optional[str],
+    filename: Optional[str],
+    epochs: Optional[int],
     batch_size: int,
     learning_rate: float,
     label_smoothing: float,
     load_model: bool,
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     configured_train_dir = train_dir_override or experiment.get("model", {}).get("checkpoint_dir")
     train_dir = resolve_project_path(configured_train_dir)
     if train_dir is None:
@@ -150,7 +151,7 @@ def _training_config(
     }
 
 
-def _expected_checkpoint_training(dataset_config: dict[str, Any]) -> dict[str, Any]:
+def _expected_checkpoint_training(dataset_config: Dict[str, Any]) -> Dict[str, Any]:
     strategy = dict(dataset_config.get("split_strategy", {}))
     train_quota = int(strategy.get("train_class_quota", 900))
     eval_quota = int(strategy.get("evaluation_class_quota", 100))
@@ -179,8 +180,8 @@ def _expected_checkpoint_training(dataset_config: dict[str, Any]) -> dict[str, A
 def _validate_mapping(
     *,
     name: str,
-    configured: dict[str, Any],
-    expected: dict[str, Any],
+    configured: Dict[str, Any],
+    expected: Dict[str, Any],
 ) -> None:
     for key, expected_value in expected.items():
         if isinstance(expected_value, dict):
@@ -209,10 +210,10 @@ def _validate_mapping(
 
 
 def _validate_checkpoint_training(
-    experiment: dict[str, Any],
+    experiment: Dict[str, Any],
     train_images: np.ndarray,
     eval_images: np.ndarray,
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     configured = experiment.get("checkpoint_training")
     if not isinstance(configured, dict):
         raise ValueError("Fashion-MNIST checkpoint_training is required.")
@@ -242,8 +243,8 @@ def _validate_checkpoint_training(
 
 
 def _trainer_for_model(model_name: str) -> Any:
-    if model_name == "m1":
-        return train_or_load_mnist_model
+    if model_name == "m3":
+        return train_or_load_mnist_m3_model
     if model_name == "m2":
         return train_or_load_mnist_m2_model
     raise ValueError("Unsupported Fashion-MNIST model: {0}".format(model_name))
@@ -251,16 +252,16 @@ def _trainer_for_model(model_name: str) -> Any:
 
 def run_training(
     model_name: str,
-    consolidated_config: dict[str, Any],
-    experiment_id: str | None = None,
-    train_dir_override: str | None = None,
-    filename: str | None = None,
-    epochs: int | None = None,
+    consolidated_config: Dict[str, Any],
+    experiment_id: Optional[str] = None,
+    train_dir_override: Optional[str] = None,
+    filename: Optional[str] = None,
+    epochs: Optional[int] = None,
     batch_size: int = 128,
     learning_rate: float = 0.001,
     label_smoothing: float = 0.1,
     load_model: bool = False,
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     """Train or restore the configured Fashion-MNIST checkpoint."""
     model_key = model_name.lower()
     experiment_name, experiment = _experiment_config(

@@ -59,14 +59,14 @@ Table 10 tambem e separada por grupo de modelo. Os grupos ImageNet escrevem
 Para preparar checkpoints Fashion-MNIST antes dos experimentos publicos:
 
 ```bash
-python scripts/train_fashion_mnist_checkpoint.py --model m1
+python scripts/train_fashion_mnist_checkpoint.py --model m3
 python scripts/train_fashion_mnist_checkpoint.py --model m2
 ```
 
 Depois execute os experimentos pelo runner central:
 
 ```bash
-python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m1
+python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m3
 python scripts/run_experiment.py --experiment fashion_mnist_cw_l2_m2
 ```
 

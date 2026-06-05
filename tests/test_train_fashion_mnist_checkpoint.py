@@ -24,8 +24,8 @@ class FakeSession:
 def _config() -> dict:
     return {
         "experiments": {
-            "fashion_mnist_fgsm_m1": {
-                "model_group": "m1",
+            "fashion_mnist_fgsm_m3": {
+                "model_group": "m3",
                 "dataset": {
                     "name": "fashion_mnist",
                     "csv_path": "data/fashion_mnist/fashion-mnist_test.csv",
@@ -38,7 +38,7 @@ def _config() -> dict:
                     },
                 },
                 "model": {
-                    "checkpoint_dir": "artifacts/models/fashion_mnist/m1/checkpoints"
+                    "checkpoint_dir": "artifacts/models/fashion_mnist/m3/checkpoints"
                 },
                 "checkpoint_training": {
                     "source_csv": "data/fashion_mnist/fashion-mnist_test.csv",
@@ -128,12 +128,12 @@ def _fake_graph(session: FakeSession) -> dict:
     }
 
 
-def test_train_fashion_mnist_checkpoint_uses_m1_experiment_defaults(monkeypatch) -> None:
+def test_train_fashion_mnist_checkpoint_uses_m3_experiment_defaults(monkeypatch) -> None:
     session = FakeSession()
     calls = {}
 
     def fake_trainer(sess, x, y, predictions, x_train, y_train, x_test, y_test, config):
-        calls["trainer"] = "m1"
+        calls["trainer"] = "m3"
         calls["session"] = sess
         calls["x_train_shape"] = x_train.shape
         calls["y_train_shape"] = y_train.shape
@@ -144,23 +144,23 @@ def test_train_fashion_mnist_checkpoint_uses_m1_experiment_defaults(monkeypatch)
 
     monkeypatch.setattr(train_script, "split_fashion_mnist_balanced", _fake_split)
     monkeypatch.setattr(train_script, "build_training_graph", lambda model: _fake_graph(session))
-    monkeypatch.setattr(train_script, "train_or_load_mnist_model", fake_trainer)
+    monkeypatch.setattr(train_script, "train_or_load_mnist_m3_model", fake_trainer)
 
-    result = train_script.run_training("m1", _config(), epochs=1)
+    result = train_script.run_training("m3", _config(), epochs=1)
 
-    assert calls["trainer"] == "m1"
+    assert calls["trainer"] == "m3"
     assert calls["session"] is session
     assert calls["x_train_shape"] == (20, 28, 28, 1)
     assert calls["y_train_shape"] == (20, 10)
     assert calls["x_test_shape"] == (10, 28, 28, 1)
     assert calls["y_test_shape"] == (10, 10)
     assert calls["config"]["train_dir"].endswith(
-        "artifacts/models/fashion_mnist/m1/checkpoints"
+        "artifacts/models/fashion_mnist/m3/checkpoints"
     )
-    assert calls["config"]["filename"] == "mnist.ckpt"
+    assert calls["config"]["filename"] == "mnist_m3.ckpt"
     assert calls["config"]["epochs"] == 1
-    assert result["experiment_id"] == "fashion_mnist_fgsm_m1"
-    assert result["model"] == "m1"
+    assert result["experiment_id"] == "fashion_mnist_fgsm_m3"
+    assert result["model"] == "m3"
     assert result["train_samples"] == 20
     assert result["evaluation_samples"] == 10
     assert result["train_class_quota"] == 2
@@ -170,12 +170,32 @@ def test_train_fashion_mnist_checkpoint_uses_m1_experiment_defaults(monkeypatch)
     assert session.closed is True
 
 
+def test_train_fashion_mnist_checkpoint_uses_m3_initial_training_defaults(monkeypatch) -> None:
+    session = FakeSession()
+    calls = {}
+
+    def fake_trainer(sess, x, y, predictions, x_train, y_train, x_test, y_test, config):
+        calls["config"] = dict(config)
+        return {"checkpoint_path": str(Path(config["train_dir"]) / config["filename"])}
+
+    monkeypatch.setattr(train_script, "split_fashion_mnist_balanced", _fake_split)
+    monkeypatch.setattr(train_script, "build_training_graph", lambda model: _fake_graph(session))
+    monkeypatch.setattr(train_script, "train_or_load_mnist_m3_model", fake_trainer)
+
+    train_script.run_training("m3", _config())
+
+    assert calls["config"]["epochs"] == 10
+    assert calls["config"]["learning_rate"] == 0.001
+    assert calls["config"]["label_smoothing"] == 0.1
+    assert session.closed is True
+
+
 def test_train_fashion_mnist_checkpoint_uses_m2_trainer_and_checkpoint(monkeypatch) -> None:
     session = FakeSession()
     calls = {}
 
-    def fake_m1(*args, **kwargs):
-        raise AssertionError("M1 trainer should not be called for --model m2")
+    def fake_m3(*args, **kwargs):
+        raise AssertionError("M3 trainer should not be called for --model m2")
 
     def fake_m2(sess, x, y, predictions, x_train, y_train, x_test, y_test, config):
         calls["config"] = dict(config)
@@ -183,7 +203,7 @@ def test_train_fashion_mnist_checkpoint_uses_m2_trainer_and_checkpoint(monkeypat
 
     monkeypatch.setattr(train_script, "split_fashion_mnist_balanced", _fake_split)
     monkeypatch.setattr(train_script, "build_training_graph", lambda model: _fake_graph(session))
-    monkeypatch.setattr(train_script, "train_or_load_mnist_model", fake_m1)
+    monkeypatch.setattr(train_script, "train_or_load_mnist_m3_model", fake_m3)
     monkeypatch.setattr(train_script, "train_or_load_mnist_m2_model", fake_m2)
 
     result = train_script.run_training("m2", _config(), batch_size=64, load_model=True)
@@ -201,9 +221,9 @@ def test_train_fashion_mnist_checkpoint_uses_m2_trainer_and_checkpoint(monkeypat
 
 
 def test_train_fashion_mnist_checkpoint_rejects_model_experiment_mismatch() -> None:
-    with pytest.raises(ValueError, match="configured for model m2, not m1"):
+    with pytest.raises(ValueError, match="configured for model m2, not m3"):
         train_script.run_training(
-            "m1",
+            "m3",
             _config(),
             experiment_id="fashion_mnist_cw_l2_m2",
         )
@@ -213,7 +233,7 @@ def test_train_fashion_mnist_checkpoint_rejects_training_sample_mismatch(
     monkeypatch,
 ) -> None:
     config = _config()
-    config["experiments"]["fashion_mnist_fgsm_m1"]["checkpoint_training"]["selection"][
+    config["experiments"]["fashion_mnist_fgsm_m3"]["checkpoint_training"]["selection"][
         "per_class_end"
     ] = 3
 
@@ -223,7 +243,7 @@ def test_train_fashion_mnist_checkpoint_rejects_training_sample_mismatch(
         ValueError,
         match="checkpoint_training.selection.per_class_end must be 2",
     ):
-        train_script.run_training("m1", config)
+        train_script.run_training("m3", config)
 
 
 def test_train_fashion_mnist_checkpoint_cli_prints_json(monkeypatch, capsys) -> None:
@@ -232,7 +252,7 @@ def test_train_fashion_mnist_checkpoint_cli_prints_json(monkeypatch, capsys) -> 
     def fake_run_training(**kwargs):
         calls.update(kwargs)
         return {
-            "checkpoint_path": "/tmp/fashion_mnist/m1/mnist.ckpt",
+            "checkpoint_path": "/tmp/fashion_mnist/m3/mnist_m3.ckpt",
             "model": kwargs["model_name"],
             "train_samples": 9000,
         }
@@ -245,7 +265,7 @@ def test_train_fashion_mnist_checkpoint_cli_prints_json(monkeypatch, capsys) -> 
         [
             "train_fashion_mnist_checkpoint.py",
             "--model",
-            "m1",
+            "m3",
             "--epochs",
             "2",
             "--batch-size",
@@ -261,8 +281,8 @@ def test_train_fashion_mnist_checkpoint_cli_prints_json(monkeypatch, capsys) -> 
     assert train_script.main() == 0
 
     output = capsys.readouterr().out
-    assert '"checkpoint_path": "/tmp/fashion_mnist/m1/mnist.ckpt"' in output
-    assert calls["model_name"] == "m1"
+    assert '"checkpoint_path": "/tmp/fashion_mnist/m3/mnist_m3.ckpt"' in output
+    assert calls["model_name"] == "m3"
     assert calls["filename"] == "custom.ckpt"
     assert calls["epochs"] == 2
     assert calls["batch_size"] == 32

@@ -26,7 +26,7 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
     assert set(config["experiments"]) == {
         "defense_aware",
         "fashion_mnist_cw_l2_m2",
-        "fashion_mnist_fgsm_m1",
+        "fashion_mnist_fgsm_m3",
         "imagenet_new_classes_cw_l2_inception_v3",
         "imagenet_new_classes_deepfool_caffenet",
         "imagenet_new_classes_fgsm_googlenet",
@@ -75,7 +75,7 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
         ("table_4_mnist", "filter_grid"),
         ("table_4_imagenet", "imagenet_table_4"),
         ("defense_aware", "defense_aware"),
-        ("fashion_mnist_fgsm_m1", "table_10_group"),
+        ("fashion_mnist_fgsm_m3", "table_10_group"),
         ("fashion_mnist_cw_l2_m2", "table_10_group"),
         ("table_10_m1", "table_10_group"),
         ("table_10_googlenet", "table_10_group"),
@@ -116,7 +116,7 @@ def test_build_experiment_config_rejects_unknown_experiment() -> None:
 def test_build_fashion_mnist_experiment_preserves_checkpoint_training() -> None:
     """Fashion-MNIST runtime config should keep checkpoint sample provenance."""
     config = experiment_runner.build_experiment_config(
-        "fashion_mnist_fgsm_m1",
+        "fashion_mnist_fgsm_m3",
         _consolidated_config(),
     )
 
