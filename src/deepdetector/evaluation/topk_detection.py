@@ -42,6 +42,50 @@ METRIC_FIELDS = (
     "false_positive_reduction_percent",
     "attack_success_rate_percent",
 )
+RULE_METRIC_FIELDS = (
+    "class",
+    "rule",
+    "k",
+    "threshold",
+    "delta",
+    "selected",
+    "test_number",
+    "disturbed_failure",
+    "TP",
+    "FN",
+    "FP",
+    "TN",
+    "recall_percent",
+    "precision_percent",
+    "f1_percent",
+    "false_positive_rate_percent",
+    "false_positive_reduction_percent",
+    "attack_success_rate_percent",
+)
+
+
+@dataclass(frozen=True)
+class RuleSpec:
+    """One configured top-k detector rule and its parameters."""
+
+    name: str
+    k: int | None = None
+    threshold: int | None = None
+    delta: float | None = None
+
+    @property
+    def key(self) -> str:
+        """Return a stable key for JSON/audit maps."""
+        if self.name == "top1_change":
+            return self.name
+        if self.name in {"topk_overlap", "top1_in_topk"}:
+            return "{0}__k{1}".format(self.name, int(self.k or 1))
+        if self.name == "rank_displacement":
+            return "{0}__t{1}".format(self.name, int(self.threshold or 1))
+        if self.name == "confidence_drop":
+            delta_key = int(round(float(self.delta or 0.0) * 100.0))
+            return "{0}__k{1}__d{2:03d}".format(self.name, int(self.k or 1), delta_key)
+        return self.name
 
 
 @dataclass(frozen=True)
@@ -51,7 +95,7 @@ class TopKDetectionResult:
     selection_rows: list[dict[str, Any]]
     selection_json: dict[str, dict[str, Any]]
     metric_rows: list[dict[str, Any]]
-    metrics_json: dict[str, dict[str, dict[str, Any]]]
+    metrics_json: Any
     ambiguous_images_by_class: dict[str, list[np.ndarray]]
 
 
@@ -97,6 +141,95 @@ def is_detected_topk(
     before = set(top_k_indices(probs_before, k))
     after = set(top_k_indices(probs_after, k))
     return len(before.intersection(after)) == 0
+
+
+def detect_top1_change(before: Sequence[float], after: Sequence[float]) -> bool:
+    """Return whether the top-1 class changed after filtering."""
+    before_array = np.asarray(before, dtype=np.float64).reshape(-1)
+    after_array = np.asarray(after, dtype=np.float64).reshape(-1)
+    if before_array.size == 0 or after_array.size == 0:
+        raise ValueError("before and after must not be empty.")
+    return int(np.argmax(before_array)) != int(np.argmax(after_array))
+
+
+def detect_top1_in_topk(before: Sequence[float], after: Sequence[float], k: int) -> bool:
+    """Return whether the pre-filter top-1 class is absent from post-filter top-k."""
+    before_array = np.asarray(before, dtype=np.float64).reshape(-1)
+    if before_array.size == 0:
+        raise ValueError("before must not be empty.")
+    top1_before = int(np.argmax(before_array))
+    return top1_before not in set(top_k_indices(after, k))
+
+
+def detect_rank_displacement(
+    before: Sequence[float],
+    after: Sequence[float],
+    threshold: int,
+) -> bool:
+    """Return whether pre-filter top-1 fell to zero-based rank >= threshold."""
+    before_array = np.asarray(before, dtype=np.float64).reshape(-1)
+    after_array = np.asarray(after, dtype=np.float64).reshape(-1)
+    if before_array.size == 0 or after_array.size == 0:
+        raise ValueError("before and after must not be empty.")
+    if int(threshold) < 0:
+        raise ValueError("threshold must be non-negative.")
+    top1_before = int(np.argmax(before_array))
+    ranking_after = [int(index) for index in np.argsort(-after_array, kind="mergesort")]
+    rank = ranking_after.index(top1_before) if top1_before in ranking_after else len(ranking_after)
+    return rank >= int(threshold)
+
+
+def detect_confidence_drop(
+    before: Sequence[float],
+    after: Sequence[float],
+    k: int,
+    delta: float,
+) -> bool:
+    """Return whether position changed or pre-filter top-1 confidence dropped enough."""
+    before_array = np.asarray(before, dtype=np.float64).reshape(-1)
+    after_array = np.asarray(after, dtype=np.float64).reshape(-1)
+    if before_array.size == 0 or after_array.size == 0:
+        raise ValueError("before and after must not be empty.")
+    top1_before = int(np.argmax(before_array))
+    position_changed = top1_before not in set(top_k_indices(after_array, k))
+    confidence_dropped = (float(before_array[top1_before]) - float(after_array[top1_before])) >= float(
+        delta
+    )
+    return position_changed or confidence_dropped
+
+
+_RULE_DISPATCH = {
+    "top1_change": lambda before, after, k, threshold, delta: detect_top1_change(before, after),
+    "topk_overlap": lambda before, after, k, threshold, delta: is_detected_topk(before, after, k),
+    "top1_in_topk": lambda before, after, k, threshold, delta: detect_top1_in_topk(
+        before, after, k
+    ),
+    "rank_displacement": lambda before, after, k, threshold, delta: detect_rank_displacement(
+        before, after, threshold
+    ),
+    "confidence_drop": lambda before, after, k, threshold, delta: detect_confidence_drop(
+        before, after, k, delta
+    ),
+}
+
+
+def detect_by_rule(
+    before: Sequence[float],
+    after: Sequence[float],
+    rule: str,
+    k: int = 1,
+    threshold: int = 1,
+    delta: float = 0.10,
+) -> bool:
+    """Dispatch one top-k detector rule by name."""
+    if rule not in _RULE_DISPATCH:
+        raise ValueError(
+            "Regra desconhecida: '{0}'. Disponíveis: {1}".format(
+                rule,
+                sorted(_RULE_DISPATCH),
+            )
+        )
+    return bool(_RULE_DISPATCH[rule](before, after, int(k), int(threshold), float(delta)))
 
 
 def _predict_scores(model: Any, image: np.ndarray) -> np.ndarray:
@@ -227,6 +360,259 @@ def _configured_k_values(config: Mapping[str, Any]) -> list[int]:
     return values
 
 
+def _configured_rule_specs(config: Mapping[str, Any]) -> list[RuleSpec]:
+    """Return expanded detector rule/parameter combinations."""
+    rules = config.get("rules")
+    if not rules:
+        return []
+
+    default_ks = _configured_k_values(config)
+    specs: list[RuleSpec] = []
+    for rule_config in rules:
+        if isinstance(rule_config, str):
+            rule_config = {"name": rule_config}
+        name = str(rule_config.get("name", ""))
+        if not name:
+            raise ValueError("topk_detection rule must define name.")
+
+        if name == "top1_change":
+            specs.append(RuleSpec(name=name))
+        elif name in {"topk_overlap", "top1_in_topk"}:
+            for k in [int(value) for value in rule_config.get("ks", default_ks)]:
+                specs.append(RuleSpec(name=name, k=k))
+        elif name == "rank_displacement":
+            thresholds = rule_config.get("thresholds", default_ks)
+            for threshold in [int(value) for value in thresholds]:
+                specs.append(RuleSpec(name=name, threshold=threshold))
+        elif name == "confidence_drop":
+            ks = [int(value) for value in rule_config.get("ks", default_ks)]
+            deltas = [float(value) for value in rule_config.get("deltas", [0.10])]
+            for k in ks:
+                for delta in deltas:
+                    specs.append(RuleSpec(name=name, k=k, delta=delta))
+        else:
+            raise ValueError("Unknown topk_detection rule: {0}".format(name))
+
+    unique_specs: list[RuleSpec] = []
+    seen: set[str] = set()
+    for spec in specs:
+        if spec.key in seen:
+            continue
+        seen.add(spec.key)
+        unique_specs.append(spec)
+    return unique_specs
+
+
+def _rule_detection(spec: RuleSpec, before: Sequence[float], after: Sequence[float]) -> bool:
+    """Evaluate one configured rule spec."""
+    return detect_by_rule(
+        before,
+        after,
+        rule=spec.name,
+        k=int(spec.k or 1),
+        threshold=int(spec.threshold or 1),
+        delta=float(spec.delta or 0.10),
+    )
+
+
+def _rank_of_class(probs: Sequence[float], class_id: int) -> int:
+    """Return the zero-based rank of class_id under descending probabilities."""
+    prob_array = np.asarray(probs, dtype=np.float64).reshape(-1)
+    ranking = [int(index) for index in np.argsort(-prob_array, kind="mergesort")]
+    return ranking.index(int(class_id)) if int(class_id) in ranking else len(ranking)
+
+
+def _sample_audit_row(
+    *,
+    sample_id: str,
+    class_name: str,
+    true_label: int | None,
+    is_adversarial: bool,
+    before: Sequence[float],
+    after: Sequence[float],
+) -> dict[str, Any]:
+    """Return the logical per-sample audit payload used by configured rules."""
+    before_array = np.asarray(before, dtype=np.float64).reshape(-1)
+    after_array = np.asarray(after, dtype=np.float64).reshape(-1)
+    top1_before = int(np.argmax(before_array))
+    top1_after = int(np.argmax(after_array))
+    top5_k = min(5, before_array.size, after_array.size)
+    return {
+        "sample_id": sample_id,
+        "class_name": class_name,
+        "true_label": true_label,
+        "is_adversarial": bool(is_adversarial),
+        "top1_before_filter": top1_before,
+        "top1_before_filter_confidence": float(before_array[top1_before]),
+        "top1_after_filter": top1_after,
+        "top1_after_filter_confidence": float(after_array[top1_after]),
+        "top5_before_filter": top_k_indices(before_array, top5_k),
+        "top5_after_filter": top_k_indices(after_array, top5_k),
+        "confidence_of_top1_before_in_after": float(after_array[top1_before]),
+        "rank_of_top1_before_in_after": _rank_of_class(after_array, top1_before),
+        "detections": {},
+    }
+
+
+def _class_true_label(config: Mapping[str, Any], class_name: str) -> int | None:
+    """Return the configured true label for one class, when available."""
+    class_indices = config.get("dataset", {}).get("class_indices", {})
+    if class_name not in class_indices:
+        return None
+    return int(class_indices[class_name])
+
+
+def _global_rule_counts(
+    counts_by_class: Mapping[str, Mapping[str, Mapping[str, int]]],
+    rule_specs: Sequence[RuleSpec],
+) -> dict[str, dict[str, int]]:
+    """Aggregate configured rule counters by summing class counters."""
+    global_counts = {spec.key: _zero_counts(0) for spec in rule_specs}
+    for class_counts in counts_by_class.values():
+        for spec in rule_specs:
+            for field in ("selected", "test_number", "disturbed_failure", "TP", "FN", "FP", "TN"):
+                global_counts[spec.key][field] += int(class_counts[spec.key][field])
+    return global_counts
+
+
+def _evaluate_configured_rules(
+    *,
+    selected_by_class: Mapping[str, Sequence[SelectionSample]],
+    selection_rows: list[dict[str, Any]],
+    selection_json: dict[str, dict[str, Any]],
+    model: Any,
+    transform: TransformFn,
+    attack_generator: AttackGenerator,
+    config: Mapping[str, Any],
+    rule_specs: Sequence[RuleSpec],
+) -> TopKDetectionResult:
+    """Evaluate configured detector rules and return official output payloads."""
+    attack_config = config.get("attack", {})
+    counts_by_class = {
+        class_name: {spec.key: _zero_counts(len(selected)) for spec in rule_specs}
+        for class_name, selected in selected_by_class.items()
+    }
+    baseline_by_class = {
+        class_name: _zero_counts(len(selected))
+        for class_name, selected in selected_by_class.items()
+    }
+    sample_audit: list[dict[str, Any]] = []
+
+    for class_name, selected in selected_by_class.items():
+        true_label = _class_true_label(config, class_name)
+        for sample_index, (image, clean_probs, _, _) in enumerate(selected, start=1):
+            filtered_clean = transform(image)
+            filtered_clean_probs = predict_proba(model, filtered_clean)
+            clean_pred = int(np.argmax(clean_probs))
+
+            clean_audit = _sample_audit_row(
+                sample_id="{0}/{1:06d}_clean".format(class_name, sample_index),
+                class_name=class_name,
+                true_label=true_label,
+                is_adversarial=False,
+                before=clean_probs,
+                after=filtered_clean_probs,
+            )
+            baseline_clean_detected = detect_top1_change(clean_probs, filtered_clean_probs)
+            if baseline_clean_detected:
+                baseline_by_class[class_name]["FP"] += 1
+            else:
+                baseline_by_class[class_name]["TN"] += 1
+
+            for spec in rule_specs:
+                class_counts = counts_by_class[class_name][spec.key]
+                detected = _rule_detection(spec, clean_probs, filtered_clean_probs)
+                clean_audit["detections"][spec.key] = detected
+                if detected:
+                    class_counts["FP"] += 1
+                else:
+                    class_counts["TN"] += 1
+            sample_audit.append(clean_audit)
+
+            adversarial = attack_generator(model, image, clean_pred, attack_config)
+            adv_probs = predict_proba(model, adversarial)
+            attack_success = int(np.argmax(adv_probs)) != clean_pred
+            if not attack_success:
+                baseline_by_class[class_name]["disturbed_failure"] += 1
+                for spec in rule_specs:
+                    counts_by_class[class_name][spec.key]["disturbed_failure"] += 1
+                continue
+
+            filtered_adv_probs = predict_proba(model, transform(adversarial))
+            baseline_by_class[class_name]["test_number"] += 1
+            if detect_top1_change(adv_probs, filtered_adv_probs):
+                baseline_by_class[class_name]["TP"] += 1
+            else:
+                baseline_by_class[class_name]["FN"] += 1
+
+            adv_audit = _sample_audit_row(
+                sample_id="{0}/{1:06d}_adversarial".format(class_name, sample_index),
+                class_name=class_name,
+                true_label=true_label,
+                is_adversarial=True,
+                before=adv_probs,
+                after=filtered_adv_probs,
+            )
+            for spec in rule_specs:
+                class_counts = counts_by_class[class_name][spec.key]
+                class_counts["test_number"] += 1
+                detected = _rule_detection(spec, adv_probs, filtered_adv_probs)
+                adv_audit["detections"][spec.key] = detected
+                if detected:
+                    class_counts["TP"] += 1
+                else:
+                    class_counts["FN"] += 1
+            sample_audit.append(adv_audit)
+
+    global_counts = _global_rule_counts(counts_by_class, rule_specs)
+    global_baseline = _zero_counts(0)
+    for baseline in baseline_by_class.values():
+        for field in ("selected", "test_number", "disturbed_failure", "TP", "FN", "FP", "TN"):
+            global_baseline[field] += int(baseline[field])
+
+    metric_rows: list[dict[str, Any]] = []
+    for class_name, class_counts in counts_by_class.items():
+        baseline_fp = int(baseline_by_class[class_name]["FP"])
+        for spec in rule_specs:
+            payload = _metric_payload(class_counts[spec.key], baseline_fp=baseline_fp)
+            row = {
+                "class": class_name,
+                "rule": spec.name,
+                "k": spec.k,
+                "threshold": spec.threshold,
+                "delta": spec.delta,
+            }
+            row.update(payload)
+            metric_rows.append(row)
+
+    global_baseline_fp = int(global_baseline["FP"])
+    for spec in rule_specs:
+        payload = _metric_payload(global_counts[spec.key], baseline_fp=global_baseline_fp)
+        row = {
+            "class": "global",
+            "rule": spec.name,
+            "k": spec.k,
+            "threshold": spec.threshold,
+            "delta": spec.delta,
+        }
+        row.update(payload)
+        metric_rows.append(row)
+
+    return TopKDetectionResult(
+        selection_rows=selection_rows,
+        selection_json=selection_json,
+        metric_rows=metric_rows,
+        metrics_json={
+            "metrics": metric_rows,
+            "sample_audit": sample_audit,
+        },
+        ambiguous_images_by_class={
+            class_name: [item[0] for item in selected]
+            for class_name, selected in selected_by_class.items()
+        },
+    )
+
+
 def evaluate_topk_detection(
     *,
     samples_by_class: Mapping[str, Sequence[np.ndarray]],
@@ -262,6 +648,19 @@ def evaluate_topk_detection(
     global_row = {"class": "global"}
     global_row.update(global_selection)
     selection_rows.append(global_row)
+
+    rule_specs = _configured_rule_specs(detection_config)
+    if rule_specs:
+        return _evaluate_configured_rules(
+            selected_by_class=selected_by_class,
+            selection_rows=selection_rows,
+            selection_json=selection_json,
+            model=model,
+            transform=transform,
+            attack_generator=attack_generator,
+            config=config,
+            rule_specs=rule_specs,
+        )
 
     counts_by_class = {
         class_name: {k: _zero_counts(len(selected)) for k in k_values}
@@ -391,10 +790,11 @@ def write_topk_detection_outputs(
         SELECTION_FIELDS,
     )
     selection_json = write_metrics_json(output_path / "selection.json", result.selection_json)
+    metric_fields = RULE_METRIC_FIELDS if _uses_rule_metrics(result.metric_rows) else METRIC_FIELDS
     metrics_csv = write_metrics_csv(
         output_path / "metrics.csv",
         result.metric_rows,
-        METRIC_FIELDS,
+        metric_fields,
     )
     metrics_json = write_metrics_json(output_path / "metrics.json", result.metrics_json)
     return {
@@ -404,6 +804,11 @@ def write_topk_detection_outputs(
         "metrics_csv": metrics_csv,
         "metrics_json": metrics_json,
     }
+
+
+def _uses_rule_metrics(rows: Sequence[Mapping[str, Any]]) -> bool:
+    """Return whether metric rows use the configured-rule schema."""
+    return bool(rows and "rule" in rows[0])
 
 
 def _as_uint8_rgb(image: np.ndarray) -> np.ndarray:

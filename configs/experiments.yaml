@@ -750,6 +750,14 @@ experiments:
       baseline_k: 1
       candidate_k_values: [2, 3, 5]
       default_k: 3
+      rules:
+        - name: topk_overlap
+        - name: top1_in_topk
+        - name: rank_displacement
+          thresholds: [1, 2, 3, 5]
+        - name: confidence_drop
+          ks: [2, 3]
+          deltas: [0.05, 0.10, 0.20]
     output:
       aggregate_by_class: true
       aggregate_global: true

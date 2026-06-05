@@ -4,6 +4,12 @@ Use this file to track implementation tasks derived from specifications in `spec
 
 ## Backlog
 
+- [x] Implement configurable top-k detection rules from `specs/features/fix_topk.md`
+  - [x] Add rule dispatch helpers for `top1_change`, `top1_in_topk`, `rank_displacement`, and `confidence_drop`.
+  - [x] Preserve legacy `topk_overlap` behavior and output shape when `rules` is not configured.
+  - [x] Expand configured rule/parameter combinations into official `metrics.csv` and `metrics.json` outputs.
+  - [x] Add focused tests for rule equivalence, dispatch, configured outputs, and config fidelity.
+  - [x] Force Top-k FGSM generation to use the GoogLeNet attack-gradient path.
 - [x] Implement top-k prediction detection from `specs/features/topk_detector.md`
   - [x] Add `topk_detection` to the consolidated experiment config and runner dispatch.
   - [x] Add reusable top-k selection, detection, aggregation, and output helpers.

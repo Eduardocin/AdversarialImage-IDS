@@ -105,15 +105,30 @@ def _epsilon_255(attack_config: Dict[str, Any]) -> float:
     return float(attack_config.get("epsilon", 1.0 / 255.0)) * 255.0
 
 
+class _TopKAttackGradientModel:
+    """Delegate model calls while forcing FGSM onto the attack-gradient path."""
+
+    def __init__(self, model: Any) -> None:
+        self._model = model
+
+    def __getattr__(self, name: str) -> Any:
+        if name == "prediction_gradient":
+            raise AttributeError(name)
+        return getattr(self._model, name)
+
+    def gradient(self, image: np.ndarray, class_id: int) -> np.ndarray:
+        return self._model.gradient(image, class_id)
+
+
 def _generate_fgsm_googlenet(
     model: Any,
     image: np.ndarray,
     class_id: int,
     attack_config: Dict[str, Any],
 ) -> np.ndarray:
-    """Generate one FGSM/GoogLeNet adversarial image through the shared helper."""
+    """Generate one FGSM/GoogLeNet adversarial image through the attack graph."""
     return generate_fgsm_caffe_image(
-        model=model,
+        model=_TopKAttackGradientModel(model),
         image=image,
         class_id=int(class_id),
         epsilon_255=_epsilon_255(attack_config),
