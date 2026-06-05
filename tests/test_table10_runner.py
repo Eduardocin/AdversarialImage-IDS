@@ -15,6 +15,7 @@ sys.path.insert(0, str(SRC_ROOT))
 from deepdetector.evaluation.tables.table_10 import (  # noqa: E402
     TABLE_10_SCHEMA,
     build_pending_table_10_row,
+    evaluate_table_10_fashion_mnist_row,
     evaluate_table_10_imagenet_row,
     evaluate_table_10_googlenet_row,
     run_table_10_group,
@@ -56,6 +57,11 @@ IMAGENET_NEW_CLASS_EXPERIMENTS = {
         [14],
         ["cw_l2"],
     ),
+}
+
+FASHION_MNIST_EXPERIMENTS = {
+    "fashion_mnist_fgsm_m1": ("fgsm_m1", "m1", [1], ["fgsm"]),
+    "fashion_mnist_cw_l2_m2": ("cw_l2_m2", "m2", [9], ["cw_l2_nn_robust"]),
 }
 
 
@@ -388,6 +394,302 @@ def test_imagenet_new_classes_configs_use_model_specific_labels() -> None:
         "scholar_bus": 962,
         "soccer_ball": 222,
     }
+
+
+def test_fashion_mnist_configs_are_separate_table10_experiments() -> None:
+    """Fashion-MNIST should expose one public command per selected Table 10 row."""
+    config = _consolidated_config()
+    experiments = config["experiments"]
+
+    for experiment_name, (
+        output_leaf,
+        model_group,
+        row_numbers,
+        attack_names,
+    ) in FASHION_MNIST_EXPERIMENTS.items():
+        experiment = experiments[experiment_name]
+        dataset = experiment["dataset"]
+
+        assert experiment["kind"] == "table_10_group"
+        assert experiment["output_dir"] == (
+            "results/experiments/fashion_mnist/{0}".format(output_leaf)
+        )
+        assert experiment["model_group"] == model_group
+        assert experiment["dataset_group"] == "fashion_mnist"
+        assert experiment["dataset_label"] == "Fashion-MNIST"
+        assert experiment["output"]["manifest"] is True
+        assert dataset["name"] == "fashion_mnist"
+        assert dataset["domain"] == "mnist_compatible"
+        assert dataset["csv_path"] == "data/fashion_mnist/fashion-mnist_test.csv"
+        assert dataset["split_strategy"] == {
+            "name": "balanced_by_class",
+            "train_samples": 9000,
+            "evaluation_samples": 1000,
+            "train_class_quota": 900,
+            "evaluation_class_quota": 100,
+        }
+        assert experiment["checkpoint_training"] == {
+            "source_csv": "data/fashion_mnist/fashion-mnist_test.csv",
+            "split_name": "train",
+            "selection": {
+                "method": "first_n_per_class",
+                "per_class_start": 0,
+                "per_class_end": 900,
+                "class_quota": 900,
+                "total_samples": 9000,
+            },
+            "validation_sample": {
+                "split_name": "evaluation",
+                "method": "next_n_per_class",
+                "per_class_start": 900,
+                "per_class_end": 1000,
+                "class_quota": 100,
+                "total_samples": 1000,
+                "excludes_training": True,
+            },
+        }
+        assert dataset["image_shape"] == [28, 28, 1]
+        assert set(dataset["class_quotas"].values()) == {100}
+        assert [row["no"] for row in experiment["rows"]] == row_numbers
+        assert [row["attack"]["name"] for row in experiment["rows"]] == attack_names
+
+
+def test_table10_fashion_mnist_row_computes_metrics(monkeypatch) -> None:
+    """Fashion-MNIST rows should discard clean errors and compute Table 10 metrics."""
+    graph = {
+        "sess": type("Session", (), {"close": lambda self: None})(),
+        "model": object(),
+        "x": object(),
+    }
+    images = table_10_module.np.asarray(
+        [[[[0.0]]], [[[0.1]]], [[[1.0]]], [[[1.1]]]],
+        dtype=table_10_module.np.float32,
+    )
+    labels = table_10_module.np.asarray([0, 0, 1, 1], dtype=table_10_module.np.int64)
+    metadata = {
+        "name": "fashion_mnist",
+        "domain": "mnist_compatible",
+        "split": "test",
+        "csv_path": "data/fashion_mnist/fashion-mnist_test.csv",
+        "split_strategy": {"name": "balanced_by_class"},
+        "image_shape": [28, 28, 1],
+        "value_range": {"min": 0.0, "max": 1.0},
+        "class_order": ["first", "second"],
+        "class_quotas": {"first": 1, "second": 1},
+        "candidate_counts": {"first": 2, "second": 2},
+    }
+    predictions = iter(
+        [
+            table_10_module.np.asarray([0, 9, 1, 9], dtype=table_10_module.np.int64),
+            table_10_module.np.asarray([1, 1], dtype=table_10_module.np.int64),
+            table_10_module.np.asarray([0, 1], dtype=table_10_module.np.int64),
+            table_10_module.np.asarray([0, 1], dtype=table_10_module.np.int64),
+        ]
+    )
+
+    monkeypatch.setattr(
+        table_10_module,
+        "_build_table_10_fashion_mnist_graph",
+        lambda config: graph,
+    )
+    monkeypatch.setattr(
+        table_10_module,
+        "load_fashion_mnist_evaluation_split",
+        lambda dataset_config: (images, labels, dict(metadata)),
+    )
+    monkeypatch.setattr(
+        table_10_module,
+        "_mnist_graph_predict",
+        lambda graph, images, batch_size: next(predictions),
+    )
+    monkeypatch.setattr(table_10_module, "_table_10_filter", lambda config: (lambda image: image))
+
+    def fake_generate_attack(name, **kwargs):
+        assert name == "fgsm"
+        assert kwargs["eps"] == 0.2
+        return kwargs["images"].copy()
+
+    monkeypatch.setattr(table_10_module, "generate_attack", fake_generate_attack)
+
+    group_config = {
+        "dataset": {
+            "name": "fashion_mnist",
+            "domain": "mnist_compatible",
+            "class_order": ["first", "second"],
+            "class_indices": {"first": 0, "second": 1},
+            "class_quotas": {"first": 2, "second": 2},
+            "require_clean_correct": True,
+        },
+        "model_group": "m1",
+        "model": {"family": "mnist", "dataset_name": "fashion_mnist"},
+        "evaluation": {"batch_size": 2},
+    }
+
+    result = evaluate_table_10_fashion_mnist_row(
+        group_config,
+        {
+            "no": 1,
+            "attack_model": "FGSM (ε=0.2)/M1",
+            "status": "implemented",
+            "attack": {"name": "fgsm", "epsilon": 0.2},
+        },
+    )
+
+    assert result["metrics"] == {
+        "num_failures": 1,
+        "tp": 1,
+        "fn": 0,
+        "fp": 0,
+        "rtp": 1,
+        "rtp_percent": 100.0,
+        "recall": 100.0,
+        "precision": 100.0,
+        "f1": 100.0,
+    }
+    assert group_config["_table_10_dataset_summary"]["clean_errors"] == {
+        "first": 1,
+        "second": 1,
+    }
+    assert group_config["_table_10_dataset_summary"]["clean_correct"] == {
+        "first": 1,
+        "second": 1,
+    }
+    assert group_config["_table_10_dataset_summary"]["selected_clean_correct"] == {
+        "first": 1,
+        "second": 1,
+    }
+    assert (
+        group_config["_table_10_dataset_summary"]["selection_policy"]
+        == "discard_clean_errors"
+    )
+
+
+def test_table10_fashion_mnist_manifest_records_dataset_and_attack(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Fashion-MNIST manifests should preserve CSV split and attack metadata."""
+    dataset_summary = {
+        "name": "fashion_mnist",
+        "domain": "mnist_compatible",
+        "split": "test",
+        "csv_path": "data/fashion_mnist/fashion-mnist_test.csv",
+        "split_strategy": {
+            "name": "balanced_by_class",
+            "train_samples": 9000,
+            "evaluation_samples": 1000,
+            "train_class_quota": 900,
+            "evaluation_class_quota": 100,
+        },
+        "training_sample": {
+            "split_name": "train",
+            "method": "first_n_per_class",
+            "per_class_start": 0,
+            "per_class_end": 900,
+            "class_quota": 900,
+            "total_samples": 9000,
+        },
+        "evaluation_sample": {
+            "split_name": "evaluation",
+            "method": "next_n_per_class",
+            "per_class_start": 900,
+            "per_class_end": 1000,
+            "class_quota": 100,
+            "total_samples": 1000,
+            "excludes_training": True,
+        },
+        "image_shape": [28, 28, 1],
+        "value_range": {"min": 0.0, "max": 1.0},
+        "class_order": ["first"],
+        "class_quotas": {"first": 100},
+        "candidate_counts": {"first": 1000},
+        "candidates_read": {"first": 100},
+        "clean_errors": {"first": 0},
+        "clean_correct": {"first": 100},
+        "selected_clean_correct": {"first": 100},
+        "selection_policy": "discard_clean_errors",
+    }
+
+    def fake_evaluate(group_config, row_config):
+        group_config["_table_10_dataset_summary"] = dataset_summary
+        return {
+            "metrics": {
+                "num_failures": 0,
+                "tp": 1,
+                "fn": 0,
+                "fp": 0,
+                "rtp": 1,
+                "rtp_percent": 100.0,
+                "recall": 100.0,
+                "precision": 100.0,
+                "f1": 100.0,
+            }
+        }
+
+    monkeypatch.setattr(
+        table_10_module,
+        "evaluate_table_10_fashion_mnist_row",
+        fake_evaluate,
+    )
+
+    run_table_10_group(
+        {
+            "experiment_id": "fashion_mnist_fgsm_m1",
+            "kind": "table_10_group",
+            "dataset": {"name": "fashion_mnist"},
+            "checkpoint_training": {
+                "source_csv": "data/fashion_mnist/fashion-mnist_test.csv",
+                "split_name": "train",
+                "selection": {
+                    "method": "first_n_per_class",
+                    "per_class_start": 0,
+                    "per_class_end": 900,
+                    "class_quota": 900,
+                    "total_samples": 9000,
+                },
+                "validation_sample": {
+                    "split_name": "evaluation",
+                    "method": "next_n_per_class",
+                    "per_class_start": 900,
+                    "per_class_end": 1000,
+                    "class_quota": 100,
+                    "total_samples": 1000,
+                    "excludes_training": True,
+                },
+            },
+            "model_group": "m1",
+            "dataset_group": "fashion_mnist",
+            "dataset_label": "Fashion-MNIST",
+            "output": {"dir": str(tmp_path), "manifest": True},
+            "rows": [
+                {
+                    "no": 1,
+                    "attack_model": "FGSM (ε=0.2)/M1",
+                    "status": "implemented",
+                    "attack": {"name": "fgsm", "epsilon": 0.2},
+                }
+            ],
+        }
+    )
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["experiment_id"] == "fashion_mnist_fgsm_m1"
+    assert manifest["dataset_group"] == "fashion_mnist"
+    assert manifest["dataset"]["csv_path"] == "data/fashion_mnist/fashion-mnist_test.csv"
+    assert manifest["dataset"]["split_strategy"]["train_samples"] == 9000
+    assert manifest["dataset"]["training_sample"]["per_class_end"] == 900
+    assert manifest["dataset"]["evaluation_sample"]["per_class_start"] == 900
+    assert manifest["dataset"]["checkpoint_training"]["selection"]["total_samples"] == 9000
+    assert manifest["dataset"]["selected_clean_correct"] == {"first": 100}
+    assert manifest["dataset"]["selection_policy"] == "discard_clean_errors"
+    assert manifest["rows"] == [
+        {
+            "no": 1,
+            "attack_model": "FGSM (ε=0.2)/M1",
+            "status": "completed",
+            "attack": {"name": "fgsm", "epsilon": 0.2},
+        }
+    ]
 
 
 def test_table_10_schema_matches_paper_fields() -> None:
@@ -1123,7 +1425,9 @@ def test_run_experiment_dispatches_table10_group(monkeypatch) -> None:
 
 @pytest.mark.parametrize(
     "experiment_name",
-    sorted(TABLE10_EXPERIMENTS) + sorted(IMAGENET_NEW_CLASS_EXPERIMENTS),
+    sorted(TABLE10_EXPERIMENTS)
+    + sorted(IMAGENET_NEW_CLASS_EXPERIMENTS)
+    + sorted(FASHION_MNIST_EXPERIMENTS),
 )
 def test_run_experiment_cli_accepts_table10_groups(monkeypatch, experiment_name) -> None:
     """scripts/run_experiment.py should accept every Table 10 model-group command."""

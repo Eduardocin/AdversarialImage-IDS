@@ -173,6 +173,8 @@ def build_experiment_config(
         base_config["dataset_label"] = str(experiment.get("dataset_label", ""))
         base_config["rows"] = [dict(row) for row in experiment.get("rows", [])]
         base_config["filter"] = dict(experiment.get("filter", {}))
+        if "checkpoint_training" in experiment:
+            base_config["checkpoint_training"] = dict(experiment.get("checkpoint_training", {}))
         return base_config
 
     if kind == "filter_grid":

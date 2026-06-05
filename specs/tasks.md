@@ -256,3 +256,12 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Reuse Table 10 row schema, metrics helpers, detector filter, and separate output layout.
   - [x] Preserve only selected Table 10 ImageNet rows 5, 8, and 14 on `ImageNet-NewClasses`.
   - [x] Add tests for config, clean-correct quota filling, metrics schema, manifest contents, and forbidden artifacts.
+- [x] Implement Fashion-MNIST new dataset evaluation from `specs/features/fmnist_new_dataset.md`
+  - [x] Add Fashion-MNIST CSV loader with balanced 9000/1000 train/evaluation split.
+  - [x] Add public experiments `fashion_mnist_fgsm_m1` and `fashion_mnist_cw_l2_m2`.
+  - [x] Reuse `kind: table_10_group`, Table 10 schema, detector filter, and separate outputs.
+  - [x] Evaluate FGSM/M1 with `epsilon: 0.2` and CW L2/M2 with `cw_l2_nn_robust` kappa `0.0`.
+  - [x] Add tests for config, balanced split validation, Table 10 metrics schema, manifest contents, and runner dispatch.
+  - [x] Add a standalone Fashion-MNIST checkpoint helper for M1/M2 training.
+  - [x] Declare and validate the Fashion-MNIST checkpoint training sample in experiment config.
+  - [x] Treat Fashion-MNIST class quotas as evaluation candidates and discard clean errors without blocking.

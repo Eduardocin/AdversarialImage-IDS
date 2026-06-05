@@ -25,6 +25,11 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
     assert "defaults" in config
     assert set(config["experiments"]) == {
         "defense_aware",
+        "fashion_mnist_cw_l2_m2",
+        "fashion_mnist_fgsm_m1",
+        "imagenet_new_classes_cw_l2_inception_v3",
+        "imagenet_new_classes_deepfool_caffenet",
+        "imagenet_new_classes_fgsm_googlenet",
         "table_3",
         "table_4",
         "table_4_mnist",
@@ -70,6 +75,8 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
         ("table_4_mnist", "filter_grid"),
         ("table_4_imagenet", "imagenet_table_4"),
         ("defense_aware", "defense_aware"),
+        ("fashion_mnist_fgsm_m1", "table_10_group"),
+        ("fashion_mnist_cw_l2_m2", "table_10_group"),
         ("table_10_m1", "table_10_group"),
         ("table_10_googlenet", "table_10_group"),
         ("table_10_caffenet", "table_10_group"),
@@ -104,6 +111,20 @@ def test_build_experiment_config_rejects_unknown_experiment() -> None:
     """Unknown experiments should fail with a clear error."""
     with pytest.raises(ValueError, match="Unknown experiment"):
         experiment_runner.build_experiment_config("missing", _consolidated_config())
+
+
+def test_build_fashion_mnist_experiment_preserves_checkpoint_training() -> None:
+    """Fashion-MNIST runtime config should keep checkpoint sample provenance."""
+    config = experiment_runner.build_experiment_config(
+        "fashion_mnist_fgsm_m1",
+        _consolidated_config(),
+    )
+
+    assert config["checkpoint_training"]["source_csv"] == (
+        "data/fashion_mnist/fashion-mnist_test.csv"
+    )
+    assert config["checkpoint_training"]["selection"]["per_class_end"] == 900
+    assert config["checkpoint_training"]["validation_sample"]["per_class_start"] == 900
 
 
 def test_run_experiment_rejects_unknown_kind(monkeypatch) -> None:

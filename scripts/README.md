@@ -56,6 +56,20 @@ Table 10 tambem e separada por grupo de modelo. Os grupos ImageNet escrevem
 `results/mnist/article_reproduction/table_10_m1/` e
 `results/mnist/article_reproduction/table_10_m2/`.
 
+Para preparar checkpoints Fashion-MNIST antes dos experimentos publicos:
+
+```bash
+python scripts/train_fashion_mnist_checkpoint.py --model m1
+python scripts/train_fashion_mnist_checkpoint.py --model m2
+```
+
+Depois execute os experimentos pelo runner central:
+
+```bash
+python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m1
+python scripts/run_experiment.py --experiment fashion_mnist_cw_l2_m2
+```
+
 Para gerar adversariais CW do M2, use o auxiliar nomeado por acao/tabela/escopo:
 
 ```bash

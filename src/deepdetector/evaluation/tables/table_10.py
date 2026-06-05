@@ -16,7 +16,14 @@ import numpy as np
 
 from deepdetector.attacks.fgsm_imagenet import generate_fgsm_caffe_image, predict_caffe_label
 from deepdetector.attacks.registry import generate_attack
+from deepdetector.data.fashion_mnist import load_fashion_mnist_evaluation_split
 from deepdetector.data.imagenet import resize_normalized_image
+from deepdetector.evaluation.article_reproduction import (
+    apply_filter_batch,
+    create_restored_mnist_graph,
+    predict_labels,
+)
+from deepdetector.evaluation.defense_aware import create_restored_mnist_m2_graph
 from deepdetector.evaluation.detector_metrics import (
     compute_detector_counts,
     compute_precision_recall,
@@ -457,6 +464,30 @@ def _load_clean_correct_table_10_imagenet_class_folders(
 def _dataset_summary_for_manifest(config: dict[str, Any]) -> dict[str, Any] | None:
     summary = config.get("_table_10_dataset_summary")
     if isinstance(summary, dict):
+        if summary.get("name") == "fashion_mnist":
+            return {
+                "name": "fashion_mnist",
+                "domain": summary.get("domain", "mnist_compatible"),
+                "split": summary.get("split", "test"),
+                "csv_path": summary.get("csv_path"),
+                "split_strategy": dict(summary.get("split_strategy", {})),
+                "training_sample": dict(summary.get("training_sample", {})),
+                "evaluation_sample": dict(summary.get("evaluation_sample", {})),
+                "checkpoint_training": dict(config.get("checkpoint_training", {})),
+                "image_shape": list(summary.get("image_shape", [28, 28, 1])),
+                "value_range": summary.get(
+                    "value_range",
+                    {"min": 0.0, "max": 1.0},
+                ),
+                "class_order": list(summary.get("class_order", [])),
+                "class_quotas": dict(summary.get("class_quotas", {})),
+                "candidate_counts": dict(summary.get("candidate_counts", {})),
+                "candidates_read": dict(summary.get("candidates_read", {})),
+                "clean_errors": dict(summary.get("clean_errors", {})),
+                "clean_correct": dict(summary.get("clean_correct", {})),
+                "selected_clean_correct": dict(summary.get("selected_clean_correct", {})),
+                "selection_policy": summary.get("selection_policy"),
+            }
         return {
             "classes": list(summary.get("classes", [])),
             "quotas": dict(summary.get("quotas", {})),
@@ -812,6 +843,249 @@ def evaluate_table_10_googlenet_row(
     return evaluate_table_10_imagenet_row(config, row_config)
 
 
+def _table_10_checkpoint_dir(config: dict[str, Any]) -> str:
+    checkpoint_dir = resolve_project_path(config.get("model", {}).get("checkpoint_dir"))
+    if checkpoint_dir is None:
+        raise ValueError("Table 10 Fashion-MNIST model.checkpoint_dir is required.")
+    if not checkpoint_dir.is_dir():
+        raise IOError("Fashion-MNIST checkpoint_dir not found: {0}".format(checkpoint_dir))
+    return str(checkpoint_dir)
+
+
+def _build_table_10_fashion_mnist_graph(config: dict[str, Any]) -> dict[str, Any]:
+    model_group = str(config.get("model_group", "")).lower()
+    model_config = config.get("model", {})
+    if str(model_config.get("family", "")).lower() != "mnist":
+        raise ValueError("Fashion-MNIST Table 10 requires model.family=mnist.")
+    if str(model_config.get("dataset_name", "")).lower() != "fashion_mnist":
+        raise ValueError("Fashion-MNIST model.dataset_name must be fashion_mnist.")
+    if list(model_config.get("input_shape", [28, 28, 1])) != [28, 28, 1]:
+        raise ValueError("Fashion-MNIST model.input_shape must be [28, 28, 1].")
+    if int(model_config.get("num_classes", 10)) != 10:
+        raise ValueError("Fashion-MNIST model.num_classes must be 10.")
+
+    checkpoint_dir = _table_10_checkpoint_dir(config)
+    if model_group == "m1":
+        return create_restored_mnist_graph(checkpoint_dir)
+    if model_group == "m2":
+        return create_restored_mnist_m2_graph(checkpoint_dir)
+    raise ValueError("Fashion-MNIST Table 10 supports only model_group m1 or m2.")
+
+
+def _mnist_graph_predict(
+    graph: dict[str, Any],
+    images: np.ndarray,
+    batch_size: int,
+) -> np.ndarray:
+    return predict_labels(
+        graph["sess"],
+        graph["x"],
+        graph["predictions"],
+        images,
+        batch_size=batch_size,
+    )
+
+
+def _fashion_mnist_quotas(config: dict[str, Any]) -> dict[str, int]:
+    dataset_config = config.get("dataset", {})
+    quotas = dict(dataset_config.get("class_quotas", {}))
+    if not quotas:
+        class_order = list(dataset_config.get("class_order", []))
+        quotas = {str(class_name): 100 for class_name in class_order}
+    return {str(key): int(value) for key, value in quotas.items()}
+
+
+def _fashion_mnist_class_indices(config: dict[str, Any]) -> dict[str, int]:
+    return {
+        str(key): int(value)
+        for key, value in dict(config.get("dataset", {}).get("class_indices", {})).items()
+    }
+
+
+def _select_fashion_mnist_clean_correct(
+    *,
+    config: dict[str, Any],
+    images: np.ndarray,
+    labels: np.ndarray,
+    clean_predictions: np.ndarray,
+    metadata: dict[str, Any],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    dataset_config = config.get("dataset", {})
+    class_order = [str(class_name) for class_name in dataset_config.get("class_order", [])]
+    class_indices = _fashion_mnist_class_indices(config)
+    quotas = _fashion_mnist_quotas(config)
+    require_clean_correct = bool(dataset_config.get("require_clean_correct", True))
+    selected_indices: list[int] = []
+    clean_errors: dict[str, int] = {}
+    clean_correct: dict[str, int] = {}
+    candidates_read: dict[str, int] = {}
+
+    for class_name in class_order:
+        if class_name not in class_indices:
+            raise ValueError("Fashion-MNIST class_indices missing class: {0}".format(class_name))
+        quota = int(quotas[class_name])
+        label = int(class_indices[class_name])
+        class_candidates = np.flatnonzero(labels == label).astype(np.int64)
+        candidates_read[class_name] = int(len(class_candidates))
+        clean_correct_mask = clean_predictions[class_candidates] == label
+        correct_indices = class_candidates[clean_correct_mask]
+        clean_errors[class_name] = int(len(class_candidates) - len(correct_indices))
+        clean_correct[class_name] = int(len(correct_indices))
+        if require_clean_correct:
+            selected_indices.extend(correct_indices[:quota].tolist())
+        else:
+            if len(class_candidates) < quota:
+                raise ValueError(
+                    "Insufficient Fashion-MNIST samples for class {0}: required {1}, found {2}.".format(
+                        class_name,
+                        quota,
+                        len(class_candidates),
+                    )
+                )
+            selected_indices.extend(class_candidates[:quota].tolist())
+
+    metadata.update(
+        {
+            "classes": class_order,
+            "quotas": quotas,
+            "candidates_read": candidates_read,
+            "clean_errors": clean_errors,
+            "clean_correct": clean_correct,
+            "selected_clean_correct": clean_correct if require_clean_correct else candidates_read,
+            "selection_policy": (
+                "discard_clean_errors" if require_clean_correct else "include_all_candidates"
+            ),
+        }
+    )
+    selected = np.asarray(selected_indices, dtype=np.int64)
+    if require_clean_correct and len(selected) == 0:
+        raise ValueError("Fashion-MNIST evaluation has no clean-correct samples.")
+    return images[selected], labels[selected], clean_predictions[selected]
+
+
+def _generate_fashion_mnist_adversarial(
+    *,
+    graph: dict[str, Any],
+    row_config: dict[str, Any],
+    config: dict[str, Any],
+    images: np.ndarray,
+    labels: np.ndarray,
+) -> np.ndarray:
+    attack_config = dict(row_config.get("attack", {}))
+    attack_name = str(attack_config.pop("name", "")).strip().lower()
+    if attack_name == "fgsm":
+        return generate_attack(
+            "fgsm",
+            sess=graph["sess"],
+            model=graph["model"],
+            x_placeholder=graph["x"],
+            images=images,
+            eps=float(attack_config.pop("epsilon", attack_config.pop("eps", 0.2))),
+            clip_min=float(attack_config.pop("clip_min", 0.0)),
+            clip_max=float(attack_config.pop("clip_max", 1.0)),
+            **attack_config,
+        )
+    if attack_name == "cw_l2_nn_robust":
+        robust_root = (
+            attack_config.pop("nn_robust_attacks_root", None)
+            or config.get("evaluation", {}).get("nn_robust_attacks_root")
+            or "nn_robust_attacks"
+        )
+        return generate_attack(
+            "cw_l2_nn_robust",
+            graph=graph,
+            images=images,
+            labels=labels,
+            nn_robust_attacks_root=robust_root,
+            **attack_config,
+        )
+    raise ValueError("Unsupported Fashion-MNIST Table 10 attack: {0}".format(attack_name))
+
+
+def evaluate_table_10_fashion_mnist_row(
+    group_config: dict[str, Any],
+    row_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Evaluate one Fashion-MNIST Table 10 extension row."""
+    attack_name = str(row_config.get("attack", {}).get("name", "")).strip().lower()
+    if attack_name not in {"fgsm", "cw_l2_nn_robust"}:
+        raise ValueError("Unsupported Fashion-MNIST Table 10 attack: {0}".format(attack_name))
+
+    graph = _build_table_10_fashion_mnist_graph(group_config)
+    batch_size = int(group_config.get("evaluation", {}).get("batch_size", 256))
+    filter_fn = _table_10_filter(group_config)
+
+    try:
+        images, labels, metadata = load_fashion_mnist_evaluation_split(
+            group_config.get("dataset", {})
+        )
+        clean_predictions_all = _mnist_graph_predict(graph, images, batch_size)
+        selected_images, selected_labels, clean_predictions = _select_fashion_mnist_clean_correct(
+            config=group_config,
+            images=images,
+            labels=labels,
+            clean_predictions=clean_predictions_all,
+            metadata=metadata,
+        )
+        group_config["_table_10_dataset_summary"] = metadata
+
+        adversarial_images = _generate_fashion_mnist_adversarial(
+            graph=graph,
+            row_config=row_config,
+            config=group_config,
+            images=selected_images,
+            labels=selected_labels,
+        )
+        adversarial_images = np.asarray(adversarial_images, dtype=np.float32)
+        if adversarial_images.shape != selected_images.shape:
+            raise ValueError("Adversarial image shape does not match clean image shape.")
+
+        adversarial_predictions = _mnist_graph_predict(
+            graph,
+            adversarial_images,
+            batch_size,
+        )
+        filtered_clean = apply_filter_batch(filter_fn, selected_images)
+        filtered_adv = apply_filter_batch(filter_fn, adversarial_images)
+        filtered_clean_predictions = _mnist_graph_predict(graph, filtered_clean, batch_size)
+        filtered_adv_predictions = _mnist_graph_predict(graph, filtered_adv, batch_size)
+
+        records: list[dict[str, Any]] = []
+        for sample_index, true_label in enumerate(selected_labels):
+            clean_pred = int(clean_predictions[sample_index])
+            adv_pred = int(adversarial_predictions[sample_index])
+            if adv_pred == clean_pred:
+                records.append(
+                    {
+                        "sample_index": int(sample_index),
+                        "true_label": int(true_label),
+                        "clean_pred": clean_pred,
+                        "adv_pred": adv_pred,
+                        "discarded_attack_failed": True,
+                    }
+                )
+                continue
+            filtered_adv_pred = int(filtered_adv_predictions[sample_index])
+            records.append(
+                {
+                    "sample_index": int(sample_index),
+                    "true_label": int(true_label),
+                    "clean_pred": clean_pred,
+                    "adv_pred": adv_pred,
+                    "filtered_clean_pred": int(filtered_clean_predictions[sample_index]),
+                    "filtered_adv_pred": filtered_adv_pred,
+                    "detected": bool(filtered_adv_pred != adv_pred),
+                    "corrected": bool(filtered_adv_pred == int(true_label)),
+                    "false_positive": bool(
+                        int(filtered_clean_predictions[sample_index]) != clean_pred
+                    ),
+                }
+            )
+        return {"metrics": _table_10_metrics_from_records(records)}
+    finally:
+        graph["sess"].close()
+
+
 def _is_table_10_imagenet_attack(
     group_config: dict[str, Any],
     row_config: dict[str, Any],
@@ -828,10 +1102,27 @@ def _is_table_10_imagenet_attack(
     )
 
 
+def _is_table_10_fashion_mnist_attack(
+    group_config: dict[str, Any],
+    row_config: dict[str, Any],
+) -> bool:
+    model_group = str(group_config.get("model_group", "")).lower()
+    attack_name = str(row_config.get("attack", {}).get("name", "")).lower()
+    return (
+        str(group_config.get("dataset", {}).get("name", "")).lower() == "fashion_mnist"
+        and (
+            (model_group == "m1" and attack_name == "fgsm")
+            or (model_group == "m2" and attack_name == "cw_l2_nn_robust")
+        )
+    )
+
+
 def _row_result(group_config: dict[str, Any], row_config: dict[str, Any]) -> dict[str, Any]:
     metrics = row_config.get("metrics")
     if isinstance(metrics, dict):
         return {"metrics": metrics}
+    if _is_table_10_fashion_mnist_attack(group_config, row_config):
+        return evaluate_table_10_fashion_mnist_row(group_config, row_config)
     if _is_table_10_imagenet_attack(group_config, row_config):
         if str(group_config.get("model_group", "")).lower() == "googlenet":
             return evaluate_table_10_googlenet_row(group_config, row_config)
@@ -968,6 +1259,8 @@ def run_table_10_group(config: dict[str, Any]) -> list[dict[str, Any]]:
                 "status": "completed",
             }
         )
+        if str(config.get("dataset", {}).get("name", "")).lower() == "fashion_mnist":
+            manifest_entries[-1]["attack"] = dict(row_config.get("attack", {}))
 
     save_table_10_outputs(
         rows=rows,
