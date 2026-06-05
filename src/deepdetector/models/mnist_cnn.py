@@ -7,17 +7,101 @@ import os
 from typing import Any, Optional, Tuple
 
 
+def _set_keras_channels_last(keras_backend: Any) -> None:
+    """Configure Keras for TensorFlow-style NHWC image tensors."""
+    if hasattr(keras_backend, "set_image_dim_ordering"):
+        keras_backend.set_image_dim_ordering("tf")
+        return
+    if hasattr(keras_backend, "set_image_data_format"):
+        keras_backend.set_image_data_format("channels_last")
+        return
+    raise AttributeError(
+        "Keras backend does not expose image data format configuration helpers."
+    )
+
+
+def _disable_tensorflow_eager(tf_module: Any) -> None:
+    """Disable eager execution for TF1-style MNIST graph code."""
+    try:
+        tf_module.compat.v1.disable_eager_execution()
+    except Exception:
+        pass
+
+
+def patch_tensorflow_v1_symbols(tf_module: Any) -> None:
+    """Expose TF1 symbols used by legacy CleverHans/Keras code on TF2."""
+    _disable_tensorflow_eager(tf_module)
+    names = [
+        "GraphKeys",
+        "get_collection",
+        "add_to_collection",
+        "variable_scope",
+        "get_variable",
+        "global_variables",
+        "local_variables",
+        "trainable_variables",
+        "global_variables_initializer",
+        "variables_initializer",
+        "placeholder",
+        "Session",
+        "ConfigProto",
+        "reset_default_graph",
+        "get_default_graph",
+        "name_scope",
+        "control_dependencies",
+        "assign",
+        "assign_add",
+        "gradients",
+        "random_uniform",
+        "set_random_seed",
+    ]
+    for name in names:
+        if not hasattr(tf_module, name) and hasattr(tf_module.compat.v1, name):
+            setattr(tf_module, name, getattr(tf_module.compat.v1, name))
+
+    try:
+        if not hasattr(tf_module.train, "AdamOptimizer"):
+            tf_module.train.AdamOptimizer = tf_module.compat.v1.train.AdamOptimizer
+    except Exception:
+        pass
+
+
+def make_convolution2d(
+    convolution2d: Any,
+    filters: int,
+    kernel_size: Tuple[int, int],
+    *,
+    padding: str,
+    input_shape: Optional[Tuple[int, int, int]] = None,
+) -> Any:
+    """Create a Conv2D layer across Keras 1 and Keras 2 argument names."""
+    kwargs = {"padding": padding}
+    if input_shape is not None:
+        kwargs["input_shape"] = input_shape
+    try:
+        return convolution2d(filters, kernel_size, **kwargs)
+    except TypeError as exc:
+        if "Keyword argument not understood" not in str(exc) and "missing" not in str(exc):
+            raise
+
+    legacy_kwargs = {"border_mode": padding}
+    if input_shape is not None:
+        legacy_kwargs["input_shape"] = input_shape
+    return convolution2d(filters, kernel_size[0], kernel_size[1], **legacy_kwargs)
+
+
 def create_tf_session(allow_growth: bool = True) -> Any:
     """Create a TensorFlow session and attach it to the Keras backend."""
     import tensorflow as tf
     from keras import backend as keras_backend
 
+    patch_tensorflow_v1_symbols(tf)
     config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = allow_growth
 
     sess = tf.compat.v1.Session(config=config)
     keras_backend.set_session(sess)
-    keras_backend.set_image_dim_ordering("tf")
+    _set_keras_channels_last(keras_backend)
     return sess
 
 

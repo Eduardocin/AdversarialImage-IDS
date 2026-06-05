@@ -11,7 +11,12 @@ from deepdetector.models.mnist_m3 import (
     load_mnist_m3_model,
     save_mnist_m3_model,
 )
+from deepdetector.models.mnist_cnn import patch_tensorflow_v1_symbols
 from deepdetector.training.train_mnist_m1 import smooth_one_hot_labels
+from deepdetector.training.tf1_training import (
+    classification_loss,
+    evaluate_clean_accuracy,
+)
 
 
 def train_or_load_mnist_m3_model(
@@ -29,7 +34,7 @@ def train_or_load_mnist_m3_model(
     import math
 
     import tensorflow as tf
-    from cleverhans.utils_tf import model_eval, model_loss
+    patch_tensorflow_v1_symbols(tf)
 
     def learning_phase_feed(value: int) -> Dict[Any, Any]:
         """Return a feed dict for Keras learning phase when needed."""
@@ -64,18 +69,16 @@ def train_or_load_mnist_m3_model(
     if rng is None:
         rng = np.random.RandomState([2017, 8, 30])
 
-    eval_params = {"batch_size": batch_size}
     eval_feed = learning_phase_feed(0)
 
     def evaluate() -> float:
-        accuracy = model_eval(
-            sess,
-            x,
-            y,
-            predictions,
-            X_test,
-            Y_test,
-            args=eval_params,
+        accuracy = evaluate_clean_accuracy(
+            sess=sess,
+            x=x,
+            predictions=predictions,
+            images=X_test,
+            labels=Y_test,
+            batch_size=batch_size,
             feed=eval_feed,
         )
         print("m3_clean_test_accuracy={0:.4f}".format(accuracy), flush=True)
@@ -92,7 +95,7 @@ def train_or_load_mnist_m3_model(
     if trained_from_scratch:
         Y_train_smooth = smooth_one_hot_labels(Y_train, label_smoothing)
         train_feed = learning_phase_feed(1)
-        loss = model_loss(y, predictions)
+        loss = classification_loss(tf, y, predictions, output_is_probabilities=True)
         train_step = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
         sess.run(tf.compat.v1.global_variables_initializer())
 

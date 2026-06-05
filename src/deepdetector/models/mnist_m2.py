@@ -5,6 +5,8 @@ from __future__ import print_function
 import os
 from typing import Any, Optional, Tuple
 
+from deepdetector.models.mnist_cnn import make_convolution2d
+
 
 def build_mnist_m2_model(x_placeholder: Any) -> Tuple[Any, Any]:
     """Build the MNIST M2 CNN and return ``(model, predictions)``.
@@ -22,15 +24,23 @@ def build_mnist_m2_model(x_placeholder: Any) -> Tuple[Any, Any]:
     from keras.models import Sequential
 
     model = Sequential()
-    model.add(Convolution2D(32, 3, 3, border_mode="valid", input_shape=(28, 28, 1)))
+    model.add(
+        make_convolution2d(
+            Convolution2D,
+            32,
+            (3, 3),
+            padding="valid",
+            input_shape=(28, 28, 1),
+        )
+    )
     model.add(Activation("relu"))
-    model.add(Convolution2D(32, 3, 3, border_mode="valid"))
+    model.add(make_convolution2d(Convolution2D, 32, (3, 3), padding="valid"))
     model.add(Activation("relu"))
     model.add(MaxPooling2D(pool_size=(2, 2)))
 
-    model.add(Convolution2D(64, 3, 3, border_mode="valid"))
+    model.add(make_convolution2d(Convolution2D, 64, (3, 3), padding="valid"))
     model.add(Activation("relu"))
-    model.add(Convolution2D(64, 3, 3, border_mode="valid"))
+    model.add(make_convolution2d(Convolution2D, 64, (3, 3), padding="valid"))
     model.add(Activation("relu"))
     model.add(MaxPooling2D(pool_size=(2, 2)))
 

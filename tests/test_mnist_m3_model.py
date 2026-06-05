@@ -7,6 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 sys.path.insert(0, str(SRC_ROOT))
 
+from deepdetector.models.mnist_cnn import make_convolution2d  # noqa: E402
 from deepdetector.models.mnist_m3 import build_mnist_m3_model  # noqa: E402
 
 
@@ -26,6 +27,52 @@ def _fake_layer(name):
         return {"name": name, "args": args, "kwargs": kwargs}
 
     return factory
+
+
+def test_make_convolution2d_uses_modern_keras_padding() -> None:
+    """Keras 2 Conv2D should receive kernel_size and padding."""
+    calls = []
+
+    def fake_convolution2d(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {"args": args, "kwargs": kwargs}
+
+    layer = make_convolution2d(
+        fake_convolution2d,
+        32,
+        (3, 3),
+        padding="same",
+        input_shape=(28, 28, 1),
+    )
+
+    assert layer["args"] == (32, (3, 3))
+    assert layer["kwargs"] == {
+        "padding": "same",
+        "input_shape": (28, 28, 1),
+    }
+    assert len(calls) == 1
+
+
+def test_make_convolution2d_falls_back_to_legacy_border_mode() -> None:
+    """Keras 1 Convolution2D should receive rows, cols, and border_mode."""
+    calls = []
+
+    def fake_convolution2d(*args, **kwargs):
+        calls.append((args, kwargs))
+        if "padding" in kwargs:
+            raise TypeError("Keyword argument not understood: padding")
+        return {"args": args, "kwargs": kwargs}
+
+    layer = make_convolution2d(
+        fake_convolution2d,
+        64,
+        (3, 3),
+        padding="valid",
+    )
+
+    assert layer["args"] == (64, 3, 3)
+    assert layer["kwargs"] == {"border_mode": "valid"}
+    assert len(calls) == 2
 
 
 def test_mnist_m3_model_declares_fashion_mnist_cnn_contract(monkeypatch) -> None:

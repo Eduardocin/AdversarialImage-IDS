@@ -6,6 +6,8 @@ import glob
 import os
 from typing import Any, Optional, Tuple
 
+from deepdetector.models.mnist_cnn import make_convolution2d
+
 
 CONV_DROPOUT_RATE = 0.25
 DENSE_DROPOUT_RATE = 0.5
@@ -22,16 +24,24 @@ def build_mnist_m3_model(x_placeholder: Any) -> Tuple[Any, Any]:
     from keras.models import Sequential
 
     model = Sequential()
-    model.add(Convolution2D(32, 3, 3, border_mode="same", input_shape=(28, 28, 1)))
+    model.add(
+        make_convolution2d(
+            Convolution2D,
+            32,
+            (3, 3),
+            padding="same",
+            input_shape=(28, 28, 1),
+        )
+    )
     model.add(Activation("relu"))
-    model.add(Convolution2D(32, 3, 3, border_mode="same"))
+    model.add(make_convolution2d(Convolution2D, 32, (3, 3), padding="same"))
     model.add(Activation("relu"))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(CONV_DROPOUT_RATE))
 
-    model.add(Convolution2D(64, 3, 3, border_mode="same"))
+    model.add(make_convolution2d(Convolution2D, 64, (3, 3), padding="same"))
     model.add(Activation("relu"))
-    model.add(Convolution2D(64, 3, 3, border_mode="same"))
+    model.add(make_convolution2d(Convolution2D, 64, (3, 3), padding="same"))
     model.add(Activation("relu"))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(CONV_DROPOUT_RATE))
