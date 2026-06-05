@@ -260,3 +260,11 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Add the defense-aware evaluation and runner integration.
   - [x] Write only `metrics.csv` and `metrics.json`.
   - [x] Add automated tests for config, attack criteria, metrics, and output artifacts.
+- [x] Implement original CarliniL2Adaptive path from `specs/refactor/use_original_carlini_l2_adaptive.md`
+  - [x] Use the local `nn_robust_attacks/` checkout as the backend root.
+  - [x] Add a loader for `CarliniL2Adaptive` from `l2_adaptive_attack.py`.
+  - [x] Add `original_adaptive_cw_l2` range conversion and M2 input-shift handling.
+  - [x] Dispatch `defense_aware` to the original adaptive wrapper by config type.
+  - [x] Preserve the existing `adaptive_cw_l2` wrapper for comparison.
+  - [x] Match the final filter tie-break rule from the base code.
+  - [x] Add focused tests for config, registry, range conversion, adapter shift, dispatch, and filter tie-breaks.

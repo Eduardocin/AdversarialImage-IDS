@@ -1,14 +1,21 @@
-"""Defense-aware CW-L2 evaluation for MNIST M2."""
+"""Defense-aware CW-L2 evaluation for MNIST M2.
+
+This module is intentionally TensorFlow 1.x / legacy Keras friendly because the
+MNIST M2 model used by the CW experiments is built with old standalone Keras.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-from deepdetector.attacks.adaptive_cw_l2 import generate_adaptive_cw_l2_attack
+from deepdetector.attacks.adaptive_cw_l2 import (
+    generate_adaptive_cw_l2_attack,
+    generate_original_adaptive_cw_l2_attack,
+)
 from deepdetector.attacks.nn_robust import generate_nn_robust_cw_l2_attack
 from deepdetector.evaluation.article_reproduction import (
     label_to_int,
@@ -53,7 +60,42 @@ class ScenarioCounts:
     detected: int = 0
     undetected: int = 0
     failures: int = 0
-    l2_distances: list[float] = field(default_factory=list)
+    l2_distances: List[float] = field(default_factory=list)
+
+
+def _prepare_tensorflow_legacy_mode() -> Any:
+    """Return TensorFlow after forcing TF1 graph mode when possible."""
+    import tensorflow as tf
+
+    compat_v1 = getattr(tf, "compat", None)
+    compat_v1 = getattr(compat_v1, "v1", None)
+
+    if compat_v1 is not None:
+        if hasattr(compat_v1, "disable_eager_execution"):
+            compat_v1.disable_eager_execution()
+        if hasattr(compat_v1, "disable_v2_behavior"):
+            compat_v1.disable_v2_behavior()
+
+    return tf
+
+
+def _set_keras_inference_phase(sess: Optional[Any] = None) -> None:
+    """Force legacy Keras dropout/batch-norm layers to run in inference mode.
+
+    This must run before ``build_mnist_m2_model`` because the old Keras Dropout
+    layer creates/uses ``keras_learning_phase`` while the graph is being built.
+    """
+    try:
+        from keras import backend as K
+
+        if sess is not None and hasattr(K, "set_session"):
+            K.set_session(sess)
+
+        if hasattr(K, "set_learning_phase"):
+            K.set_learning_phase(0)
+    except Exception:
+        # Keep this best-effort because tests often monkeypatch TensorFlow/Keras.
+        pass
 
 
 def _attack_kwargs(attack_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -108,7 +150,7 @@ def _row_for_counts(
     }
 
 
-def rows_to_metrics_json(rows: list[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+def rows_to_metrics_json(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """Convert CSV rows to the metrics.json payload without extra metadata."""
     payload: Dict[str, Dict[str, Any]] = {}
     for row in rows:
@@ -129,7 +171,7 @@ def evaluate_defense_aware_arrays(
     defense_unaware_attack_fn: AttackFn,
     defense_aware_attack_fn: AttackFn,
     transform_fn: TransformFn,
-) -> list[Dict[str, Any]]:
+) -> List[Dict[str, Any]]:
     """Evaluate defense-unaware and defense-aware scenarios over arrays."""
     image_array = np.asarray(images, dtype=np.float32)
     label_ints = label_to_int(np.asarray(labels))
@@ -142,6 +184,7 @@ def evaluate_defense_aware_arrays(
         clean_pred = _predict_one(predict_fn, clean_image)
         if clean_pred != true_label:
             continue
+
         total_valid += 1
 
         blind_adv = np.asarray(
@@ -149,15 +192,19 @@ def evaluate_defense_aware_arrays(
             dtype=np.float32,
         ).reshape(clean_image.shape)
         blind_pred = _predict_one(predict_fn, blind_adv)
+
         if blind_pred == true_label:
             blind_counts.failures += 1
         else:
             blind_counts.success += 1
             blind_counts.l2_distances.append(_l2_distance(blind_adv, clean_image))
-            blind_transformed = np.asarray(transform_fn(blind_adv), dtype=np.float32).reshape(
-                clean_image.shape
-            )
+
+            blind_transformed = np.asarray(
+                transform_fn(blind_adv),
+                dtype=np.float32,
+            ).reshape(clean_image.shape)
             blind_transformed_pred = _predict_one(predict_fn, blind_transformed)
+
             if blind_pred != blind_transformed_pred:
                 blind_counts.detected += 1
             else:
@@ -168,10 +215,12 @@ def evaluate_defense_aware_arrays(
             dtype=np.float32,
         ).reshape(clean_image.shape)
         adaptive_pred = _predict_one(predict_fn, adaptive_adv)
-        adaptive_transformed = np.asarray(transform_fn(adaptive_adv), dtype=np.float32).reshape(
-            clean_image.shape
-        )
+        adaptive_transformed = np.asarray(
+            transform_fn(adaptive_adv),
+            dtype=np.float32,
+        ).reshape(clean_image.shape)
         adaptive_transformed_pred = _predict_one(predict_fn, adaptive_transformed)
+
         if adaptive_pred != true_label and adaptive_pred == adaptive_transformed_pred:
             adaptive_counts.success += 1
             adaptive_counts.undetected += 1
@@ -195,29 +244,43 @@ def evaluate_defense_aware_arrays(
 
 def create_restored_mnist_m2_graph(train_dir: str) -> Dict[str, Any]:
     """Create the TF1 graph, restore MNIST M2, and return graph handles."""
-    import tensorflow as tf
-
+    tf = _prepare_tensorflow_legacy_mode()
     sess = create_tf_session()
-    x_placeholder = tf.compat.v1.placeholder(
-        tf.float32,
-        shape=(None, 28, 28, 1),
-        name="x",
-    )
-    model, predictions = build_mnist_m2_model(x_placeholder)
-    checkpoint = load_mnist_m2_model(sess, train_dir)
-    if checkpoint is None:
-        raise IOError("No TensorFlow checkpoint found in {0}".format(train_dir))
+    graph = getattr(sess, "graph", None)
 
-    setattr(model, "sess", sess)
-    setattr(model, "input_tensor", x_placeholder)
-    setattr(model, "num_labels", 10)
-    return {
-        "sess": sess,
-        "x": x_placeholder,
-        "model": model,
-        "predictions": predictions,
-        "checkpoint": checkpoint,
-    }
+    def build_on_active_graph() -> Dict[str, Any]:
+        _set_keras_inference_phase(sess)
+
+        x_placeholder = tf.compat.v1.placeholder(
+            tf.float32,
+            shape=(None, 28, 28, 1),
+            name="x",
+        )
+
+        model, predictions = build_mnist_m2_model(x_placeholder)
+        checkpoint = load_mnist_m2_model(sess, train_dir)
+        if checkpoint is None:
+            raise IOError("No TensorFlow checkpoint found in {0}".format(train_dir))
+
+        setattr(model, "sess", sess)
+        setattr(model, "input_tensor", x_placeholder)
+        setattr(model, "predictions", predictions)
+        setattr(model, "logits_tensor", predictions)
+        setattr(model, "num_labels", 10)
+
+        return {
+            "sess": sess,
+            "x": x_placeholder,
+            "model": model,
+            "predictions": predictions,
+            "checkpoint": checkpoint,
+        }
+
+    if graph is not None and hasattr(graph, "as_default"):
+        with graph.as_default():
+            return build_on_active_graph()
+
+    return build_on_active_graph()
 
 
 def _checkpoint_dir(config: Dict[str, Any]) -> str:
@@ -279,14 +342,29 @@ def _adaptive_attack_fn(
     kwargs.setdefault("clip_min", 0.0)
     kwargs.setdefault("clip_max", 1.0)
 
+    attack_type = str(attack_config.get("type", "adaptive_cw_l2")).strip().lower()
+    if attack_type == "adaptive_cw_l2":
+        attack_generator = generate_adaptive_cw_l2_attack
+    elif attack_type == "original_adaptive_cw_l2":
+        attack_generator = generate_original_adaptive_cw_l2_attack
+    else:
+        raise ValueError("Unsupported defense-aware attack type: {0}".format(attack_type))
+
     def attack(image: np.ndarray, true_label: int, clean_pred: int) -> np.ndarray:
-        adversarial = generate_adaptive_cw_l2_attack(
+        call_kwargs = dict(kwargs)
+
+        # The current approximation needs the shared detector transform and
+        # predict function. The original CarliniL2Adaptive wrapper should keep
+        # its own internal defense-aware predicate, matching the reference code.
+        if attack_type == "adaptive_cw_l2":
+            call_kwargs["transform_fn"] = transform_fn
+            call_kwargs["predict_fn"] = predict_fn
+
+        adversarial = attack_generator(
             model=graph["model"],
             images=_as_batch(image),
             labels=np.asarray([true_label], dtype=np.int32),
-            transform_fn=transform_fn,
-            predict_fn=predict_fn,
-            **kwargs,
+            **call_kwargs,
         )
         return np.asarray(adversarial[0], dtype=np.float32)
 
@@ -295,7 +373,7 @@ def _adaptive_attack_fn(
 
 def save_defense_aware_outputs(
     *,
-    rows: list[Dict[str, Any]],
+    rows: List[Dict[str, Any]],
     output_dir: Path,
     csv_name: str = "metrics.csv",
     json_name: str = "metrics.json",
@@ -309,8 +387,8 @@ def save_defense_aware_outputs(
 
 def run_defense_aware_evaluation(
     config: Dict[str, Any],
-    graph: Dict[str, Any] | None = None,
-) -> list[Dict[str, Any]]:
+    graph: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
     """Run the configured defense-aware MNIST M2 evaluation."""
     seed = config.get("seed")
     if seed is not None:
@@ -342,14 +420,16 @@ def run_defense_aware_evaluation(
     return rows
 
 
-def run_defense_aware_experiment(config: Dict[str, Any]) -> list[Dict[str, Any]]:
+def run_defense_aware_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Run defense-aware evaluation and write official outputs."""
     rows = run_defense_aware_evaluation(config)
     output_config = config.get("output", {})
     configured_dir = output_config.get("dir") or config.get("output_dir")
     output_dir = resolve_project_path(configured_dir)
+
     if output_dir is None:
         raise ValueError("defense_aware must define output.dir or output_dir.")
+
     save_defense_aware_outputs(
         rows=rows,
         output_dir=output_dir,

@@ -7,8 +7,49 @@ from typing import Any, Dict
 import numpy as np
 
 from deepdetector.filters.entropy import one_d_entropy
-from deepdetector.filters.mean_filters import cross_mean_filter
 from deepdetector.filters.quantization import scalar_quantization
+
+
+def _original_cross_mean_channel(image_2d: np.ndarray, radius: int) -> np.ndarray:
+    """Apply the original cross mean filter on valid interior pixels."""
+    if radius <= 0:
+        raise ValueError("radius must be positive.")
+
+    image_array = np.asarray(image_2d, dtype=np.float32)
+    height, width = image_array.shape
+    output = image_array.copy()
+    if height <= 2 * radius or width <= 2 * radius:
+        return output
+
+    divisor = float(4 * radius + 1)
+    for row in range(radius, height - radius):
+        for col in range(radius, width - radius):
+            total = float(image_array[row, col])
+            for offset in range(1, radius + 1):
+                total += float(image_array[row - offset, col])
+                total += float(image_array[row + offset, col])
+                total += float(image_array[row, col - offset])
+                total += float(image_array[row, col + offset])
+            output[row, col] = total / divisor
+    return output
+
+
+def _original_cross_mean_filter(image: np.ndarray, radius: int) -> np.ndarray:
+    image_array = np.asarray(image, dtype=np.float32)
+    if image_array.ndim == 2:
+        filtered = _original_cross_mean_channel(image_array, radius)
+    elif image_array.ndim == 3 and image_array.shape[2] >= 1:
+        filtered = np.stack(
+            [
+                _original_cross_mean_channel(image_array[:, :, channel], radius)
+                for channel in range(image_array.shape[2])
+            ],
+            axis=2,
+        )
+    else:
+        raise ValueError("Expected image shape (H, W) or (H, W, C).")
+
+    return np.clip(filtered, 0.0, 1.0).astype(np.float32).reshape(image_array.shape)
 
 
 def _single_final_adaptive_detection_filter(
@@ -43,10 +84,10 @@ def _single_final_adaptive_detection_filter(
         interval=int(high_entropy_step),
         left=True,
     ).reshape(image_array.shape)
-    smoothed = cross_mean_filter(quantized, radius=int(spatial_radius)).reshape(
+    smoothed = _original_cross_mean_filter(quantized, radius=int(spatial_radius)).reshape(
         image_array.shape
     )
-    use_quantized = np.abs(quantized - image_array) <= np.abs(smoothed - image_array)
+    use_quantized = np.abs(quantized - image_array) < np.abs(smoothed - image_array)
     return np.where(use_quantized, quantized, smoothed).astype(np.float32).reshape(
         image_array.shape
     )

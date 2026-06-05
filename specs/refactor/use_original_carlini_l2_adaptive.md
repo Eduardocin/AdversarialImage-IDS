@@ -20,6 +20,27 @@ if self.mnistPredicate(ii) == self.transformed(ii):
 
 Portanto, o objetivo deste plano é substituir a aproximação atual por uma integração direta com o `CarliniL2Adaptive` original.
 
+### Verificação local
+
+O checkout local do backend original já existe em:
+
+```text
+nn_robust_attacks/
+```
+
+Esse diretório é um checkout Git de `https://github.com/carlini/nn_robust_attacks.git` e já contém os backends usados hoje pelo projeto:
+
+```text
+nn_robust_attacks/l2_attack.py
+nn_robust_attacks/li_attack.py
+nn_robust_attacks/l0_attack.py
+nn_robust_attacks/l2_adaptive_attack.py
+```
+
+Portanto, a implementação não deve criar uma nova cópia vendorizada em `third_party/` nem em `src/deepdetector/external/`. O caminho local `nn_robust_attacks` deve continuar sendo a raiz configurável do backend externo, como já ocorre em `configs/experiments.yaml`.
+
+Verificação adicional: o checkout local atual contém `nn_robust_attacks/l2_adaptive_attack.py` e expõe a classe `CarliniL2Adaptive`. Mesmo assim, o loader deve falhar com erro claro se esse arquivo ou classe não estiver disponível em outro ambiente.
+
 ---
 
 ## Objetivo
@@ -61,31 +82,39 @@ Isso mede evasão da defesa, mas não força o otimizador do CW-L2 a procurar ex
 
 ---
 
-## Mudança 1 — Incluir o arquivo original `l2_adaptive_attack.py`
+## Mudança 1 — Usar o checkout local `nn_robust_attacks`
 
 ### Proposta
 
-Adicionar uma cópia controlada do arquivo original no projeto, por exemplo:
+Usar o backend externo local já existente:
 
 ```text
-third_party/nn_robust_attacks/l2_adaptive_attack.py
+nn_robust_attacks/
 ```
 
-ou, se preferirmos manter o padrão atual do projeto:
+O arquivo adaptativo original esperado deve ficar em:
 
 ```text
-src/deepdetector/external/nn_robust_attacks/l2_adaptive_attack.py
+nn_robust_attacks/l2_adaptive_attack.py
 ```
 
 ### Recomendação
 
-Usar `third_party/nn_robust_attacks/l2_adaptive_attack.py`, porque o código é externo e baseado no repositório de referência.
+Manter `nn_robust_attacks` fora do pacote `src/deepdetector`, como checkout externo local. O projeto já usa esse padrão para `CarliniL2` e `CarliniLi`, carregando os arquivos diretamente a partir de `nn_robust_attacks_root`.
 
 ### Observações
 
-O arquivo deve preservar o comportamento original, mas pode receber mudanças mínimas para compatibilidade com TensorFlow 1.x via `tf.compat.v1`, caso necessário.
+O arquivo `l2_adaptive_attack.py`, quando adicionado ao checkout local, deve preservar o comportamento original, mas pode receber mudanças mínimas para compatibilidade com TensorFlow 1.x via `tf.compat.v1`, caso necessário.
 
 Evitar reescrever a lógica do ataque neste primeiro momento. A prioridade é fidelidade ao base.
+
+### Erro esperado
+
+Se `nn_robust_attacks/l2_adaptive_attack.py` não existir, ou se o arquivo não expor `CarliniL2Adaptive`, a execução deve falhar com uma mensagem explícita, por exemplo:
+
+```text
+Missing nn_robust_attacks l2_adaptive_attack.py: nn_robust_attacks/l2_adaptive_attack.py
+```
 
 ---
 
@@ -276,7 +305,7 @@ Adicionar campos explícitos:
 attacks:
   defense_aware:
     type: original_adaptive_cw_l2
-    nn_robust_attacks_root: third_party/nn_robust_attacks
+    nn_robust_attacks_root: nn_robust_attacks
     targeted: false
     confidence: 0
     max_iterations: 2000
@@ -527,7 +556,7 @@ ou o comando real usado pelo projeto.
 Também documentar a necessidade de ter o diretório:
 
 ```text
-third_party/nn_robust_attacks/l2_adaptive_attack.py
+nn_robust_attacks/l2_adaptive_attack.py
 ```
 
 ou configurar:
@@ -542,7 +571,9 @@ nn_robust_attacks_root: /caminho/para/nn_robust_attacks
 
 ### Etapa 1 — Preparar o código externo
 
-- [ ] Adicionar `third_party/nn_robust_attacks/l2_adaptive_attack.py`.
+- [ ] Validar que o checkout local `nn_robust_attacks/` existe.
+- [ ] Adicionar/restaurar `nn_robust_attacks/l2_adaptive_attack.py` no checkout local, se ele ainda não existir.
+- [ ] Não criar cópia vendorizada em `third_party/` ou `src/deepdetector/external/`.
 - [ ] Validar imports TensorFlow 1.x com `patch_tensorflow_v1_symbols()`.
 - [ ] Garantir que a classe `CarliniL2Adaptive` é carregável.
 
@@ -578,6 +609,8 @@ nn_robust_attacks_root: /caminho/para/nn_robust_attacks
 A mudança será considerada concluída quando:
 
 - [ ] o experimento `defense_aware` usar `CarliniL2Adaptive` original durante a otimização;
+- [ ] o backend adaptativo ser carregado a partir de `nn_robust_attacks/l2_adaptive_attack.py`;
+- [ ] a execução falhar com erro claro se `l2_adaptive_attack.py` ou `CarliniL2Adaptive` não estiver disponível no checkout local;
 - [ ] a configuração do YAML explicitar entrada externa `[0,1]` e ataque interno `[-0.5,0.5]`;
 - [ ] o adapter aplicar `+0.5` antes de chamar o M2;
 - [ ] o filtro final reproduzir a regra de empate do base;

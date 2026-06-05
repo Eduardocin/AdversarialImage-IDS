@@ -15,7 +15,9 @@ sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.attacks.adaptive_cw_l2 import (  # noqa: E402
     generate_adaptive_cw_l2_attack,
+    generate_original_adaptive_cw_l2_attack,
 )
+from deepdetector.attacks.nn_robust import NnRobustModelAdapter  # noqa: E402
 from deepdetector.attacks.registry import ATTACK_REGISTRY  # noqa: E402
 from deepdetector.evaluation import defense_aware as defense_aware_module  # noqa: E402
 from deepdetector.evaluation.defense_aware import (  # noqa: E402
@@ -26,6 +28,7 @@ from deepdetector.evaluation.defense_aware import (  # noqa: E402
 )
 from deepdetector.experiments import runner as experiment_runner  # noqa: E402
 from deepdetector.filters.adaptive_noise_reduction import (  # noqa: E402
+    _original_cross_mean_filter,
     build_final_adaptive_detection_filter,
     final_adaptive_detection_filter,
 )
@@ -60,11 +63,20 @@ def test_defense_aware_config_matches_spec() -> None:
         experiment["attacks"]["defense_unaware"]["nn_robust_attacks_root"]
         == "nn_robust_attacks"
     )
-    assert experiment["attacks"]["defense_aware"]["type"] == "adaptive_cw_l2"
+    assert experiment["attacks"]["defense_aware"]["type"] == "original_adaptive_cw_l2"
     assert (
         experiment["attacks"]["defense_aware"]["nn_robust_attacks_root"]
         == "nn_robust_attacks"
     )
+    assert experiment["attacks"]["defense_aware"]["input_range"] == {
+        "min": 0.0,
+        "max": 1.0,
+    }
+    assert experiment["attacks"]["defense_aware"]["attack_box"] == {
+        "min": -0.5,
+        "max": 0.5,
+    }
+    assert experiment["attacks"]["defense_aware"]["model_input_shift"] == 0.5
     assert experiment["detector"]["type"] == "final_adaptive_detection_filter"
     assert experiment["detector"]["spatial_filter"] == {
         "type": "cross_mean",
@@ -117,11 +129,11 @@ def test_detector_builder_uses_cross_mean_radius(monkeypatch) -> None:
         return 6.0
 
     def fake_quantization(image, interval, left=True):
-        return np.full_like(image, 0.4, dtype=np.float32)
+        return np.full_like(image, 0.0, dtype=np.float32)
 
     def fake_cross(image, radius=1):
         calls.append(radius)
-        return np.full_like(image, 0.6, dtype=np.float32)
+        return np.full_like(image, 1.0, dtype=np.float32)
 
     monkeypatch.setattr(
         "deepdetector.filters.adaptive_noise_reduction.one_d_entropy",
@@ -132,7 +144,7 @@ def test_detector_builder_uses_cross_mean_radius(monkeypatch) -> None:
         fake_quantization,
     )
     monkeypatch.setattr(
-        "deepdetector.filters.adaptive_noise_reduction.cross_mean_filter",
+        "deepdetector.filters.adaptive_noise_reduction._original_cross_mean_filter",
         fake_cross,
     )
 
@@ -151,10 +163,15 @@ def test_detector_builder_uses_cross_mean_radius(monkeypatch) -> None:
 
     assert calls == [3]
     assert filtered.shape == (3, 3, 1)
+    np.testing.assert_array_equal(filtered, np.full((3, 3, 1), 1.0, dtype=np.float32))
 
 
 def test_adaptive_cw_l2_is_registered() -> None:
     assert "adaptive_cw_l2" in ATTACK_REGISTRY
+
+
+def test_original_adaptive_cw_l2_is_registered() -> None:
+    assert "original_adaptive_cw_l2" in ATTACK_REGISTRY
 
 
 def test_adaptive_cw_l2_accepts_only_undetected_misclassifications() -> None:
@@ -186,6 +203,101 @@ def test_adaptive_cw_l2_accepts_only_undetected_misclassifications() -> None:
     np.testing.assert_array_equal(result[0], candidates[0])
     np.testing.assert_array_equal(result[1], images[1])
     np.testing.assert_array_equal(result[2], images[2])
+
+
+def test_original_adaptive_cw_l2_converts_ranges_and_uses_local_backend(tmp_path) -> None:
+    centered_path = tmp_path / "centered.npy"
+    labels_path = tmp_path / "labels.npy"
+    backend = tmp_path / "l2_adaptive_attack.py"
+    backend.write_text(
+        "\n".join(
+            [
+                "import numpy as np",
+                "class CarliniL2Adaptive:",
+                "    def __init__(self, sess, model, **kwargs):",
+                "        assert kwargs['boxmin'] == -0.5",
+                "        assert kwargs['boxmax'] == 0.5",
+                "        self.model = model",
+                "    def attack(self, images, labels):",
+                "        np.save({0!r}, images)".format(str(centered_path)),
+                "        np.save({0!r}, labels)".format(str(labels_path)),
+                "        return images + 0.25",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    class FakeModel:
+        sess = object()
+        num_labels = 10
+
+    images = np.asarray([[[[0.0], [1.0]], [[0.5], [0.25]]]], dtype=np.float32)
+
+    result = generate_original_adaptive_cw_l2_attack(
+        model=FakeModel(),
+        images=images,
+        labels=np.asarray([3], dtype=np.int32),
+        nn_robust_attacks_root=str(tmp_path),
+        input_range={"min": 0.0, "max": 1.0},
+        attack_box={"min": -0.5, "max": 0.5},
+        model_input_shift=0.5,
+    )
+
+    np.testing.assert_allclose(np.load(centered_path), [[[[-0.5], [0.5]], [[0.0], [-0.25]]]])
+    np.testing.assert_array_equal(np.load(labels_path), np.eye(10, dtype=np.float32)[[3]])
+    np.testing.assert_allclose(result, [[[[0.25], [1.0]], [[0.75], [0.5]]]])
+    assert result.dtype == np.float32
+
+
+def test_original_adaptive_cw_l2_missing_backend_fails_clearly(tmp_path) -> None:
+    class FakeModel:
+        sess = object()
+        num_labels = 10
+
+    with pytest.raises(ImportError, match="Missing nn_robust_attacks l2_adaptive_attack.py"):
+        generate_original_adaptive_cw_l2_attack(
+            model=FakeModel(),
+            images=np.zeros((1, 1, 1, 1), dtype=np.float32),
+            labels=np.asarray([0], dtype=np.int32),
+            nn_robust_attacks_root=str(tmp_path),
+        )
+
+
+def test_nn_robust_adapter_applies_model_input_shift() -> None:
+    captured = {}
+
+    class FakeModel:
+        def predict(self, data):
+            captured["data"] = np.asarray(data, dtype=np.float32)
+            return captured["data"]
+
+    adapter = NnRobustModelAdapter(
+        FakeModel(),
+        image_shape=(2, 2, 1),
+        num_labels=10,
+        input_shift=0.5,
+    )
+
+    adapter.predict(np.asarray([[[[-0.5], [0.25]], [[0.0], [0.5]]]], dtype=np.float32))
+
+    np.testing.assert_allclose(captured["data"], [[[[0.0], [0.75]], [[0.5], [1.0]]]])
+
+    adapter.model.predict(np.asarray([[[[-0.25], [0.0]], [[0.25], [0.5]]]], dtype=np.float32))
+
+    np.testing.assert_allclose(captured["data"], [[[[0.25], [0.5]], [[0.75], [1.0]]]])
+
+
+def test_original_cross_mean_filter_preserves_borders_and_uses_radius_three() -> None:
+    image = np.zeros((7, 7, 1), dtype=np.float32)
+    image[3, 3, 0] = 13.0
+
+    filtered = _original_cross_mean_filter(image, radius=3)
+
+    np.testing.assert_array_equal(filtered[0, :, :], image[0, :, :])
+    np.testing.assert_array_equal(filtered[-1, :, :], image[-1, :, :])
+    np.testing.assert_array_equal(filtered[:, 0, :], image[:, 0, :])
+    np.testing.assert_array_equal(filtered[:, -1, :], image[:, -1, :])
+    assert float(filtered[3, 3, 0]) == 1.0
 
 
 def test_evaluate_defense_aware_arrays_counts_success_failure_and_l2() -> None:
@@ -418,3 +530,78 @@ def test_run_defense_aware_evaluation_uses_shared_transform_in_adaptive_attack(
     assert captured["adaptive_transform"] is captured["transform"]
     assert rows[0]["success"] == 1
     assert rows[1]["success"] == 1
+
+
+def test_run_defense_aware_evaluation_dispatches_original_adaptive_attack(
+    monkeypatch,
+) -> None:
+    images = np.asarray([[[[0.0]]]], dtype=np.float32)
+    labels = np.asarray([0], dtype=np.int32)
+    captured = {}
+
+    monkeypatch.setattr(
+        defense_aware_module,
+        "_load_images",
+        lambda config: (images, labels),
+    )
+    monkeypatch.setattr(
+        defense_aware_module,
+        "create_restored_mnist_m2_graph",
+        lambda train_dir: {"model": object(), "sess": object(), "x": object(), "predictions": object()},
+    )
+    monkeypatch.setattr(
+        defense_aware_module,
+        "_predict_fn",
+        lambda graph, batch_size: lambda batch: np.asarray(
+            [int(round(float(value))) for value in batch.reshape((len(batch), -1))[:, 0]]
+        ),
+    )
+    monkeypatch.setattr(
+        defense_aware_module,
+        "build_final_adaptive_detection_filter",
+        lambda config: lambda image: image,
+    )
+    monkeypatch.setattr(
+        defense_aware_module,
+        "generate_nn_robust_cw_l2_attack",
+        lambda **kwargs: np.asarray([[[[1.0]]]], dtype=np.float32),
+    )
+
+    def fake_original(**kwargs):
+        captured.update(kwargs)
+        return np.asarray([[[[1.0]]]], dtype=np.float32)
+
+    monkeypatch.setattr(
+        defense_aware_module,
+        "generate_original_adaptive_cw_l2_attack",
+        fake_original,
+    )
+
+    defense_aware_module.run_defense_aware_evaluation(
+        {
+            "seed": 42,
+            "dataset": {"name": "mnist", "start": 9000, "end": 10000},
+            "model": {},
+            "evaluation": {"batch_size": 1},
+            "attacks": {
+                "defense_unaware": {
+                    "type": "cw_l2_nn_robust",
+                    "nn_robust_attacks_root": "nn_robust_attacks",
+                },
+                "defense_aware": {
+                    "type": "original_adaptive_cw_l2",
+                    "nn_robust_attacks_root": "nn_robust_attacks",
+                    "input_range": {"min": 0.0, "max": 1.0},
+                    "attack_box": {"min": -0.5, "max": 0.5},
+                    "model_input_shift": 0.5,
+                },
+            },
+            "detector": {"type": "final_adaptive_detection_filter"},
+        }
+    )
+
+    assert captured["nn_robust_attacks_root"] == "nn_robust_attacks"
+    assert captured["input_range"] == {"min": 0.0, "max": 1.0}
+    assert captured["attack_box"] == {"min": -0.5, "max": 0.5}
+    assert captured["model_input_shift"] == 0.5
+    assert "transform_fn" not in captured

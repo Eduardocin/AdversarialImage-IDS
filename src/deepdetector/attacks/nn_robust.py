@@ -5,12 +5,36 @@ from __future__ import annotations
 from contextlib import contextmanager
 import importlib.util
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import numpy as np
 
 from deepdetector.attacks.tf_compat import patch_tensorflow_v1_symbols
 from deepdetector.io.paths import resolve_project_path
+
+
+def _predict_with_model(model: Any, data: Any) -> Any:
+    if hasattr(model, "get_logits"):
+        return model.get_logits(data)
+    if callable(model):
+        return model(data)
+    if hasattr(model, "predict"):
+        return model.predict(data)
+    raise NotImplementedError("nn_robust_attacks requires model logits.")
+
+
+class _ShiftedPredictModel(object):
+    """Expose `.predict` with an input shift for original Carlini helpers."""
+
+    def __init__(self, model: Any, input_shift: float) -> None:
+        self._model = model
+        self._input_shift = float(input_shift)
+
+    def predict(self, data: Any) -> Any:
+        return _predict_with_model(self._model, data + self._input_shift)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._model, name)
 
 
 class NnRobustModelAdapter(object):
@@ -20,27 +44,25 @@ class NnRobustModelAdapter(object):
         self,
         model: Any,
         *,
-        image_shape: tuple[int, int, int],
+        image_shape: Tuple[int, int, int],
         num_labels: int,
+        input_shift: float = 0.0,
     ) -> None:
         if len(image_shape) != 3:
             raise ValueError("nn_robust_attacks requires HWC image_shape.")
         if image_shape[0] != image_shape[1]:
             raise ValueError("nn_robust_attacks requires square images.")
-        self.model = model
+        self._model = model
+        self.model = _ShiftedPredictModel(model, input_shift) if input_shift else model
         self.image_size = int(image_shape[0])
         self.num_channels = int(image_shape[2])
         self.num_labels = int(num_labels)
+        self.input_shift = float(input_shift)
 
     def predict(self, data: Any) -> Any:
         """Return pre-softmax logits for centered attack tensors."""
-        if hasattr(self.model, "get_logits"):
-            return self.model.get_logits(data)
-        if callable(self.model):
-            return self.model(data)
-        if hasattr(self.model, "predict"):
-            return self.model.predict(data)
-        raise NotImplementedError("nn_robust_attacks requires model logits.")
+        shifted = data + self.input_shift if self.input_shift else data
+        return _predict_with_model(self._model, shifted)
 
 
 def _load_nn_robust_class(root: str, filename: str, class_name: str) -> Any:
@@ -58,11 +80,19 @@ def _load_nn_robust_class(root: str, filename: str, class_name: str) -> Any:
         raise ImportError("Could not load nn_robust_attacks from {0}".format(attack_path))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    if not hasattr(module, class_name):
+        raise ImportError(
+            "Missing nn_robust_attacks class {0}: {1}".format(class_name, attack_path)
+        )
     return getattr(module, class_name)
 
 
 def _load_nn_robust_carlini_l2(root: str) -> Any:
     return _load_nn_robust_class(root, "l2_attack.py", "CarliniL2")
+
+
+def _load_nn_robust_carlini_l2_adaptive(root: str) -> Any:
+    return _load_nn_robust_class(root, "l2_adaptive_attack.py", "CarliniL2Adaptive")
 
 
 def _load_nn_robust_carlini_li(root: str) -> Any:
@@ -98,7 +128,12 @@ def _one_hot(labels: np.ndarray, num_labels: int) -> np.ndarray:
     return encoded
 
 
-def _adapter_for_images(model: Any, images: np.ndarray) -> NnRobustModelAdapter:
+def _adapter_for_images(
+    model: Any,
+    images: np.ndarray,
+    *,
+    input_shift: float = 0.0,
+) -> NnRobustModelAdapter:
     image_array = np.asarray(images, dtype=np.float32)
     if image_array.ndim != 4:
         raise ValueError("nn_robust_attacks requires image batches.")
@@ -106,6 +141,7 @@ def _adapter_for_images(model: Any, images: np.ndarray) -> NnRobustModelAdapter:
         model,
         image_shape=tuple(int(value) for value in image_array.shape[1:]),
         num_labels=int(getattr(model, "num_labels", 10)),
+        input_shift=float(input_shift),
     )
 
 

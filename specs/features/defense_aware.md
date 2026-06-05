@@ -80,7 +80,11 @@ Test/CW/adaptive_CWL2_MNIST.py
 Test/CW/l2_adaptive_attack.py
 ```
 
-A implementação deste projeto deve reproduzir esse comportamento de forma compatível com a arquitetura atual.
+A implementação deste projeto deve reproduzir esse comportamento de forma compatível com a arquitetura atual, carregando o backend adaptativo a partir do checkout local configurável:
+
+```text
+nn_robust_attacks/l2_adaptive_attack.py
+```
 
 ---
 
@@ -145,7 +149,7 @@ defense_aware:
       learning_rate: 0.1
 
     defense_aware:
-      type: adaptive_cw_l2
+      type: original_adaptive_cw_l2
       nn_robust_attacks_root: nn_robust_attacks
       targeted: false
       confidence: 0
@@ -153,6 +157,13 @@ defense_aware:
       binary_search_steps: 5
       initial_const: 1.0
       learning_rate: 0.1
+      input_range:
+        min: 0.0
+        max: 1.0
+      attack_box:
+        min: -0.5
+        max: 0.5
+      model_input_shift: 0.5
 
   detector:
     type: final_adaptive_detection_filter
