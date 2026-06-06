@@ -8,6 +8,7 @@ from typing import Any, Iterator, Optional, Tuple
 import numpy as np
 
 from deepdetector.attacks.fgsm_imagenet import predict_caffe_label
+from deepdetector.filters.table7_filters import table7_filter
 
 
 @dataclass
@@ -59,10 +60,10 @@ def _iter_dataset(dataset: Any) -> Iterator[Tuple[np.ndarray, Any, Optional[np.n
 
         if len(images) != len(labels):
             raise ValueError("images and labels must have the same length.")
-        if adv_images is not None and len(adv_images) != len(images):
-            raise ValueError("adversarial images must have the same length as images.")
+        n_rows = len(images) if adv_images is None else min(len(images), len(adv_images))
 
-        for index, image in enumerate(images):
+        for index in range(n_rows):
+            image = images[index]
             adversarial = None if adv_images is None else adv_images[index]
             yield image, labels[index], adversarial
         return
@@ -135,8 +136,6 @@ def _apply_table8_filter_to_model_input(
     size: int,
 ) -> np.ndarray:
     """Apply the shared CHW 0-255 spatial smoothing filter to model input."""
-    from deepdetector.filters.table7_filters import table7_filter
-
     chw_255, layout, scale = _image_to_chw_255(image)
     filtered = table7_filter(
         image=chw_255,

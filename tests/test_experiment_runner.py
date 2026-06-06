@@ -43,6 +43,7 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
         "table_7",
         "table_8",
         "table_9",
+        "topk_detection",
     }
     assert config["defaults"] == {
         "output": {"csv": "metrics.csv", "json": "metrics.json"}
@@ -82,6 +83,7 @@ def test_consolidated_config_contains_defaults_and_tables() -> None:
         ("table_10_caffenet", "table_10_group"),
         ("table_10_m2", "table_10_group"),
         ("table_10_inception_v3", "table_10_group"),
+        ("topk_detection", "topk_detection"),
     ],
 )
 def test_run_experiment_entrypoint_resolves_requested_experiment(

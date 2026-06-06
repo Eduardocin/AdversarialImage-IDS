@@ -28,8 +28,12 @@ class Table7FilterResult:
     recall: float
     precision: float
     f1: float
+    total_images: int
+    clean_correct: int
+    attack_success: int
     n_high_entropy_clean: int
     n_high_entropy_adversarial: int
+    skipped_low_entropy_clean: int
     disturbed_failure: int
     skipped_wrong_baseline: int
 
@@ -66,10 +70,10 @@ def _iter_dataset(dataset: Any) -> Iterator[Tuple[np.ndarray, Any, Optional[np.n
 
         if len(images) != len(labels):
             raise ValueError("images and labels must have the same length.")
-        if adv_images is not None and len(adv_images) != len(images):
-            raise ValueError("adversarial images must have the same length as images.")
+        n_rows = len(images) if adv_images is None else min(len(images), len(adv_images))
 
-        for index, image in enumerate(images):
+        for index in range(n_rows):
+            image = images[index]
             adversarial = None if adv_images is None else adv_images[index]
             yield image, labels[index], adversarial
         return
@@ -209,17 +213,23 @@ def evaluate_table7_filter(
     tp = 0
     fn = 0
     fp = 0
+    total_images = 0
+    clean_correct = 0
+    attack_success = 0
     n_high_entropy_clean = 0
     n_high_entropy_adversarial = 0
+    skipped_low_entropy_clean = 0
     disturbed_failure = 0
     skipped_wrong_baseline = 0
 
     for clean_image, label, provided_adversarial in _iter_dataset(dataset):
+        total_images += 1
         true_label = _label_to_int(label)
         clean_pred = _predict_one(model, clean_image)
         if clean_pred != true_label:
             skipped_wrong_baseline += 1
             continue
+        clean_correct += 1
 
         adversarial_image = provided_adversarial
         if adversarial_image is None:
@@ -234,13 +244,19 @@ def evaluate_table7_filter(
             disturbed_failure += 1
             continue
 
-        if _entropy_for_image(adversarial_image) <= float(entropy_threshold):
+        attack_success += 1
+        clean_entropy = _entropy_for_image(clean_image)
+        adversarial_entropy = _entropy_for_image(adversarial_image)
+        threshold = float(entropy_threshold)
+
+        if clean_entropy <= threshold:
+            skipped_low_entropy_clean += 1
             continue
 
-        if _entropy_for_image(clean_image) > float(entropy_threshold):
-            n_high_entropy_clean += 1
+        n_high_entropy_clean += 1
+        if adversarial_entropy > threshold:
+            n_high_entropy_adversarial += 1
 
-        n_high_entropy_adversarial += 1
         filtered_clean = _apply_table7_filter_to_model_input(
             image=clean_image,
             mask_type=mask_type,
@@ -271,8 +287,12 @@ def evaluate_table7_filter(
         recall=recall,
         precision=precision,
         f1=f1,
+        total_images=int(total_images),
+        clean_correct=int(clean_correct),
+        attack_success=int(attack_success),
         n_high_entropy_clean=int(n_high_entropy_clean),
         n_high_entropy_adversarial=int(n_high_entropy_adversarial),
+        skipped_low_entropy_clean=int(skipped_low_entropy_clean),
         disturbed_failure=int(disturbed_failure),
         skipped_wrong_baseline=int(skipped_wrong_baseline),
     )

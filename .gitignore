@@ -183,8 +183,7 @@ cython_debug/
 
 # Project artifacts
 /outputs
-/artifacts/adversarial_examples/
-/artifacts/models/
+/artifacts
 
 /results/*
 !/results/
@@ -212,6 +211,8 @@ run.log
 /data
 /material
 /src/original
+/results 
+nn_robust_attacks/
 
 # Local planning scratch files
 /specs/**/*.local.md

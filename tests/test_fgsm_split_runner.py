@@ -156,8 +156,8 @@ def test_table9_is_combined_mnist_imagenet_like_table6() -> None:
     assert table9["imagenet"]["filter"]["type"] == "proposed_detection_filter"
     assert table6["mnist"]["dataset"]["slices"] == table9["mnist"]["dataset"]["slices"]
     assert table6["imagenet"]["dataset"]["splits"] == table9["imagenet"]["dataset"]["splits"]
-    assert table6["output_dir"] == "results/experiments/table_6"
-    assert table9["output_dir"] == "results/experiments/table_9"
+    assert table6["output_dir"] == "results/table_6"
+    assert table9["output_dir"] == "results/table_9"
     assert table6["mnist"]["attack"]["epsilon"] == 0.2
     assert table9["mnist"]["attack"]["epsilon"] == 0.2
     assert table9["imagenet"]["attack"]["epsilon_255"] == 1.0

@@ -62,7 +62,7 @@ Expected labels:
 Official outputs go to:
 
 ```text
-results/experiments/table_4/imagenet/
+results/table_4/imagenet/
 ```
 
 The runtime writes:

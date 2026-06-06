@@ -126,7 +126,7 @@ Configuração esperada antes da implementação completa:
 ```yaml
 table_10_googlenet:
   kind: table_10_group
-  output_dir: results/experiments/table_10/imagenet/googlenet
+  output_dir: results/table_10/imagenet/googlenet
   dataset:
     name: imagenet
   model:
@@ -389,7 +389,7 @@ python scripts/run_experiment.py --experiment table_10_googlenet
 A saída continua sendo:
 
 ```text
-results/experiments/table_10/imagenet/googlenet/
+results/table_10/imagenet/googlenet/
 ├── metrics.csv
 └── metrics.json
 ```
@@ -609,7 +609,7 @@ Critério recomendado:
 * [ ] A linha 7 não fica `blocked` se o ataque estiver funcional.
 * [ ] Se o modelo GoogLeNet não expuser gradiente, a linha 7 continua bloqueada com motivo técnico claro.
 * [ ] O comando `python scripts/run_experiment.py --experiment table_10_googlenet` continua sendo o ponto de entrada.
-* [ ] O output continua em `results/experiments/table_10/imagenet/googlenet/`.
+* [ ] O output continua em `results/table_10/imagenet/googlenet/`.
 * [ ] O output contém apenas `metrics.csv` e `metrics.json`.
 * [ ] A implementação reaproveita métricas e outputs existentes.
 * [ ] A implementação não referencia resultados antigos.
@@ -627,7 +627,7 @@ A implementação estará concluída quando:
 4. `metrics.csv` e `metrics.json` forem gerados no diretório:
 
 ```text
-results/experiments/table_10/imagenet/googlenet/
+results/table_10/imagenet/googlenet/
 ```
 
 5. nenhum `manifest.json` for gerado;

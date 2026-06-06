@@ -4,6 +4,23 @@ Use this file to track implementation tasks derived from specifications in `spec
 
 ## Backlog
 
+- [x] Implement configurable top-k detection rules from `specs/features/fix_topk.md`
+  - [x] Add rule dispatch helpers for `top1_change`, `top1_in_topk`, `rank_displacement`, and `confidence_drop`.
+  - [x] Preserve legacy `topk_overlap` behavior and output shape when `rules` is not configured.
+  - [x] Expand configured rule/parameter combinations into official `metrics.csv` and `metrics.json` outputs.
+  - [x] Add focused tests for rule equivalence, dispatch, configured outputs, and config fidelity.
+  - [x] Force Top-k FGSM generation to use the GoogLeNet attack-gradient path.
+- [x] Implement top-k prediction detection from `specs/features/topk_detector.md`
+  - [x] Add `topk_detection` to the consolidated experiment config and runner dispatch.
+  - [x] Add reusable top-k selection, detection, aggregation, and output helpers.
+  - [x] Reuse ImageNet test `cab`/`panda`/`zebra`, GoogLeNet FGSM `epsilon=1/255`, and `article_final_detection_filter`.
+  - [x] Write only `selection.csv`, `selection.json`, `metrics.csv`, and `metrics.json`.
+  - [x] Add automated tests for acceptance criteria.
+- [x] Persist selected ambiguous images from `specs/features/topk_detector.md`
+  - [x] Save selected clean ambiguous images under `results/experiments/topk_detection/ambiguous_images/<class_name>/`.
+  - [x] Use deterministic PNG filenames based on selection order.
+  - [x] Keep adversarial images, diagnostics, and reports out of the output contract.
+  - [x] Add automated tests for saved ambiguous image artifacts.
 - [x] Apply script refactor from `specs/refactor/plano_refatoracao_scripts.md`
   - [x] Add shared ImageNet path, config, pivot CSV, model, data, evaluation, and adversarial helpers.
   - [x] Route Table 7 and Table 8 ImageNet runners through shared helpers.
@@ -84,7 +101,7 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Reuse compatible ImageNet FGSM caches from `artifacts/adversarial_examples`.
   - [x] Generate and persist ImageNet FGSM caches when a split cache is missing.
   - [x] Aggregate TP, FN, and FP across datasets before calculating metrics.
-  - [x] Write only `metrics.csv` and `metrics.json` under `results/experiments/table_6`.
+  - [x] Write only `metrics.csv` and `metrics.json` under `results/table_6`.
   - [x] Remove the legacy public Table 6 ImageNet script and config.
 - [x] Implement Table 9 final FGSM detector from `specs/features/table_9.md`
   - [x] Add official Table 9 config to `configs/experiments.yaml`.
@@ -119,7 +136,7 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Share the same attack helper across Table 4, Table 7, and GoogLeNet FGSM scripts.
   - [x] Add tests covering clean-baseline skip, Caffe-scale epsilon, and no TensorFlow import in the main path.
 - [x] Implement Table 10 ImageNet GoogLeNet group from `specs/features/table10_googlenet.md`
-  - [x] Update `table_10_googlenet` output directory to `results/experiments/table_10/imagenet/googlenet`.
+  - [x] Update `table_10_googlenet` output directory to `results/table_10/imagenet/googlenet`.
   - [x] Add official Table 10 schema and pending-row materialization.
   - [x] Route `kind: table_10_group` through the reusable Table 10 group runner.
   - [x] Write only `metrics.csv` and `metrics.json` for the Table 10 group.
@@ -137,10 +154,25 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Apply masked mean values only where the full mask fits inside the image.
   - [x] Preserve border pixels exactly instead of using reflect padding.
   - [x] Add a regression test for unchanged spatial borders.
+- [x] Align Table 7 ImageNet high-entropy selection with `specs/features/Table 7 ImageNet.md`.
+  - [x] Filter Table 7 samples by clean/original image entropy, not adversarial image entropy.
+  - [x] Add `skipped_low_entropy_clean`, `attack_success`, and high-entropy diagnostic counters to Table 7 results/status.
+  - [x] Keep adversarial entropy as diagnostic only.
+  - [x] Preserve spatial-smoothing-only behavior without quantization.
+  - [x] Add regression tests for clean entropy selection, adversarial entropy diagnostic behavior, default threshold, metrics, and all 12 filter combinations.
+- [x] Verify Table 8 ImageNet validation behavior after Table 7 entropy correction.
+  - [x] Confirm Table 8 does not apply entropy-based sample inclusion or exclusion.
+  - [x] Confirm Table 8 applies only the five fixed spatial smoothing filters without quantization.
+  - [x] Add or update regression tests if the existing coverage does not lock these rules.
+- [x] Allow ImageNet adversarial caches with different sample counts.
+  - [x] Load caches when the per-image shape is compatible even if the number of examples differs.
+  - [x] Align Table 7 and Table 8 evaluation to the available clean/adversarial prefix.
+  - [x] Preserve explicit failure for incompatible per-image cache shapes.
+  - [x] Add regression tests for extra cached rows and per-image mismatch failure.
 - [x] Combine Table 4 MNIST and ImageNet execution from `specs/features/table_4_combined.md`
   - [x] Add composite `table_4` with explicit `table_4_mnist` and `table_4_imagenet` components.
   - [x] Route ImageNet Table 4 through the consolidated experiment runner.
-  - [x] Write MNIST and ImageNet outputs under `results/experiments/table_4/`.
+  - [x] Write MNIST and ImageNet outputs under `results/table_4/`.
   - [x] Add tests for config fidelity and composite dispatch.
 - [x] Remove Table 4 ImageNet diagnostics output from `specs/features/table_4_combined.md`
   - [x] Remove legacy `configs/article_reproduction/imagenet_table_4.yaml`.
@@ -210,8 +242,8 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Write `metrics.csv`, `metrics.json`, and `manifest.json` for the CaffeNet group.
   - [x] Add automated tests for config, wrapper dispatch, and blocked manifest semantics.
 - [x] Route MNIST Table 10 article reproduction outputs by dataset/model from `specs/features/Table_10.md`
-  - [x] Set `table_10_m1` output to `results/mnist/article_reproduction/table_10_m1`.
-  - [x] Set `table_10_m2` output to `results/mnist/article_reproduction/table_10_m2`.
+  - [x] Set `table_10_m1` output to `results/table_10/m1`.
+  - [x] Set `table_10_m2` combined output to `results/table_10/M2_cw`.
   - [x] Align legacy Table 10 M1/M2 script defaults with the dataset/model output folders.
   - [x] Add automated tests for the updated output paths.
 - [x] Add explicit M2 CW regeneration mode from `specs/features/Table_10.md`
@@ -235,6 +267,10 @@ Use this file to track implementation tasks derived from specifications in `spec
 - [x] Clarify Table 10 execution paths
   - [x] Document `scripts/run_experiment.py` as the official runner path.
   - [x] Document `scripts/article_reproduction/generate_table_10_m2_cw.py` as the M2 helper for CW regeneration.
+- [x] Separate targeted M2 CW report outputs from `specs/features/Table_10.md`
+  - [x] Route `--only-norm L2` and `--only-kappa` reports to `results/table_10/M2_cw_l2/`.
+  - [x] Route `--only-norm Linf` reports to `results/table_10/M2_cw_Linf/`.
+  - [x] Add automated tests for norm-specific output directories.
 - [x] Fix Table 10 Inception v3 CW-L2 evaluation from `specs/refactor/refactor_table10_inception.md`
   - [x] Select clean-correct Inception v3 samples until configured class quotas are filled.
   - [x] Materialize an Inception candidate pool large enough to replace clean errors.
@@ -281,3 +317,10 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Keep default M3 learning rate at 0.001.
   - [x] Keep default M3 label smoothing at 0.1.
   - [x] Update focused checkpoint helper tests.
+- [x] Adjust Table 10 GoogLeNet attack fidelity from `specs/features/table10_googlenet_attack_fidelity.md`
+  - [x] Set DeepFool/GoogLeNet clipping to `[0,255]`.
+  - [x] Ensure FGSM/GoogLeNet gradients use the original softmax graph.
+  - [x] Ensure DeepFool/GoogLeNet gradients use `deploy_removeSoftmax.prototxt`.
+  - [x] Add regression tests for attack-specific graph selection and Caffe-scale clipping.
+  - [x] Add lightweight per-sample diagnostic logging for reduced runs.
+

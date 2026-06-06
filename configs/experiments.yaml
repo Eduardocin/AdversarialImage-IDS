@@ -54,7 +54,7 @@ experiments:
 
   table_3:
     kind: filter_grid
-    output_dir: results/experiments/table_3
+    output_dir: results/table_3
     dataset:
       name: mnist
       split: test
@@ -83,14 +83,14 @@ experiments:
 
   table_4:
     kind: composite
-    output_dir: results/experiments/table_4
+    output_dir: results/table_4
     components:
       - table_4_mnist
       - table_4_imagenet
 
   table_4_mnist:
     kind: filter_grid
-    output_dir: results/experiments/table_4/mnist
+    output_dir: results/table_4/mnist
     dataset:
       name: mnist
       split: test
@@ -138,7 +138,7 @@ experiments:
 
   table_4_imagenet:
     kind: imagenet_table_4
-    output_dir: results/experiments/table_4/imagenet
+    output_dir: results/table_4/imagenet
     dataset:
       name: imagenet
       split: train
@@ -191,7 +191,7 @@ experiments:
   table_6:
     kind: table_6
     description: Adaptive quantization strategy
-    output_dir: results/experiments/table_6
+    output_dir: results/table_6
     datasets: [mnist, imagenet]
     split_order: [train, validation]
     entropy_thresholds:
@@ -274,7 +274,7 @@ experiments:
 
   table_7:
     kind: imagenet_table_7
-    output_dir: results/experiments/table_7
+    output_dir: results/table_7
     dataset:
       name: imagenet
       split: training
@@ -318,7 +318,7 @@ experiments:
 
   table_8:
     kind: imagenet_table_8
-    output_dir: results/experiments/table_8
+    output_dir: results/table_8
     dataset:
       name: imagenet
       split: validation
@@ -364,7 +364,7 @@ experiments:
 
   table_9:
     kind: table_9
-    output_dir: results/experiments/table_9
+    output_dir: results/table_9
     description: Final proposed detection filter against FGSM
     datasets: [mnist, imagenet]
     split_order: [train, validation]
@@ -440,7 +440,7 @@ experiments:
 
   table_10_m1:
     kind: table_10_group
-    output_dir: results/mnist/article_reproduction/table_10_m1
+    output_dir: results/table_10/m1
     dataset:
       name: mnist
     model:
@@ -477,7 +477,7 @@ experiments:
 
   table_10_googlenet:
     kind: table_10_group
-    output_dir: results/experiments/table_10/imagenet/googlenet
+    output_dir: results/table_10/imagenet/googlenet
     dataset:
       name: imagenet
       split: test
@@ -536,12 +536,12 @@ experiments:
           max_iter: 50
           overshoot: 0.02
           clip_min: 0.0
-          clip_max: 1.0
+          clip_max: 255.0
           num_classes: 10
 
   table_10_caffenet:
     kind: table_10_group
-    output_dir: results/experiments/table_10/caffenet
+    output_dir: results/table_10/caffenet
     dataset:
       name: imagenet
       split: test
@@ -584,7 +584,7 @@ experiments:
 
   table_10_m2:
     kind: table_10_group
-    output_dir: results/mnist/article_reproduction/table_10_m2
+    output_dir: results/table_10/M2_cw
     dataset:
       name: mnist
     model:
@@ -632,7 +632,7 @@ experiments:
 
   table_10_inception_v3:
     kind: table_10_group
-    output_dir: results/experiments/table_10/inception_v3
+    output_dir: results/table_10/inception_v3
     dataset:
       name: imagenet
       split: test
@@ -950,6 +950,16 @@ experiments:
       name: imagenet
       split: new_test
       images_dir: data/imagenet/new_test
+  
+  topk_detection:
+    kind: topk_detection
+    description: Top-k prediction based detection for ambiguous ImageNet images
+    output_dir: results/experiments/topk_detection
+    seed: 42
+    dataset:
+      name: imagenet
+      split: test
+      images_dir: data/imagenet/test
       image_size: 224
       image_shape: [224, 224, 3]
       value_range: [0.0, 1.0]
@@ -964,6 +974,11 @@ experiments:
         ambulance: 40
         scholar_bus: 40
         soccer_ball: 20
+      n_samples: all
+      class_indices:
+        cab: 468
+        panda: 388
+        zebra: 340
     model:
       name: googlenet_caffe
       family: caffe
@@ -1106,3 +1121,38 @@ experiments:
           targeted: false
           clip_min: -0.5
           clip_max: 0.5
+      use_gpu: false
+      batch_size: 32
+    attack:
+      name: fgsm
+      epsilon: 0.00392156862745098
+      clip_min: 0.0
+      clip_max: 255.0
+      attack_model: "FGSM (epsilon=1/255)/GoogLeNet"
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
+      implementation: article_final_detection_filter
+    ambiguity_selection:
+      enabled: true
+      method: top1_top2_margin
+      max_margin: 0.15
+      min_top1_confidence: 0.20
+      max_top1_confidence: 0.60
+      max_samples_per_class: 50
+    topk_detection:
+      baseline_k: 1
+      candidate_k_values: [2, 3, 5]
+      default_k: 3
+      rules:
+        - name: topk_overlap
+        - name: top1_in_topk
+        - name: rank_displacement
+          thresholds: [1, 2, 3, 5]
+        - name: confidence_drop
+          ks: [2, 3]
+          deltas: [0.05, 0.10, 0.20]
+    output:
+      aggregate_by_class: true
+      aggregate_global: true
+      include_selection_summary: true

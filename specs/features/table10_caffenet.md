@@ -32,7 +32,7 @@ A implementação aqui deve reproduzir essa separação de papéis: `deploy_orig
 
 A configuração `table_10_caffenet` deve continuar como `kind: table_10_group` e deve ser atualizada para refletir o suporte correto a CaffeNet.
 
-O grupo deve gerar saída em `results/experiments/table_10/caffenet/` com:
+O grupo deve gerar saída em `results/table_10/caffenet/` com:
 
 * `metrics.csv`
 * `metrics.json`
@@ -95,8 +95,8 @@ Não implementar nesta tarefa:
 
 - [ ] O `configs/experiments.yaml` contém `table_10_caffenet` com `kind: table_10_group`.
 - [ ] O experimento `table_10_caffenet` pode ser invocado por `python scripts/run_experiment.py --experiment table_10_caffenet`.
-- [ ] O grupo `caffenet` escreve `results/experiments/table_10/caffenet/metrics.csv` e `metrics.json`.
-- [ ] O grupo `caffenet` escreve `results/experiments/table_10/caffenet/manifest.json`.
+- [ ] O grupo `caffenet` escreve `results/table_10/caffenet/metrics.csv` e `metrics.json`.
+- [ ] O grupo `caffenet` escreve `results/table_10/caffenet/manifest.json`.
 - [ ] A linha 8 mantém `no: 8` e `attack_model: "DeepFool/CaffeNet"`.
 - [ ] O wrapper reporta `attack_deploy_proto`/`deploy_proto` separados de forma compatível com o original.
 - [ ] As métricas vazias são mantidas para linhas bloqueadas.

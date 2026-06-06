@@ -80,13 +80,13 @@ O grupo `m1` representa os experimentos FGSM em MNIST com o modelo M1.
 Diretório:
 
 ```text
-results/mnist/article_reproduction/table_10_m1/
+results/table_10/m1/
 ```
 
 Arquivos:
 
 ```text
-results/mnist/article_reproduction/table_10_m1/
+results/table_10/m1/
 ├── metrics.csv
 ├── metrics.json
 └── manifest.json
@@ -107,13 +107,13 @@ O grupo `googlenet` representa os experimentos em ImageNet com o modelo GoogLeNe
 Diretório:
 
 ```text
-results/experiments/table_10/googlenet/
+results/table_10/googlenet/
 ```
 
 Arquivos:
 
 ```text
-results/experiments/table_10/googlenet/
+results/table_10/googlenet/
 ├── metrics.csv
 ├── metrics.json
 └── manifest.json
@@ -132,13 +132,13 @@ O grupo `caffenet` representa os experimentos em ImageNet com o modelo CaffeNet.
 Diretório:
 
 ```text
-results/experiments/table_10/caffenet/
+results/table_10/caffenet/
 ```
 
 Arquivos:
 
 ```text
-results/experiments/table_10/caffenet/
+results/table_10/caffenet/
 ├── metrics.csv
 ├── metrics.json
 └── manifest.json
@@ -187,6 +187,8 @@ dois modos explícitos:
   `--generate-attacks --overwrite-attacks`.
 - limitar uma execução M2 a um único valor de `kappa` CW-L2 quando chamado com
   `--only-kappa <valor>`.
+- limitar uma execução M2 a uma única norma CW quando chamado com
+  `--only-norm L2` ou `--only-norm Linf`.
 
 Para M2, CW-L2 deve ser gerado exclusivamente com
 `nn_robust_attacks.CarliniL2` e CW-L∞ deve ser gerado exclusivamente com
@@ -213,13 +215,24 @@ quantidade de amostras e hiperparâmetros principais.
 Diretório:
 
 ```text
-results/mnist/article_reproduction/table_10_m2/
+results/table_10/M2_cw/
 ```
+
+Execuções M2 filtradas por norma devem gravar seus relatórios em subdiretórios
+separados para evitar sobrescrever resultados de outra norma:
+
+```text
+results/table_10/
+├── M2_cw_l2/
+└── M2_cw_Linf/
+```
+
+Execuções M2 filtradas por `--only-kappa` também devem gravar em `M2_cw_l2/`.
 
 Arquivos:
 
 ```text
-results/mnist/article_reproduction/table_10_m2/
+results/table_10/M2_cw/
 ├── metrics.csv
 ├── metrics.json
 └── manifest.json
@@ -243,13 +256,13 @@ O grupo `inception_v3` representa os experimentos CW em ImageNet com Inception v
 Diretório:
 
 ```text
-results/experiments/table_10/inception_v3/
+results/table_10/inception_v3/
 ```
 
 Arquivos:
 
 ```text
-results/experiments/table_10/inception_v3/
+results/table_10/inception_v3/
 ├── metrics.csv
 ├── metrics.json
 └── manifest.json
@@ -326,7 +339,7 @@ table_10:
     m1:
       model: m1
       dataset: mnist
-      output_dir: results/mnist/article_reproduction/table_10_m1
+      output_dir: results/table_10/m1
       rows:
         - no: 1
           attack_model: "FGSM (ε=0.1)/M1"
@@ -359,7 +372,7 @@ table_10:
     googlenet:
       model: googlenet
       dataset: imagenet
-      output_dir: results/experiments/table_10/googlenet
+      output_dir: results/table_10/googlenet
       rows:
         - no: 5
           attack_model: "FGSM (ε=1/255)/GoogLeNet"
@@ -384,7 +397,7 @@ table_10:
     caffenet:
       model: caffenet
       dataset: imagenet
-      output_dir: results/experiments/table_10/caffenet
+      output_dir: results/table_10/caffenet
       rows:
         - no: 8
           attack_model: "DeepFool/CaffeNet"
@@ -396,7 +409,7 @@ table_10:
     m2:
       model: m2
       dataset: mnist
-      output_dir: results/mnist/article_reproduction/table_10_m2
+      output_dir: results/table_10/M2_cw
       rows:
         - no: 9
           attack_model: "CW L2 (κ=0.0)/M2"
@@ -442,7 +455,7 @@ table_10:
     inception_v3:
       model: inception_v3
       dataset: imagenet
-      output_dir: results/experiments/table_10/inception_v3
+      output_dir: results/table_10/inception_v3
       rows:
         - no: 14
           attack_model: "CW L2 (κ=0.0)/Inception v3"
@@ -575,8 +588,8 @@ Cada modelo deve ter seu próprio `manifest.json`.
     "f1"
   ],
   "outputs": {
-    "metrics_csv": "results/experiments/table_10/googlenet/metrics.csv",
-    "metrics_json": "results/experiments/table_10/googlenet/metrics.json"
+    "metrics_csv": "results/table_10/googlenet/metrics.csv",
+    "metrics_json": "results/table_10/googlenet/metrics.json"
   }
 }
 ```
@@ -606,8 +619,8 @@ Cada modelo deve ter seu próprio `manifest.json`.
     "f1"
   ],
   "outputs": {
-    "metrics_csv": "results/experiments/table_10/inception_v3/metrics.csv",
-    "metrics_json": "results/experiments/table_10/inception_v3/metrics.json"
+    "metrics_csv": "results/table_10/inception_v3/metrics.csv",
+    "metrics_json": "results/table_10/inception_v3/metrics.json"
   }
 }
 ```
@@ -688,7 +701,7 @@ python scripts/run_experiment.py --experiment table_10_inception_v3
 - Cada grupo possui `metrics.csv`.
 - Cada grupo possui `metrics.json`.
 - Cada grupo possui `manifest.json`.
-- Os grupos MNIST `m1` e `m2` escrevem em `results/mnist/article_reproduction/table_10_m1/` e `results/mnist/article_reproduction/table_10_m2/`.
+- Os grupos MNIST escrevem em `results/table_10/m1/`, `results/table_10/M2_cw_l2/` e `results/table_10/M2_cw_Linf/`.
 - Cada linha preserva o `No.` original do artigo.
 - O schema segue os campos da Table 10.
 - Linhas não executadas aparecem com métricas vazias.
@@ -714,23 +727,23 @@ python scripts/run_experiment.py --experiment table_10_inception_v3
 A estrutura estará pronta quando forem possíveis os seguintes arquivos:
 
 ```text
-results/mnist/article_reproduction/table_10_m1/metrics.csv
-results/mnist/article_reproduction/table_10_m1/metrics.json
-results/mnist/article_reproduction/table_10_m1/manifest.json
+results/table_10/m1/metrics.csv
+results/table_10/m1/metrics.json
+results/table_10/m1/manifest.json
 
-results/experiments/table_10/googlenet/metrics.csv
-results/experiments/table_10/googlenet/metrics.json
-results/experiments/table_10/googlenet/manifest.json
+results/table_10/googlenet/metrics.csv
+results/table_10/googlenet/metrics.json
+results/table_10/googlenet/manifest.json
 
-results/experiments/table_10/caffenet/metrics.csv
-results/experiments/table_10/caffenet/metrics.json
-results/experiments/table_10/caffenet/manifest.json
+results/table_10/caffenet/metrics.csv
+results/table_10/caffenet/metrics.json
+results/table_10/caffenet/manifest.json
 
-results/mnist/article_reproduction/table_10_m2/metrics.csv
-results/mnist/article_reproduction/table_10_m2/metrics.json
-results/mnist/article_reproduction/table_10_m2/manifest.json
+results/table_10/M2_cw/metrics.csv
+results/table_10/M2_cw/metrics.json
+results/table_10/M2_cw/manifest.json
 
-results/experiments/table_10/inception_v3/metrics.csv
-results/experiments/table_10/inception_v3/metrics.json
-results/experiments/table_10/inception_v3/manifest.json
+results/table_10/inception_v3/metrics.csv
+results/table_10/inception_v3/metrics.json
+results/table_10/inception_v3/manifest.json
 ```

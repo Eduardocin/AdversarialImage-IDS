@@ -94,7 +94,7 @@ def _touch_model_files(tmp_path, model_name="googlenet", caffemodel_name="bvlc_g
 
 
 def test_googlenet_caffe_wrapper_uses_attack_deploy_for_gradient(monkeypatch, tmp_path) -> None:
-    """Prediction should use the original net, while gradients use removeSoftmax."""
+    """Prediction should use the original net, while DeepFool gradients use removeSoftmax."""
     _install_fake_caffe(monkeypatch)
     model_dir, deploy, attack_deploy, caffemodel = _touch_model_files(tmp_path)
 
@@ -118,6 +118,32 @@ def test_googlenet_caffe_wrapper_uses_attack_deploy_for_gradient(monkeypatch, tm
     assert wrapper.net.backward_calls == []
     assert len(wrapper.attack_net.backward_calls) == 1
     assert "loss3/classifier" in wrapper.attack_net.backward_calls[0]
+
+
+def test_googlenet_caffe_wrapper_prediction_gradient_uses_original_prob(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """FGSM should backprop through the original softmax/prob graph."""
+    _install_fake_caffe(monkeypatch)
+    model_dir, deploy, attack_deploy, caffemodel = _touch_model_files(tmp_path)
+
+    wrapper = GoogLeNetCaffeWrapper(
+        model_dir=str(model_dir),
+        deploy_prototxt=str(deploy),
+        attack_deploy_prototxt=str(attack_deploy),
+        caffemodel=str(caffemodel),
+    )
+
+    gradient = wrapper.prediction_gradient(
+        np.zeros((3, 2, 2), dtype=np.float32),
+        class_id=2,
+    )
+
+    np.testing.assert_array_equal(gradient, np.full((3, 2, 2), 3.0, dtype=np.float32))
+    assert len(wrapper.net.backward_calls) == 1
+    assert "prob" in wrapper.net.backward_calls[0]
+    assert wrapper.attack_net.backward_calls == []
 
 
 def test_googlenet_caffe_wrapper_falls_back_to_prediction_deploy_for_gradient(

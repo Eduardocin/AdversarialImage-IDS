@@ -241,11 +241,11 @@ def test_filter_candidate_configs_define_expected_candidates() -> None:
     assert table8["kind"] == "imagenet_table_8"
     assert len(table3["filters"]) == 2
     assert len(table4_mnist["filters"]) == 9
-    assert table3["output_dir"] == "results/experiments/table_3"
-    assert table4["output_dir"] == "results/experiments/table_4"
-    assert table4_mnist["output_dir"] == "results/experiments/table_4/mnist"
-    assert table7["output_dir"] == "results/experiments/table_7"
-    assert table8["output_dir"] == "results/experiments/table_8"
+    assert table3["output_dir"] == "results/table_3"
+    assert table4["output_dir"] == "results/table_4"
+    assert table4_mnist["output_dir"] == "results/table_4/mnist"
+    assert table7["output_dir"] == "results/table_7"
+    assert table8["output_dir"] == "results/table_8"
 
     assert [row["type"] for row in table3["filters"]] == [
         "scalar_quantization",

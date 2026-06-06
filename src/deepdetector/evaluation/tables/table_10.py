@@ -14,7 +14,11 @@ from typing import Any
 
 import numpy as np
 
-from deepdetector.attacks.fgsm_imagenet import generate_fgsm_caffe_image, predict_caffe_label
+from deepdetector.attacks.fgsm_imagenet import (
+    generate_fgsm_caffe_image,
+    predict_caffe_label,
+    uses_caffe_scale,
+)
 from deepdetector.attacks.registry import generate_attack
 from deepdetector.data.fashion_mnist import load_fashion_mnist_evaluation_split
 from deepdetector.data.imagenet import resize_normalized_image
@@ -29,6 +33,7 @@ from deepdetector.evaluation.detector_metrics import (
     compute_precision_recall,
 )
 from deepdetector.filters.factory import build_filter_from_config
+from deepdetector.filters.entropy import image_entropy_255_chw, one_d_entropy
 from deepdetector.io.paths import ensure_dir, resolve_project_path
 from deepdetector.io.result_writers import write_metrics_csv, write_metrics_json
 from deepdetector.models.imagenet_wrappers import (
@@ -629,6 +634,93 @@ def _fgsm_epsilon_255(attack_config: dict[str, Any]) -> float:
     return 1.0
 
 
+def _validate_table_10_attack_graph_config(
+    group_config: dict[str, Any],
+    attack_name: str,
+) -> None:
+    model_group = str(group_config.get("model_group", "")).lower()
+    if model_group != "googlenet" or str(attack_name).lower() != "deepfool":
+        return
+
+    if not group_config.get("model", {}).get("attack_deploy_proto"):
+        raise ValueError(
+            "Table 10 DeepFool/GoogLeNet requires model.attack_deploy_proto "
+            "for deploy_removeSoftmax gradients."
+        )
+
+
+def _validate_deepfool_caffe_clip(
+    clean_image: np.ndarray,
+    attack_config: dict[str, Any],
+) -> None:
+    clip_max = float(attack_config.get("clip_max", 1.0))
+    if uses_caffe_scale(clean_image) and clip_max <= 1.0:
+        raise ValueError(
+            "Table 10 DeepFool received Caffe-scale input but clip_max <= 1.0; "
+            "set clip_max to 255.0."
+        )
+
+
+def _table_10_image_entropy(image: np.ndarray) -> float:
+    image_array = np.asarray(image, dtype=np.float32)
+    if image_array.ndim == 3 and uses_caffe_scale(image_array):
+        if image_array.shape[0] == 3:
+            return float(image_entropy_255_chw(image_array))
+        if image_array.shape[-1] == 3:
+            return float(image_entropy_255_chw(np.transpose(image_array, (2, 0, 1))))
+    return float(one_d_entropy(image_array))
+
+
+def _diagnostic_enabled(config: dict[str, Any], total_images: int) -> bool:
+    if str(config.get("model_group", "")).lower() != "googlenet":
+        return False
+    evaluation_config = config.get("evaluation", {})
+    if "log_sample_diagnostics" in evaluation_config:
+        return bool(evaluation_config["log_sample_diagnostics"])
+    return total_images <= 10
+
+
+def _log_table_10_sample_diagnostic(
+    *,
+    sample_index: int,
+    true_label: int,
+    clean_pred: int,
+    adv_pred: int,
+    clean_image: np.ndarray,
+    adversarial_image: np.ndarray,
+    attack_failed: bool,
+    filtered_adv_pred: int | None = None,
+    detected: bool = False,
+    corrected: bool = False,
+) -> None:
+    delta = np.abs(
+        np.asarray(adversarial_image, dtype=np.float32)
+        - np.asarray(clean_image, dtype=np.float32)
+    )
+    logger.info(
+        "Table 10 GoogLeNet sample diagnostic | "
+        "sample_index=%d true_label=%d clean_pred=%d adv_pred=%d "
+        "attack_failed=%s clean_min=%f clean_max=%f adv_min=%f adv_max=%f "
+        "linf_delta=%f entropy_clean=%f entropy_adv=%f filtered_adv_pred=%s "
+        "detected=%s corrected=%s",
+        int(sample_index),
+        int(true_label),
+        int(clean_pred),
+        int(adv_pred),
+        bool(attack_failed),
+        float(np.nanmin(clean_image)),
+        float(np.nanmax(clean_image)),
+        float(np.nanmin(adversarial_image)),
+        float(np.nanmax(adversarial_image)),
+        float(np.nanmax(delta)) if delta.size else 0.0,
+        _table_10_image_entropy(clean_image),
+        _table_10_image_entropy(adversarial_image),
+        "" if filtered_adv_pred is None else str(int(filtered_adv_pred)),
+        bool(detected),
+        bool(corrected),
+    )
+
+
 def _generate_table_10_adversarial(
     *,
     attack_name: str,
@@ -648,6 +740,9 @@ def _generate_table_10_adversarial(
             clip_min=float(attack_config.get("clip_min", 0.0)),
             clip_max=float(attack_config.get("clip_max", 255.0)),
         )
+
+    if attack_name == "deepfool":
+        _validate_deepfool_caffe_clip(clean_image, attack_config)
 
     adversarial_batch = generate_attack(
         attack_name,
@@ -694,6 +789,7 @@ def evaluate_table_10_imagenet_row(
     attack_name = str(attack_config.get("name", "")).strip()
     if not attack_name:
         raise ValueError("Implemented Table 10 rows must define attack.name.")
+    _validate_table_10_attack_graph_config(group_config, attack_name)
 
     logger.info(
         "Evaluating Table 10 row %s with %s.",
@@ -713,6 +809,7 @@ def evaluate_table_10_imagenet_row(
     records: list[dict[str, Any]] = []
     total_images = len(images)
     progress_every = _progress_interval(total_images)
+    log_sample_diagnostics = _diagnostic_enabled(group_config, total_images)
     for sample_index, clean_image in enumerate(images):
         true_label = int(labels[sample_index])
         clean_pred = _predict_one(model, clean_image)
@@ -762,6 +859,16 @@ def evaluate_table_10_imagenet_row(
 
         adv_pred = _predict_one(model, adversarial_image)
         if adv_pred == clean_pred:
+            if log_sample_diagnostics:
+                _log_table_10_sample_diagnostic(
+                    sample_index=int(sample_index),
+                    true_label=true_label,
+                    clean_pred=int(clean_pred),
+                    adv_pred=int(adv_pred),
+                    clean_image=clean_image,
+                    adversarial_image=adversarial_image,
+                    attack_failed=True,
+                )
             records.append(
                 {
                     "sample_index": int(sample_index),
@@ -794,6 +901,23 @@ def evaluate_table_10_imagenet_row(
         )
         filtered_clean_pred = _predict_one(model, filtered_clean)
         filtered_adv_pred = _predict_one(model, filtered_adv)
+        detected = bool(filtered_adv_pred != adv_pred)
+        corrected = bool(filtered_adv_pred == true_label)
+        false_positive = bool(filtered_clean_pred != clean_pred)
+
+        if log_sample_diagnostics:
+            _log_table_10_sample_diagnostic(
+                sample_index=int(sample_index),
+                true_label=true_label,
+                clean_pred=int(clean_pred),
+                adv_pred=int(adv_pred),
+                clean_image=clean_image,
+                adversarial_image=adversarial_image,
+                attack_failed=False,
+                filtered_adv_pred=int(filtered_adv_pred),
+                detected=detected,
+                corrected=corrected,
+            )
 
         records.append(
             {
@@ -803,9 +927,9 @@ def evaluate_table_10_imagenet_row(
                 "adv_pred": int(adv_pred),
                 "filtered_clean_pred": int(filtered_clean_pred),
                 "filtered_adv_pred": int(filtered_adv_pred),
-                "detected": bool(filtered_adv_pred != adv_pred),
-                "corrected": bool(filtered_adv_pred == true_label),
-                "false_positive": bool(filtered_clean_pred != clean_pred),
+                "detected": detected,
+                "corrected": corrected,
+                "false_positive": false_positive,
             }
         )
         if (sample_index + 1) == 1 or (sample_index + 1) == total_images or (sample_index + 1) % progress_every == 0:

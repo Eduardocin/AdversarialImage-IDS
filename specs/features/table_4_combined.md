@@ -23,7 +23,7 @@ must not be hidden behind a separate result tree unrelated to Table 4.
   and filter or filter family.
 - Global defaults may only define output filenames.
 - The outputs must share the same Table 4 result root:
-  `results/experiments/table_4/`.
+  `results/table_4/`.
 - MNIST and ImageNet outputs must remain separated below that root because their
   CSV schemas are different.
 
@@ -50,8 +50,8 @@ must not be hidden behind a separate result tree unrelated to Table 4.
   `table_4_imagenet`.
 - `table_4.kind == composite`.
 - `table_4.components == [table_4_mnist, table_4_imagenet]`.
-- `table_4_mnist.output_dir == results/experiments/table_4/mnist`.
-- `table_4_imagenet.output_dir == results/experiments/table_4/imagenet`.
+- `table_4_mnist.output_dir == results/table_4/mnist`.
+- `table_4_imagenet.output_dir == results/table_4/imagenet`.
 - The consolidated runner can build configs for all three entries.
 - The composite runner executes components in declared order.
 - Tests cover config fidelity and composite dispatch.

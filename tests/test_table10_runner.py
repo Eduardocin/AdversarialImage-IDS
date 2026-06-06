@@ -78,13 +78,13 @@ def test_table10_config_declares_one_experiment_per_model_group() -> None:
 
     for experiment_name, (model_group, dataset_label, row_numbers) in TABLE10_EXPERIMENTS.items():
         experiment = experiments[experiment_name]
-        expected_output_dir = "results/experiments/table_10/{0}".format(model_group)
-        if experiment_name in {"table_10_m1", "table_10_m2"}:
-            expected_output_dir = "results/mnist/article_reproduction/{0}".format(
-                experiment_name
-            )
+        expected_output_dir = "results/table_10/{0}".format(model_group)
+        if experiment_name == "table_10_m1":
+            expected_output_dir = "results/table_10/m1"
         if experiment_name == "table_10_googlenet":
-            expected_output_dir = "results/experiments/table_10/imagenet/googlenet"
+            expected_output_dir = "results/table_10/imagenet/googlenet"
+        if experiment_name == "table_10_m2":
+            expected_output_dir = "results/table_10/M2_cw"
 
         assert experiment["kind"] == "table_10_group"
         assert experiment["model_group"] == model_group
@@ -126,7 +126,12 @@ def test_table10_googlenet_config_enables_deepfool_metrics() -> None:
     ]
     assert row["status"] == "implemented"
     assert row["attack"]["name"] == "deepfool"
+    assert row["attack"]["clip_min"] == 0.0
+    assert row["attack"]["clip_max"] == 255.0
     assert row["attack"]["num_classes"] == 10
+
+    fgsm_rows = [item for item in experiment["rows"] if item["attack"]["name"] == "fgsm"]
+    assert [row["attack"]["clip_max"] for row in fgsm_rows] == [255.0, 255.0]
 
 
 def test_table10_googlenet_builder_passes_attack_deploy_to_wrapper(
@@ -1023,14 +1028,17 @@ def test_table10_googlenet_deepfool_row_computes_metrics(monkeypatch) -> None:
     result = evaluate_table_10_googlenet_row(
         {
             "dataset": {"name": "imagenet"},
-            "model": {"name": "googlenet_caffe"},
+            "model": {
+                "name": "googlenet_caffe",
+                "attack_deploy_proto": "deploy_removeSoftmax.prototxt",
+            },
             "filter": {"name": "test_filter", "type": "proposed_detection_filter"},
         },
         {
             "no": 7,
             "attack_model": "DeepFool/GoogLeNet",
             "status": "implemented",
-            "attack": {"name": "deepfool", "max_iter": 3},
+            "attack": {"name": "deepfool", "max_iter": 3, "clip_max": 255.0},
         },
     )
 
@@ -1079,6 +1087,108 @@ def test_table10_googlenet_fgsm_row_uses_caffe_attack(monkeypatch) -> None:
 
     assert calls == [(1, 1.0, 0.0, 255.0)]
     assert float(adversarial.reshape(-1)[0]) == 1.0
+
+
+def test_table10_googlenet_fgsm_row_2_uses_two_pixel_step(monkeypatch) -> None:
+    """Row 6 epsilon=2/255 should become a raw two-pixel Caffe step."""
+    calls = []
+
+    def fake_generate_fgsm_caffe_image(
+        model,
+        image,
+        class_id,
+        epsilon_255,
+        clip_min,
+        clip_max,
+    ):
+        calls.append((class_id, epsilon_255, clip_min, clip_max))
+        return image + 2.0
+
+    monkeypatch.setattr(
+        table_10_module,
+        "generate_fgsm_caffe_image",
+        fake_generate_fgsm_caffe_image,
+    )
+
+    adversarial = table_10_module._generate_table_10_adversarial(
+        attack_name="fgsm",
+        row_config={"attack": {"name": "fgsm", "epsilon": 2 / 255, "clip_max": 255.0}},
+        model=Table10DummyModel(),
+        clean_image=table_10_module.np.zeros((1, 1, 1), dtype=table_10_module.np.float32),
+        true_label=1,
+        clean_pred=1,
+    )
+
+    assert calls == [(1, 2.0, 0.0, 255.0)]
+    assert float(adversarial.reshape(-1)[0]) == 2.0
+
+
+def test_table10_googlenet_deepfool_row_passes_caffe_clip(monkeypatch) -> None:
+    """DeepFool should receive Caffe-scale clipping for GoogLeNet row 7."""
+    calls = []
+
+    def fake_generate_attack(name, model, images, labels, **kwargs):
+        calls.append((name, kwargs["clip_min"], kwargs["clip_max"]))
+        return images + 1.0
+
+    monkeypatch.setattr(table_10_module, "generate_attack", fake_generate_attack)
+
+    adversarial = table_10_module._generate_table_10_adversarial(
+        attack_name="deepfool",
+        row_config={
+            "attack": {
+                "name": "deepfool",
+                "max_iter": 50,
+                "clip_min": 0.0,
+                "clip_max": 255.0,
+            }
+        },
+        model=Table10DummyModel(),
+        clean_image=table_10_module.np.full(
+            (3, 2, 2),
+            128.0,
+            dtype=table_10_module.np.float32,
+        ),
+        true_label=1,
+        clean_pred=1,
+    )
+
+    assert calls == [("deepfool", 0.0, 255.0)]
+    assert float(adversarial.reshape(-1)[0]) == 129.0
+
+
+def test_table10_googlenet_deepfool_rejects_unit_clip_for_caffe_input() -> None:
+    """Caffe-scale DeepFool must fail before silently clipping to [0,1]."""
+    with pytest.raises(ValueError, match="clip_max <= 1.0"):
+        table_10_module._generate_table_10_adversarial(
+            attack_name="deepfool",
+            row_config={"attack": {"name": "deepfool", "clip_min": 0.0, "clip_max": 1.0}},
+            model=Table10DummyModel(),
+            clean_image=table_10_module.np.full(
+                (3, 2, 2),
+                128.0,
+                dtype=table_10_module.np.float32,
+            ),
+            true_label=1,
+            clean_pred=1,
+        )
+
+
+def test_table10_googlenet_deepfool_requires_attack_deploy_config() -> None:
+    """GoogLeNet DeepFool should require the removeSoftmax attack graph."""
+    with pytest.raises(ValueError, match="attack_deploy_proto"):
+        evaluate_table_10_googlenet_row(
+            {
+                "dataset": {"name": "imagenet"},
+                "model": {"name": "googlenet_caffe"},
+            },
+            {
+                "no": 7,
+                "attack_model": "DeepFool/GoogLeNet",
+                "status": "implemented",
+                "attack": {"name": "deepfool", "clip_max": 255.0},
+            },
+        )
 
 
 def test_table10_inception_v3_row_computes_cw_metrics(monkeypatch) -> None:
@@ -1281,7 +1391,13 @@ def test_table10_googlenet_evaluator_requires_dataset_config(monkeypatch) -> Non
 
     with pytest.raises(ValueError, match="images_dir"):
         evaluate_table_10_googlenet_row(
-            {"dataset": {"name": "imagenet"}, "model": {"name": "googlenet_caffe"}},
+            {
+                "dataset": {"name": "imagenet"},
+                "model": {
+                    "name": "googlenet_caffe",
+                    "attack_deploy_proto": "deploy_removeSoftmax.prototxt",
+                },
+            },
             {"attack": {"name": "deepfool"}},
         )
 

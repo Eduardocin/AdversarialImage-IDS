@@ -36,8 +36,8 @@ resultado correspondente no inventario atual do codigo.
 Cada execucao simples escreve:
 
 ```text
-results/experiments/<experiment_id>/metrics.csv
-results/experiments/<experiment_id>/metrics.json
+results/<experiment_id>/metrics.csv
+results/<experiment_id>/metrics.json
 ```
 
 Tables 7 e 8 ImageNet sao excecoes de formato: escrevem pivots
@@ -45,16 +45,15 @@ Tables 7 e 8 ImageNet sao excecoes de formato: escrevem pivots
 `table_*_status.json`.
 
 Table 4 e excecao composta: seus resultados ficam em
-`results/experiments/table_4/mnist/` e `results/experiments/table_4/imagenet/`,
+`results/table_4/mnist/` e `results/table_4/imagenet/`,
 com `manifest.json` na raiz da tabela. Table 6 e Table 9 tambem executam MNIST
 e ImageNet internamente, mas escrevem somente os agregados oficiais em
-`results/experiments/table_6/` e `results/experiments/table_9/`.
+`results/table_6/` e `results/table_9/`.
 
 Table 10 tambem e separada por grupo de modelo. Os grupos ImageNet escrevem
 `metrics.csv`, `metrics.json` e `manifest.json` em
-`results/experiments/table_10/<grupo>/`. Os grupos MNIST escrevem em
-`results/mnist/article_reproduction/table_10_m1/` e
-`results/mnist/article_reproduction/table_10_m2/`.
+`results/table_10/<grupo>/`. O M2 CW fica separado em
+`results/table_10/M2_cw_l2/` e `results/table_10/M2_cw_Linf/`.
 
 Para preparar checkpoints Fashion-MNIST antes dos experimentos publicos:
 

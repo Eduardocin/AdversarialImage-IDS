@@ -156,6 +156,26 @@ def write_pivot_csv(
     return write_shared_pivot_csv(path=path, rows=rows, columns=columns)
 
 
+def _status_counts(rows: Sequence[Dict[str, Any]]) -> Dict[str, int]:
+    """Return filter-independent Table 7 sample-selection counters."""
+    if not rows:
+        return {
+            "attack_success": 0,
+            "disturbed_failure": 0,
+            "skipped_low_entropy_clean": 0,
+            "n_high_entropy_clean": 0,
+            "n_high_entropy_adversarial": 0,
+        }
+    first_row = rows[0]
+    return {
+        "attack_success": int(first_row["attack_success"]),
+        "disturbed_failure": int(first_row["disturbed_failure"]),
+        "skipped_low_entropy_clean": int(first_row["skipped_low_entropy_clean"]),
+        "n_high_entropy_clean": int(first_row["n_high_entropy_clean"]),
+        "n_high_entropy_adversarial": int(first_row["n_high_entropy_adversarial"]),
+    }
+
+
 def run_table7_imagenet_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
     """Run the official ImageNet Table 7 experiment and write pivot outputs."""
     output_dir = ensure_dir(_output_dir(config))
@@ -255,8 +275,23 @@ def run_table7_imagenet_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
             entropy_threshold=float(config.get("filter", {}).get("entropy_threshold", 5.0)),
         )
         row = asdict(result)
+        row["total_images"] = clean_summary["total_images"]
+        row["clean_correct"] = clean_summary["clean_correct"]
         row["skipped_wrong_baseline"] = clean_summary["skipped_wrong_baseline"]
         rows.append(row)
+
+    status_counts = _status_counts(rows)
+    if status_counts["n_high_entropy_clean"] == 0:
+        path = _write_status(
+            output_dir=output_dir,
+            config=config,
+            status="parcial",
+            limitation="nenhum_adversarial_high_entropy_bem_sucedido",
+            n_loaded=int(len(images)),
+            **clean_summary,
+            **status_counts,
+        )
+        return {"status": "parcial", "status_json": str(path)}
 
     output_config = config.get("output", config.get("outputs", {}))
     pivot_path = write_pivot_csv(
@@ -270,6 +305,7 @@ def run_table7_imagenet_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
         n_loaded=int(len(images)),
         pivot_csv=str(pivot_path),
         **clean_summary,
+        **status_counts,
     )
     return {
         "status": "completo",

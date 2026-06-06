@@ -71,6 +71,19 @@ def test_table8_rejects_non_fixed_filter_sets() -> None:
         list(table8_imagenet_runner.configured_filters(config))
 
 
+def test_table8_ignores_mask_grid_config_and_keeps_fixed_filters() -> None:
+    """Table 8 must not use mask_types/sizes as a local filter search grid."""
+    config = {"filter": {"mask_types": ["box"], "sizes": [3]}}
+
+    assert list(table8_imagenet_runner.configured_filters(config)) == [
+        ("cross", 5),
+        ("cross", 7),
+        ("diamond", 5),
+        ("diamond", 7),
+        ("box", 5),
+    ]
+
+
 def test_table8_write_pivot_csv_uses_fixed_columns_and_metric_rows(tmp_path) -> None:
     """The Table 8 CSV should be the article-style pivot required by the spec."""
     rows = [
@@ -138,6 +151,59 @@ def test_table8_evaluation_filters_clean_baseline_and_disturbed_failures(monkeyp
     assert result.fn == 0
     assert result.fp == 1
     assert result.precision == 0.5
+
+
+def test_table8_evaluation_does_not_filter_by_entropy(monkeypatch) -> None:
+    """Validation samples should not be included or excluded by entropy."""
+    dataset = (
+        np.asarray([_marker_image(10)], dtype=np.float32),
+        np.asarray([1], dtype=np.int32),
+        np.asarray([_marker_image(20)], dtype=np.float32),
+    )
+
+    def fail_entropy(image: np.ndarray) -> float:
+        raise AssertionError("Table 8 must not call entropy filtering")
+
+    monkeypatch.setattr(table8_module, "_entropy_for_image", fail_entropy, raising=False)
+    monkeypatch.setattr(
+        table8_module,
+        "_apply_table8_filter_to_model_input",
+        lambda image, mask_type, size: image,
+    )
+
+    result = table8_module.evaluate_table8_filter(
+        model=MarkerModel(),
+        dataset=dataset,
+        mask_type="cross",
+        size=5,
+    )
+
+    assert result.attack_success == 1
+    assert result.tp == 0
+    assert result.fn == 1
+    assert result.fp == 0
+
+
+def test_table8_filter_application_reuses_table7_spatial_smoothing(monkeypatch) -> None:
+    """Table 8 should delegate image filtering to the shared Table 7 smoothing filter."""
+    calls = []
+    image = np.zeros((3, 3, 3), dtype=np.float32)
+    image[0, 0, 0] = 10.0
+
+    def fake_table7_filter(image: np.ndarray, mask_type: str, size: int) -> np.ndarray:
+        calls.append((mask_type, size))
+        return image + 1.0
+
+    monkeypatch.setattr(table8_module, "table7_filter", fake_table7_filter)
+
+    filtered = table8_module._apply_table8_filter_to_model_input(
+        image=image,
+        mask_type="diamond",
+        size=7,
+    )
+
+    assert calls == [("diamond", 7)]
+    np.testing.assert_array_equal(filtered, image + 1.0)
 
 
 def test_table8_default_config_uses_validation_split() -> None:

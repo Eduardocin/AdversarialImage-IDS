@@ -148,7 +148,7 @@ def test_table_10_googlenet_deepfool_row_has_config() -> None:
     assert row["attack"]["max_iter"] == 50
     assert row["attack"]["overshoot"] == 0.02
     assert row["attack"]["clip_min"] == 0.0
-    assert row["attack"]["clip_max"] == 1.0
+    assert row["attack"]["clip_max"] == 255.0
     assert (
         config["experiments"]["table_10_googlenet"]["model"]["deploy_proto"]
         == "artifacts/models/imagenet/googlenet/deploy_original.prototxt"

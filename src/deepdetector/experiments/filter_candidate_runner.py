@@ -44,7 +44,7 @@ def _output_dir(config: Dict[str, Any], experiment_id: str) -> Any:
     )
     if output_dir is not None:
         return output_dir
-    return resolve_project_path("results/experiments/{0}".format(experiment_id))
+    return resolve_project_path("results/{0}".format(experiment_id))
 
 
 def _output_name(config: Dict[str, Any], key: str, default: str) -> str:
