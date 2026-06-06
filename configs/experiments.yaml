@@ -36,7 +36,7 @@ experiments:
         clip_min: 0.0
         clip_max: 1.0
       defense_aware:
-        type: original_adaptive_cw_l2
+        type: adaptive_cw_l2
         nn_robust_attacks_root: nn_robust_attacks
         targeted: false
         confidence: 0
