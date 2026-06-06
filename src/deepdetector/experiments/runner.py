@@ -13,6 +13,7 @@ from deepdetector.experiments.table8_imagenet_runner import run_table8_imagenet_
 from deepdetector.experiments.table9_runner import run_table9_experiment
 from deepdetector.experiments.table4_imagenet_runner import run_table4_imagenet_experiment
 from deepdetector.experiments.table10_runner import run_table10_group_experiment
+from deepdetector.experiments.topk_detection import run_topk_detection_experiment
 from deepdetector.io.paths import resolve_project_path
 from deepdetector.io.result_writers import write_metrics_json
 
@@ -164,6 +165,13 @@ def build_experiment_config(
         base_config["filter"] = dict(experiment.get("filter", {}))
         return base_config
 
+    if kind == "topk_detection":
+        base_config["filter"] = dict(experiment.get("filter", {}))
+        base_config["ambiguity_selection"] = dict(experiment.get("ambiguity_selection", {}))
+        base_config["topk_detection"] = dict(experiment.get("topk_detection", {}))
+        base_config["seed"] = int(experiment.get("seed", 42))
+        return base_config
+
     if kind == "filter_grid":
         dataset_override = dict(experiment.get("dataset", {}))
         slice_config = dict(experiment.get("slice", {}))
@@ -278,4 +286,6 @@ def run_experiment(name: str, consolidated_config: Dict[str, Any]):
         return run_table8_imagenet_experiment(config)
     if kind == "table_10_group":
         return run_table10_group_experiment(config)
+    if kind == "topk_detection":
+        return run_topk_detection_experiment(config)
     raise ValueError("Unknown experiment kind: {0}".format(kind))
