@@ -12,7 +12,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-from deepdetector.attacks.adaptive_cw_l2 import generate_native_adaptive_cw_l2_attack
+from deepdetector.attacks.adaptive_cw_l2 import (
+    generate_native_adaptive_cw_l2_attack,
+    generate_original_adaptive_cw_l2_attack,
+)
 from deepdetector.attacks.nn_robust import generate_nn_robust_cw_l2_attack
 from deepdetector.evaluation.article_reproduction import (
     label_to_int,
@@ -408,15 +411,18 @@ def _adaptive_attack_fn(
     attack_type = str(attack_config.get("type", "native_adaptive_cw_l2")).strip().lower()
     if attack_type == "native_adaptive_cw_l2":
         attack_generator = generate_native_adaptive_cw_l2_attack
+    elif attack_type == "original_adaptive_cw_l2":
+        attack_generator = generate_original_adaptive_cw_l2_attack
     else:
         raise ValueError("Unsupported defense-aware attack type: {0}".format(attack_type))
 
     def attack(image: np.ndarray, true_label: int, clean_pred: int) -> np.ndarray:
         call_kwargs = dict(kwargs)
 
-        call_kwargs["transform_fn"] = transform_fn
-        call_kwargs["predict_fn"] = predict_fn
-        if diagnostic_records is not None:
+        if attack_type == "native_adaptive_cw_l2":
+            call_kwargs["transform_fn"] = transform_fn
+            call_kwargs["predict_fn"] = predict_fn
+        if attack_type == "native_adaptive_cw_l2" and diagnostic_records is not None:
             call_kwargs["diagnostics"] = diagnostic_records
             call_kwargs["diagnostic_context"] = {
                 "valid_index": len(diagnostic_records),

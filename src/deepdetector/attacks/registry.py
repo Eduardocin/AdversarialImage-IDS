@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from deepdetector.attacks.adaptive_cw_l2 import generate_native_adaptive_cw_l2_attack
+from deepdetector.attacks.adaptive_cw_l2 import (
+    generate_native_adaptive_cw_l2_attack,
+    generate_original_adaptive_cw_l2_attack,
+)
 from deepdetector.attacks.deepfool import generate_deepfool
 from deepdetector.attacks.fgsm import generate_fgsm_examples
 from deepdetector.attacks.nn_robust import (
@@ -18,6 +21,7 @@ AttackGenerator = Callable[..., Any]
 
 ATTACK_REGISTRY: dict[str, AttackGenerator] = {
     "native_adaptive_cw_l2": generate_native_adaptive_cw_l2_attack,
+    "original_adaptive_cw_l2": generate_original_adaptive_cw_l2_attack,
     "cw_l2_nn_robust": generate_nn_robust_cw_l2_attack,
     "cw_linf_nn_robust": generate_nn_robust_cw_linf_attack,
     "fgsm": generate_fgsm_examples,

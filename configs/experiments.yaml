@@ -36,7 +36,8 @@ experiments:
         clip_min: 0.0
         clip_max: 1.0
       defense_aware:
-        type: native_adaptive_cw_l2
+        type: original_adaptive_cw_l2
+        nn_robust_attacks_root: nn_robust_attacks
         targeted: false
         confidence: 0
         max_iterations: 2000
@@ -47,6 +48,10 @@ experiments:
         input_range:
           min: 0.0
           max: 1.0
+        attack_box:
+          min: -0.5
+          max: 0.5
+        model_input_shift: 0.5
     detector:
       type: final_adaptive_detection_filter
       entropy_thresholds:
@@ -60,7 +65,7 @@ experiments:
         type: cross_mean
         radius: 3
     diagnostics:
-      enabled: true
+      enabled: false
       json: diagnostics.json
 
   table_3:

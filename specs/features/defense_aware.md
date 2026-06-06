@@ -24,7 +24,7 @@ Este experimento deve:
 * utilizar MNIST como dataset;
 * utilizar o modelo MNIST M2;
 * utilizar Carlini & Wagner L2 como ataque base;
-* implementar uma versão adaptativa do CW-L2;
+* implementar uma integração com a versão adaptativa original do CW-L2;
 * comparar ataque defense-unaware e defense-aware;
 * aplicar a transformação final adaptativa do DeepDetector durante a avaliação;
 * produzir métricas agregadas de sucesso do ataque, taxa de detecção, taxa de evasão e distância L2;
@@ -52,7 +52,7 @@ Além dos itens excluídos no escopo, esta especificação não inclui:
 
 * vendorização dos arquivos originais em `src/deepdetector`;
 * uso dos arquivos em `temp/` como dependência de runtime;
-* uso de `nn_robust_attacks/l2_adaptive_attack.py` como backend oficial do ataque adaptativo;
+* uso direto de arquivos em `temp/` como dependência de runtime;
 * criação de uma interface pública separada para o ataque adaptativo;
 * alteração da lógica oficial do filtro final adaptativo fora do necessário para manter consistência com esta especificação.
 
@@ -94,7 +94,7 @@ Test/CW/l2_adaptive_attack.py
 
 A implementação deste projeto deve reproduzir o comportamento metodológico desses arquivos de forma compatível com a arquitetura atual, mas **sem usar os arquivos de `temp/` ou `Test/CW/` como parte do projeto**.
 
-O ataque adaptativo oficial deve ser uma implementação nativa em `src/deepdetector`. A referência original serve apenas para entender a regra de busca: durante o loop de otimização do CW-L2, o melhor candidato defense-aware só é atualizado quando o candidato também evade a transformação do detector.
+O ataque adaptativo oficial deve ser executado por meio de um wrapper nativo em `src/deepdetector` que carrega `CarliniL2Adaptive` do checkout externo configurável `nn_robust_attacks/l2_adaptive_attack.py`. Os arquivos em `temp/` servem como fonte local de referência para restaurar esse backend externo, mas não devem ser importados pelo runtime do pacote.
 
 ---
 
@@ -159,7 +159,8 @@ defense_aware:
       learning_rate: 0.1
 
     defense_aware:
-      type: native_adaptive_cw_l2
+      type: original_adaptive_cw_l2
+      nn_robust_attacks_root: nn_robust_attacks
       targeted: false
       confidence: 0
       max_iterations: 2000
@@ -169,6 +170,10 @@ defense_aware:
       input_range:
         min: 0.0
         max: 1.0
+      attack_box:
+        min: -0.5
+        max: 0.5
+      model_input_shift: 0.5
 
   detector:
     type: final_adaptive_detection_filter
@@ -264,7 +269,7 @@ Esse ataque não deve receber o detector como entrada durante a otimização.
 
 ## Defense-Aware Adaptive CW-L2
 
-O ataque defense-aware deve utilizar uma implementação nativa adaptativa do CW-L2 em `src/deepdetector`.
+O ataque defense-aware deve utilizar o `CarliniL2Adaptive` original por meio de um wrapper em `src/deepdetector`.
 
 O ataque conhece:
 
@@ -285,21 +290,24 @@ Essa rejeição deve acontecer durante a busca do CW-L2, não apenas depois que 
 
 ---
 
-## Native Adaptive CW-L2 Search
+## Original Adaptive CW-L2 Search
 
-A implementação oficial do ataque defense-aware deve ser nativa no pacote `deepdetector`.
+A implementação oficial do ataque defense-aware deve carregar o backend externo configurável:
 
-Ela não deve importar, copiar em runtime, executar ou depender de:
+```text
+nn_robust_attacks/l2_adaptive_attack.py
+```
+
+Ela não deve importar ou executar diretamente:
 
 ```text
 temp/adaptive_CWL2_MNIST.py
 temp/l2_adaptive_attack.py
-nn_robust_attacks/l2_adaptive_attack.py
 ```
 
-Os arquivos em `temp/` podem ser usados apenas como referência de comportamento durante análise humana. Eles não devem ser tratados como código do projeto, fixture de teste, backend configurável ou dependência de execução.
+Os arquivos em `temp/` podem ser usados como referência de comportamento e como fonte local para restaurar o arquivo do checkout externo `nn_robust_attacks/l2_adaptive_attack.py`. Eles não devem ser tratados como módulo do pacote `deepdetector`.
 
-O ataque nativo deve seguir a estrutura conceitual do CW-L2:
+O backend original deve seguir a estrutura do CW-L2:
 
 1. otimizar uma variável modificadora em espaço limitado por caixa;
 2. usar a perda CW-L2 padrão para gerar candidatos adversariais;
@@ -365,7 +373,7 @@ Essa estratégia de pós-filtragem pode existir apenas como implementação expe
 * Carregar MNIST test no intervalo configurado por `start` e `end`.
 * Carregar e avaliar o modelo MNIST M2.
 * Gerar o ataque defense-unaware com CW-L2 padrão.
-* Gerar o ataque defense-aware com CW-L2 adaptativo nativo.
+* Gerar o ataque defense-aware com `CarliniL2Adaptive` original carregado de `nn_robust_attacks/l2_adaptive_attack.py`.
 * Avaliar candidatos intermediários do ataque adaptativo dentro do loop de otimização.
 * Escrever somente `metrics.csv` e `metrics.json` no diretório oficial do experimento.
 * Quando `diagnostics.enabled == true`, escrever também `diagnostics.json`.
@@ -375,7 +383,7 @@ Essa estratégia de pós-filtragem pode existir apenas como implementação expe
 ## Non-Functional Requirements
 
 * Manter a implementação simples, legível e compatível com os padrões existentes em `deepdetector`.
-* Evitar dependências novas quando as APIs atuais de TensorFlow/Keras e NumPy forem suficientes.
+* Evitar dependências novas além do checkout externo já utilizado `nn_robust_attacks`.
 * Preservar a escala pública `[0.0, 1.0]` para imagens avaliadas pelo modelo, filtro e métricas.
 * Não gerar datasets, pesos, adversariais persistidos ou relatórios adicionais.
 * Manter os arquivos em `temp/` fora do projeto e fora dos testes automatizados.
@@ -994,7 +1002,17 @@ O script público deve apenas resolver a configuração e chamar o experimento i
 
 ## Adaptive Attack Requirement
 
-A implementação do ataque adaptativo deve aceitar uma função de transformação:
+A implementação do ataque adaptativo deve carregar `CarliniL2Adaptive` a partir de:
+
+```text
+nn_robust_attacks/l2_adaptive_attack.py
+```
+
+O wrapper do projeto deve converter imagens públicas `[0.0, 1.0]` para a escala centralizada `[-0.5, 0.5]` esperada pelo backend original, executar o ataque e converter a saída de volta para `[0.0, 1.0]`.
+
+Se o arquivo `l2_adaptive_attack.py` ou a classe `CarliniL2Adaptive` não estiver disponível, a execução deve falhar com erro claro.
+
+A implementação nativa experimental do ataque adaptativo pode aceitar uma função de transformação:
 
 ```python
 transform_fn
@@ -1006,15 +1024,17 @@ ou um objeto detector:
 detector
 ```
 
-O ataque adaptativo não deve duplicar manualmente toda a lógica do filtro dentro da classe de ataque caso já exista uma implementação reutilizável em:
+O caminho oficial com `CarliniL2Adaptive` segue a transformação embutida no arquivo original. O wrapper do projeto não deve importar os arquivos de `temp/` em runtime.
+
+A implementação nativa experimental não deve duplicar manualmente toda a lógica do filtro dentro da classe de ataque caso já exista uma implementação reutilizável em:
 
 ```text
 src/deepdetector/filters/
 ```
 
-O ataque adaptativo deve avaliar candidatos intermediários dentro do loop de otimização do CW-L2. A função `transform_fn` deve participar do critério de aceitação desses candidatos intermediários.
+O ataque adaptativo deve avaliar candidatos intermediários dentro do loop de otimização do CW-L2. No backend original, isso ocorre pela regra `mnistPredicate(ii) == transformed(ii)` antes de atualizar `o_bestattack`.
 
-O ataque adaptativo oficial não deve depender do backend externo `CarliniL2Adaptive`. O uso de `nn_robust_attacks.CarliniL2` continua permitido para o cenário defense-unaware e para comparação, mas não satisfaz por si só o requisito do cenário defense-aware se o detector for aplicado apenas ao resultado final.
+O uso de `nn_robust_attacks.CarliniL2` continua permitido para o cenário defense-unaware e para comparação, mas não satisfaz por si só o requisito do cenário defense-aware se o detector for aplicado apenas ao resultado final.
 
 ---
 
@@ -1140,9 +1160,11 @@ python scripts/run_experiment.py --experiment defense_aware
 
 * O experimento executa internamente os cenários defense-unaware e defense-aware.
 * O defense-unaware usa CW-L2 padrão via `nn_robust_attacks.CarliniL2`.
-* O defense-aware usa uma implementação nativa de CW-L2 adaptativo em `src/deepdetector`.
-* O defense-aware não depende de `temp/l2_adaptive_attack.py` nem de `nn_robust_attacks/l2_adaptive_attack.py`.
-* O ataque adaptativo conhece a transformação `T`.
+* O defense-aware usa `CarliniL2Adaptive` original por meio de wrapper em `src/deepdetector`.
+* O defense-aware carrega o backend de `nn_robust_attacks/l2_adaptive_attack.py`.
+* O defense-aware não importa `temp/l2_adaptive_attack.py` em runtime.
+* A execução falha com erro claro se `l2_adaptive_attack.py` ou `CarliniL2Adaptive` não estiver disponível no checkout externo.
+* O ataque adaptativo conhece a transformação `T` pela lógica original do backend.
 * O ataque adaptativo avalia candidatos intermediários durante o loop de otimização.
 * O ataque adaptativo mantém o melhor candidato defense-aware encontrado ao longo de todas as iterações e etapas de busca binária.
 * O ataque adaptativo oficial não é implementado como CW-L2 padrão seguido de pós-filtragem do resultado final.

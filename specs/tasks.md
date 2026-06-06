@@ -290,3 +290,9 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Separate adversarial, detected-adversarial, and evading-adversarial candidate counts.
   - [x] Persist aggregate and per-sample diagnostics without images, logits, weights, or arrays.
   - [x] Add automated tests for diagnostic counters, payloads, final status enrichment, and optional JSON output.
+- [x] Reimplement defense-aware attack with the original backend from the `temp/` reference
+  - [x] Restore `nn_robust_attacks/l2_adaptive_attack.py` from `temp/l2_adaptive_attack.py`.
+  - [x] Add loader and wrapper for `CarliniL2Adaptive`.
+  - [x] Route the official `defense_aware` config to `original_adaptive_cw_l2`.
+  - [x] Add automated tests for backend loading, range conversion, dispatch, and clear missing-backend errors.
+  - [x] Run focused defense-aware validation.

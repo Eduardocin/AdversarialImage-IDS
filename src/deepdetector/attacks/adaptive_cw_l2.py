@@ -7,9 +7,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 
 from deepdetector.attacks.nn_robust import (
+    _load_nn_robust_carlini_l2_adaptive,
     _model_session,
     _one_hot,
     _predict_with_model,
+    _require_root,
     _session_graph_context,
 )
 from deepdetector.attacks.tf_compat import patch_tensorflow_v1_symbols
@@ -184,6 +186,162 @@ def _update_best_defense_aware_candidates(
             updated_attacks[index] = candidate
 
     return updated_attacks.astype(np.float32), updated_l2
+
+
+class _OriginalCarliniPredictProxy(object):
+    """Expose NumPy logits for the original adaptive attack predicate."""
+
+    def __init__(
+        self,
+        *,
+        model: Any,
+        session: Any,
+        input_tensor: Any = None,
+        logits_tensor: Any = None,
+        input_shift: float = 0.5,
+    ) -> None:
+        self._model = model
+        self._session = session
+        self._input_tensor = input_tensor
+        self._logits_tensor = logits_tensor
+        self._input_shift = float(input_shift)
+
+    def predict(self, data: Any) -> np.ndarray:
+        data_array = np.asarray(data, dtype=np.float32) + self._input_shift
+        if self._input_tensor is not None and self._logits_tensor is not None:
+            return np.asarray(
+                self._session.run(
+                    self._logits_tensor,
+                    feed_dict={self._input_tensor: data_array},
+                )
+            )
+        return np.asarray(_predict_with_model(self._model, data_array))
+
+
+class OriginalCarliniAdaptiveModelAdapter(object):
+    """Adapter for the original ``CarliniL2Adaptive`` implementation.
+
+    The original backend uses ``model.predict(symbolic_tensor)`` for graph
+    construction and ``model.model.predict(np_array)`` inside its Python-side
+    defense-aware predicate. Both paths receive centered tensors, so the adapter
+    shifts them back to the MNIST M2 public ``[0, 1]`` input scale.
+    """
+
+    def __init__(
+        self,
+        *,
+        model: Any,
+        session: Any,
+        images: np.ndarray,
+        input_shift: float = 0.5,
+        input_tensor: Any = None,
+        logits_tensor: Any = None,
+    ) -> None:
+        image_array = np.asarray(images, dtype=np.float32)
+        if image_array.ndim != 4:
+            raise ValueError("original adaptive CW-L2 requires image batches.")
+        if image_array.shape[1] != image_array.shape[2]:
+            raise ValueError("original adaptive CW-L2 requires square images.")
+
+        self._model = model
+        self.input_shift = float(input_shift)
+        self.image_size = int(image_array.shape[1])
+        self.num_channels = int(image_array.shape[3])
+        self.num_labels = int(getattr(model, "num_labels", 10))
+        self.model = _OriginalCarliniPredictProxy(
+            model=model,
+            session=session,
+            input_tensor=input_tensor,
+            logits_tensor=logits_tensor,
+            input_shift=input_shift,
+        )
+
+    def predict(self, centered_data: Any) -> Any:
+        return _predict_with_model(self._model, centered_data + self.input_shift)
+
+
+def generate_original_adaptive_cw_l2_attack(
+    model: Any,
+    images: np.ndarray,
+    labels: np.ndarray,
+    *,
+    nn_robust_attacks_root: Optional[str] = None,
+    confidence: float = 0.0,
+    batch_size: int = 1,
+    max_iterations: int = 2000,
+    learning_rate: float = 0.1,
+    binary_search_steps: int = 5,
+    initial_const: float = 1.0,
+    abort_early: bool = True,
+    targeted: bool = False,
+    input_range: Any = None,
+    attack_box: Any = None,
+    model_input_shift: float = 0.5,
+    clip_min: float = 0.0,
+    clip_max: float = 1.0,
+    **_: Any,
+) -> np.ndarray:
+    """Generate adaptive CW-L2 examples with the original Carlini backend."""
+    image_array = np.asarray(images, dtype=np.float32)
+    if image_array.ndim != 4:
+        raise ValueError("original adaptive CW-L2 requires image batches.")
+
+    input_min, input_max = _bounds(input_range, clip_min, clip_max)
+    box_min, box_max = _bounds(attack_box, -0.5, 0.5)
+    input_span = input_max - input_min
+    box_span = box_max - box_min
+    if input_span <= 0.0 or box_span <= 0.0:
+        raise ValueError("original adaptive CW-L2 requires valid input_range and attack_box.")
+
+    centered_images = (image_array - input_min) / input_span * box_span + box_min
+    session = _model_session(model)
+    CarliniL2Adaptive = _load_nn_robust_carlini_l2_adaptive(
+        _require_root(nn_robust_attacks_root)
+    )
+    one_hot_labels = _one_hot(
+        np.asarray(labels),
+        int(getattr(model, "num_labels", 10)),
+    )
+
+    logits_tensor = getattr(model, "logits_tensor", None)
+    if logits_tensor is None:
+        logits_tensor = getattr(model, "predictions", None)
+
+    adapter = OriginalCarliniAdaptiveModelAdapter(
+        model=model,
+        session=session,
+        images=centered_images,
+        input_shift=float(model_input_shift),
+        input_tensor=getattr(model, "input_tensor", None),
+        logits_tensor=logits_tensor,
+    )
+
+    with _session_graph_context(session):
+        attack = CarliniL2Adaptive(
+            session,
+            adapter,
+            batch_size=int(batch_size),
+            confidence=float(confidence),
+            targeted=bool(targeted),
+            learning_rate=float(learning_rate),
+            binary_search_steps=int(binary_search_steps),
+            max_iterations=int(max_iterations),
+            abort_early=bool(abort_early),
+            initial_const=float(initial_const),
+            boxmin=float(box_min),
+            boxmax=float(box_max),
+        )
+        centered_adversarial = attack.attack(centered_images, one_hot_labels)
+
+    adversarial = (
+        (np.asarray(centered_adversarial, dtype=np.float32) - box_min)
+        / box_span
+        * input_span
+        + input_min
+    )
+    if adversarial.shape != image_array.shape:
+        raise ValueError("original adaptive CW-L2 returned an unexpected shape.")
+    return np.clip(adversarial, clip_min, clip_max).astype(np.float32)
 
 
 def generate_native_adaptive_cw_l2_attack(
