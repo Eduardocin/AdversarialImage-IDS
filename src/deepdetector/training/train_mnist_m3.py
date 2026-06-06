@@ -1,4 +1,4 @@
-"""MNIST M2 training loop for CW experiments."""
+"""Fashion-MNIST M3 training loop."""
 
 from __future__ import print_function
 
@@ -6,13 +6,12 @@ from typing import Any, Dict, Iterable
 
 import numpy as np
 
-from deepdetector.models.mnist_m2 import (
+from deepdetector.models.mnist_m3 import (
     latest_checkpoint,
-    load_mnist_m2_model,
-    save_mnist_m2_model,
+    load_mnist_m3_model,
+    save_mnist_m3_model,
 )
 from deepdetector.models.mnist_cnn import patch_tensorflow_v1_symbols
-from deepdetector.paths import MNIST_M2_CHECKPOINT_DIR
 from deepdetector.training.train_mnist_m1 import smooth_one_hot_labels
 from deepdetector.training.tf1_training import (
     classification_loss,
@@ -20,7 +19,7 @@ from deepdetector.training.tf1_training import (
 )
 
 
-def train_or_load_mnist_m2_model(
+def train_or_load_mnist_m3_model(
     sess: Any,
     x: Any,
     y: Any,
@@ -31,7 +30,7 @@ def train_or_load_mnist_m2_model(
     Y_test: np.ndarray,
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Train or restore the MNIST M2 CNN, then evaluate clean accuracy."""
+    """Train or restore the Fashion-MNIST M3 CNN, then evaluate clean accuracy."""
     import math
 
     import tensorflow as tf
@@ -55,19 +54,14 @@ def train_or_load_mnist_m2_model(
         try:
             from tqdm import trange
 
-            return trange(total_epochs, desc="M2 epochs", unit="epoch")
+            return trange(total_epochs, desc="M3 epochs", unit="epoch")
         except Exception:
             return range(total_epochs)
 
-    train_dir = str(
-        config.get(
-            "train_dir",
-            MNIST_M2_CHECKPOINT_DIR,
-        )
-    )
-    filename = str(config.get("filename", "mnist_m2.ckpt"))
+    train_dir = str(config["train_dir"])
+    filename = str(config.get("filename", "mnist_m3.ckpt"))
     batch_size = int(config.get("batch_size", 128))
-    nb_epochs = int(config.get("nb_epochs", config.get("epochs", 10)))
+    nb_epochs = int(config.get("nb_epochs", config.get("epochs", 12)))
     learning_rate = float(config.get("learning_rate", 0.001))
     load_model = bool(config.get("load_model", False))
     label_smoothing = float(config.get("label_smoothing", 0.1))
@@ -87,21 +81,21 @@ def train_or_load_mnist_m2_model(
             batch_size=batch_size,
             feed=eval_feed,
         )
-        print("m2_clean_test_accuracy={0:.4f}".format(accuracy), flush=True)
+        print("m3_clean_test_accuracy={0:.4f}".format(accuracy), flush=True)
         return float(accuracy)
 
     restored_checkpoint = None
     trained_from_scratch = True
 
     if load_model:
-        restored_checkpoint = load_mnist_m2_model(sess, train_dir)
+        restored_checkpoint = load_mnist_m3_model(sess, train_dir)
         if restored_checkpoint is not None:
             trained_from_scratch = False
 
     if trained_from_scratch:
         Y_train_smooth = smooth_one_hot_labels(Y_train, label_smoothing)
         train_feed = learning_phase_feed(1)
-        loss = classification_loss(tf, y, predictions, output_is_probabilities=False)
+        loss = classification_loss(tf, y, predictions, output_is_probabilities=True)
         train_step = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
         sess.run(tf.compat.v1.global_variables_initializer())
 
@@ -125,16 +119,16 @@ def train_or_load_mnist_m2_model(
             accuracy = evaluate()
             if hasattr(progress, "set_postfix"):
                 progress.set_postfix(clean_accuracy="{0:.4f}".format(accuracy))
-        checkpoint = save_mnist_m2_model(sess, train_dir, filename)
+        checkpoint = save_mnist_m3_model(sess, train_dir, filename)
     else:
         checkpoint = restored_checkpoint
 
     clean_accuracy = evaluate()
 
     return {
-        "experiment": "mnist_m2_clean_baseline",
-        "dataset": "mnist",
-        "model": "M2",
+        "experiment": "fashion_mnist_m3",
+        "dataset": "fashion_mnist",
+        "model": "M3",
         "clean_accuracy": clean_accuracy,
         "checkpoint_path": checkpoint or latest_checkpoint(train_dir),
         "trained_from_scratch": trained_from_scratch,

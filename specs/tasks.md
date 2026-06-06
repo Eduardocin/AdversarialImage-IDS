@@ -277,9 +277,50 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Keep Table 10 FP based on clean filtered predictions only.
   - [x] Preserve `[-0.5, 0.5]` filter range for Inception inputs.
   - [x] Add focused regression tests for metrics, clean sample selection, formulas, and filter range.
+- [x] Implement defense-aware adaptive CW-L2 from `specs/features/defense_aware.md`
+  - [x] Add the official `defense_aware` experiment config.
+  - [x] Add the final adaptive detection filter for MNIST M2 `[0.0, 1.0]`.
+  - [x] Add adaptive CW-L2 attack dispatch that accepts the shared transform `T`.
+  - [x] Add the defense-aware evaluation and runner integration.
+  - [x] Write only `metrics.csv` and `metrics.json`.
+  - [x] Add automated tests for config, attack criteria, metrics, and output artifacts.
+- [x] Implement ImageNet new classes selected Table 10 evaluation from `specs/features/imagenet_new_dataset.md`
+  - [x] Add the public experiment `imagenet_new_classes_fgsm_googlenet`.
+  - [x] Add the public experiment `imagenet_new_classes_deepfool_caffenet`.
+  - [x] Add the public experiment `imagenet_new_classes_cw_l2_inception_v3`.
+  - [x] Configure the new ImageNet classes `ambulance`, `scholar_bus`, and `soccer_ball` with quotas `40/40/20`.
+  - [x] Reuse Table 10 row schema, metrics helpers, detector filter, and separate output layout.
+  - [x] Preserve only selected Table 10 ImageNet rows 5, 8, and 14 on `ImageNet-NewClasses`.
+  - [x] Add tests for config, clean-correct quota filling, metrics schema, manifest contents, and forbidden artifacts.
+- [x] Implement Fashion-MNIST new dataset evaluation from `specs/features/fmnist_new_dataset.md`
+  - [x] Add Fashion-MNIST CSV loader with balanced 9000/1000 train/evaluation split.
+  - [x] Add public experiments `fashion_mnist_fgsm_m1` and `fashion_mnist_cw_l2_m2`.
+  - [x] Reuse `kind: table_10_group`, Table 10 schema, detector filter, and separate outputs.
+  - [x] Evaluate FGSM/M1 with `epsilon: 0.2` and CW L2/M2 with `cw_l2_nn_robust` kappa `0.0`.
+  - [x] Add tests for config, balanced split validation, Table 10 metrics schema, manifest contents, and runner dispatch.
+  - [x] Add a standalone Fashion-MNIST checkpoint helper for M1/M2 training.
+  - [x] Declare and validate the Fashion-MNIST checkpoint training sample in experiment config.
+  - [x] Treat Fashion-MNIST class quotas as evaluation candidates and discard clean errors without blocking.
+- [x] Update Fashion-MNIST evaluation to use M3 from `specs/features/fmnist_new_dataset.md`
+  - [x] Add the M3 model module under `src/deepdetector/models`.
+  - [x] Replace public FGSM/M1 Fashion-MNIST config with `fashion_mnist_fgsm_m3`.
+  - [x] Train or restore M3 checkpoints from the balanced Fashion-MNIST training partition.
+  - [x] Route the checkpoint helper default for `--model m3` to `fashion_mnist_fgsm_m3`.
+  - [x] Add tests for M3 architecture, config, runner dispatch, manifest, and output paths.
+- [x] Restore initial M3 architecture for Fashion-MNIST from `specs/features/fmnist_new_dataset.md`
+  - [x] Restore convolutional dropout to 0.25.
+  - [x] Restore dense dropout to 0.5.
+  - [x] Preserve M3 layer order, variable names, and tensor shapes.
+  - [x] Update focused M3 architecture tests.
+- [x] Restore initial M3 training defaults for Fashion-MNIST from `specs/features/fmnist_new_dataset.md`
+  - [x] Restore default M3 checkpoint training to 10 epochs.
+  - [x] Keep default M3 learning rate at 0.001.
+  - [x] Keep default M3 label smoothing at 0.1.
+  - [x] Update focused checkpoint helper tests.
 - [x] Adjust Table 10 GoogLeNet attack fidelity from `specs/features/table10_googlenet_attack_fidelity.md`
   - [x] Set DeepFool/GoogLeNet clipping to `[0,255]`.
   - [x] Ensure FGSM/GoogLeNet gradients use the original softmax graph.
   - [x] Ensure DeepFool/GoogLeNet gradients use `deploy_removeSoftmax.prototxt`.
   - [x] Add regression tests for attack-specific graph selection and Caffe-scale clipping.
   - [x] Add lightweight per-sample diagnostic logging for reduced runs.
+

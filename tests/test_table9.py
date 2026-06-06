@@ -141,6 +141,67 @@ def test_mnist_latest_checkpoint_falls_back_to_local_base(monkeypatch, tmp_path)
     assert checkpoint == str(checkpoint_dir / "mnist.ckpt")
 
 
+def test_mnist_session_uses_legacy_keras_image_ordering_when_available() -> None:
+    """Keras 1 should keep receiving the original TensorFlow image ordering value."""
+    calls = []
+    fake_backend = SimpleNamespace(
+        set_image_dim_ordering=lambda value: calls.append(value),
+    )
+
+    mnist_cnn._set_keras_channels_last(fake_backend)
+
+    assert calls == ["tf"]
+
+
+def test_mnist_session_uses_modern_keras_image_data_format_when_needed() -> None:
+    """Modern Keras should receive channels_last instead of the removed legacy API."""
+    calls = []
+    fake_backend = SimpleNamespace(
+        set_image_data_format=lambda value: calls.append(value),
+    )
+
+    mnist_cnn._set_keras_channels_last(fake_backend)
+
+    assert calls == ["channels_last"]
+
+
+def test_mnist_session_disables_tensorflow_eager_execution() -> None:
+    """TF2 environments must switch to graph mode before placeholders are created."""
+    calls = []
+    fake_tf = SimpleNamespace(
+        compat=SimpleNamespace(
+            v1=SimpleNamespace(disable_eager_execution=lambda: calls.append("disabled"))
+        )
+    )
+
+    mnist_cnn._disable_tensorflow_eager(fake_tf)
+
+    assert calls == ["disabled"]
+
+
+def test_mnist_tensorflow_v1_patch_exposes_cleverhans_symbols() -> None:
+    """Legacy CleverHans imports should find TF1 symbols on TF2 modules."""
+    graph_keys = object()
+    adam = object()
+    fake_tf = SimpleNamespace(
+        train=SimpleNamespace(),
+        compat=SimpleNamespace(
+            v1=SimpleNamespace(
+                disable_eager_execution=lambda: None,
+                GraphKeys=graph_keys,
+                placeholder=object(),
+                train=SimpleNamespace(AdamOptimizer=adam),
+            )
+        ),
+    )
+
+    mnist_cnn.patch_tensorflow_v1_symbols(fake_tf)
+
+    assert fake_tf.GraphKeys is graph_keys
+    assert fake_tf.placeholder is fake_tf.compat.v1.placeholder
+    assert fake_tf.train.AdamOptimizer is adam
+
+
 def test_mnist_m2_latest_checkpoint_falls_back_to_local_base(
     monkeypatch,
     tmp_path,

@@ -1,23 +1,23 @@
-"""TensorFlow 1.x/Keras M2 model used for MNIST CW experiments."""
+"""TensorFlow 1.x/Keras M3 model for Fashion-MNIST experiments."""
 
 from __future__ import print_function
 
+import glob
 import os
 from typing import Any, Optional, Tuple
 
 from deepdetector.models.mnist_cnn import make_convolution2d
 
 
-def build_mnist_m2_model(x_placeholder: Any) -> Tuple[Any, Any]:
-    """Build the MNIST M2 CNN and return ``(model, predictions)``.
+CONV_DROPOUT_RATE = 0.25
+DENSE_DROPOUT_RATE = 0.5
 
-    The model stacks convolutional blocks, dense layers, dropout, and a logits
-    output layer:
 
-    Conv(32) -> Conv(32) -> MaxPool -> Conv(64) -> Conv(64) -> MaxPool
-    -> Flatten -> Dense(200) -> Dropout -> Dense(200) -> Dense(10).
+def build_mnist_m3_model(x_placeholder: Any) -> Tuple[Any, Any]:
+    """Build the Fashion-MNIST M3 CNN and return ``(model, predictions)``.
 
-    The final layer returns logits without a softmax activation.
+    M3 is a compact CNN intended for Fashion-MNIST while preserving the
+    legacy TensorFlow 1.x/Keras model contract used by the MNIST flows.
     """
     from keras.layers import Activation, Dense, Dropout, Flatten
     from keras.layers import Convolution2D, MaxPooling2D
@@ -29,28 +29,29 @@ def build_mnist_m2_model(x_placeholder: Any) -> Tuple[Any, Any]:
             Convolution2D,
             32,
             (3, 3),
-            padding="valid",
+            padding="same",
             input_shape=(28, 28, 1),
         )
     )
     model.add(Activation("relu"))
-    model.add(make_convolution2d(Convolution2D, 32, (3, 3), padding="valid"))
+    model.add(make_convolution2d(Convolution2D, 32, (3, 3), padding="same"))
     model.add(Activation("relu"))
     model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Dropout(CONV_DROPOUT_RATE))
 
-    model.add(make_convolution2d(Convolution2D, 64, (3, 3), padding="valid"))
+    model.add(make_convolution2d(Convolution2D, 64, (3, 3), padding="same"))
     model.add(Activation("relu"))
-    model.add(make_convolution2d(Convolution2D, 64, (3, 3), padding="valid"))
+    model.add(make_convolution2d(Convolution2D, 64, (3, 3), padding="same"))
     model.add(Activation("relu"))
     model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Dropout(CONV_DROPOUT_RATE))
 
     model.add(Flatten())
-    model.add(Dense(200))
+    model.add(Dense(256))
     model.add(Activation("relu"))
-    model.add(Dropout(0.5))
-    model.add(Dense(200))
-    model.add(Activation("relu"))
+    model.add(Dropout(DENSE_DROPOUT_RATE))
     model.add(Dense(10))
+    model.add(Activation("softmax"))
 
     predictions = model(x_placeholder)
     return model, predictions
@@ -62,14 +63,14 @@ def checkpoint_path(train_dir: str, filename: str) -> str:
 
 
 def latest_checkpoint(train_dir: str) -> Optional[str]:
-    """Return the latest M2 checkpoint path in a training directory."""
+    """Return the latest M3 checkpoint path in a training directory."""
     import tensorflow as tf
 
     checkpoint = tf.train.get_checkpoint_state(train_dir)
     if checkpoint is not None and _checkpoint_files_exist(checkpoint.model_checkpoint_path):
         return checkpoint.model_checkpoint_path
 
-    local_checkpoint = checkpoint_path(train_dir, "mnist_m2.ckpt")
+    local_checkpoint = checkpoint_path(train_dir, "mnist_m3.ckpt")
     if _checkpoint_files_exist(local_checkpoint):
         return local_checkpoint
 
@@ -82,13 +83,11 @@ def _checkpoint_files_exist(base_path: Optional[str]) -> bool:
     """Return whether a TensorFlow Saver checkpoint base path is usable."""
     if not base_path:
         return False
-    return os.path.isfile(base_path + ".index") and os.path.isfile(
-        base_path + ".data-00000-of-00001"
-    )
+    return os.path.isfile(base_path + ".index") and bool(glob.glob(base_path + ".data-*"))
 
 
-def save_mnist_m2_model(sess: Any, train_dir: str, filename: str) -> str:
-    """Save M2 graph variables with a TensorFlow 1.x saver."""
+def save_mnist_m3_model(sess: Any, train_dir: str, filename: str) -> str:
+    """Save M3 graph variables with a TensorFlow 1.x saver."""
     import tensorflow as tf
 
     if not os.path.isdir(train_dir):
@@ -98,8 +97,8 @@ def save_mnist_m2_model(sess: Any, train_dir: str, filename: str) -> str:
     return saver.save(sess, checkpoint_path(train_dir, filename))
 
 
-def load_mnist_m2_model(sess: Any, train_dir: str) -> Optional[str]:
-    """Load the latest M2 checkpoint when one exists."""
+def load_mnist_m3_model(sess: Any, train_dir: str) -> Optional[str]:
+    """Load the latest M3 checkpoint when one exists."""
     import tensorflow as tf
 
     checkpoint = latest_checkpoint(train_dir)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict
 
+from deepdetector.experiments.defense_aware import run_defense_aware
 from deepdetector.experiments.fgsm_split_runner import run_fgsm_split_experiment
 from deepdetector.experiments.filter_candidate_runner import run_filter_candidate_experiment
 from deepdetector.experiments.table6_runner import run_table6_experiment
@@ -158,11 +159,23 @@ def build_experiment_config(
         base_config["filter"] = dict(experiment.get("filter", {}))
         return base_config
 
+    if kind == "defense_aware":
+        base_config["seed"] = experiment.get("seed")
+        base_config["attacks"] = {
+            str(key): dict(value)
+            for key, value in dict(experiment.get("attacks", {})).items()
+        }
+        base_config["detector"] = dict(experiment.get("detector", {}))
+        return base_config
+
     if kind == "table_10_group":
         base_config["model_group"] = str(experiment.get("model_group", ""))
+        base_config["dataset_group"] = str(experiment.get("dataset_group", ""))
         base_config["dataset_label"] = str(experiment.get("dataset_label", ""))
         base_config["rows"] = [dict(row) for row in experiment.get("rows", [])]
         base_config["filter"] = dict(experiment.get("filter", {}))
+        if "checkpoint_training" in experiment:
+            base_config["checkpoint_training"] = dict(experiment.get("checkpoint_training", {}))
         return base_config
 
     if kind == "topk_detection":
@@ -284,6 +297,8 @@ def run_experiment(name: str, consolidated_config: Dict[str, Any]):
         return run_table7_imagenet_experiment(config)
     if kind == "imagenet_table_8":
         return run_table8_imagenet_experiment(config)
+    if kind == "defense_aware":
+        return run_defense_aware(config)
     if kind == "table_10_group":
         return run_table10_group_experiment(config)
     if kind == "topk_detection":

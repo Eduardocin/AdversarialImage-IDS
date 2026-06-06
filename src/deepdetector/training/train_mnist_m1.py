@@ -9,6 +9,7 @@ import numpy as np
 from deepdetector.models.mnist_cnn import (
     latest_checkpoint,
     load_mnist_model,
+    patch_tensorflow_v1_symbols,
     save_mnist_model,
 )
 from deepdetector.paths import MNIST_M1_CHECKPOINT_DIR
@@ -38,6 +39,9 @@ def train_or_load_mnist_model(
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Train or restore the MNIST CNN, then evaluate clean accuracy."""
+    import tensorflow as tf
+
+    patch_tensorflow_v1_symbols(tf)
     from cleverhans.utils_tf import model_eval, model_train
 
     train_dir = str(config.get("train_dir", MNIST_M1_CHECKPOINT_DIR))

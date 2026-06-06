@@ -1,6 +1,10 @@
 """Adaptive noise reduction filters."""
 
 from deepdetector.filters.adaptive_quantization import entropy_based_quantization
+from deepdetector.filters.adaptive_noise_reduction import (
+    build_final_adaptive_detection_filter,
+    final_adaptive_detection_filter,
+)
 from deepdetector.filters.article_final import article_final_detection_filter
 from deepdetector.filters.entropy import image_entropy_255_chw, one_d_entropy
 from deepdetector.filters.factory import build_filter_from_config
@@ -30,6 +34,7 @@ __all__ = [
     "apply_mask_mean_filter",
     "article_final_detection_filter",
     "box_mean_filter",
+    "build_final_adaptive_detection_filter",
     "build_filter_from_config",
     "build_box_mask",
     "build_cross_mask",
@@ -38,6 +43,7 @@ __all__ = [
     "diamond_mean_filter",
     "entropy_based_quantization",
     "find_border",
+    "final_adaptive_detection_filter",
     "image_entropy_255_chw",
     "nonuniform_quantization",
     "normalize_image_range",

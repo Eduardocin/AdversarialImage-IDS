@@ -4,6 +4,54 @@ defaults:
     json: metrics.json
 
 experiments:
+  defense_aware:
+    kind: defense_aware
+    description: Defense-aware CW-L2 adaptive attack against DeepDetector
+    output_dir: results/experiments/defense_aware
+    seed: 42
+    dataset:
+      name: mnist
+      split: test
+      start: 9000
+      end: 10000
+      value_range:
+        min: 0.0
+        max: 1.0
+    model:
+      name: mnist_m2
+      checkpoint_dir: artifacts/models/mnist/m2/clean_baseline/checkpoints
+    evaluation:
+      batch_size: 256
+    attacks:
+      defense_unaware:
+        type: cw_l2
+        targeted: false
+        confidence: 0
+        max_iterations: 2000
+        binary_search_steps: 5
+        initial_const: 1.0
+        learning_rate: 0.1
+      defense_aware:
+        type: adaptive_cw_l2
+        targeted: false
+        confidence: 0
+        max_iterations: 2000
+        binary_search_steps: 5
+        initial_const: 1.0
+        learning_rate: 0.1
+    detector:
+      type: final_adaptive_detection_filter
+      entropy_thresholds:
+        low: 4.0
+        medium: 5.0
+      quantization:
+        low_entropy_step: 128
+        medium_entropy_step: 64
+        high_entropy_step: 43
+      spatial_filter:
+        type: cross_mean
+        radius: 3
+
   table_3:
     kind: filter_grid
     output_dir: results/table_3
@@ -699,6 +747,209 @@ experiments:
         status: implemented
         attack:
           name: cw_linf
+
+  fashion_mnist_fgsm_m3:
+    kind: table_10_group
+    description: Fashion-MNIST new dataset evaluation with FGSM epsilon 0.2 against M3
+    output_dir: results/experiments/fashion_mnist/fgsm_m3
+    dataset:
+      name: fashion_mnist
+      domain: mnist_compatible
+      split: test
+      csv_path: data/fashion_mnist/fashion-mnist_test.csv
+      split_strategy:
+        name: balanced_by_class
+        train_samples: 9000
+        evaluation_samples: 1000
+        train_class_quota: 900
+        evaluation_class_quota: 100
+      image_shape: [28, 28, 1]
+      value_range:
+        min: 0.0
+        max: 1.0
+      require_clean_correct: true
+      class_order:
+        - t_shirt_top
+        - trouser
+        - pullover
+        - dress
+        - coat
+        - sandal
+        - shirt
+        - sneaker
+        - bag
+        - ankle_boot
+      class_indices:
+        t_shirt_top: 0
+        trouser: 1
+        pullover: 2
+        dress: 3
+        coat: 4
+        sandal: 5
+        shirt: 6
+        sneaker: 7
+        bag: 8
+        ankle_boot: 9
+      class_quotas:
+        t_shirt_top: 100
+        trouser: 100
+        pullover: 100
+        dress: 100
+        coat: 100
+        sandal: 100
+        shirt: 100
+        sneaker: 100
+        bag: 100
+        ankle_boot: 100
+    model:
+      name: m3
+      family: mnist
+      checkpoint_dir: artifacts/models/fashion_mnist/m3/checkpoints
+      dataset_name: fashion_mnist
+      input_shape: [28, 28, 1]
+      num_classes: 10
+    checkpoint_training:
+      source_csv: data/fashion_mnist/fashion-mnist_test.csv
+      split_name: train
+      selection:
+        method: first_n_per_class
+        per_class_start: 0
+        per_class_end: 900
+        class_quota: 900
+        total_samples: 9000
+      validation_sample:
+        split_name: evaluation
+        method: next_n_per_class
+        per_class_start: 900
+        per_class_end: 1000
+        class_quota: 100
+        total_samples: 1000
+        excludes_training: true
+    attack: {}
+    evaluation:
+      batch_size: 256
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
+    model_group: m3
+    dataset_group: fashion_mnist
+    dataset_label: Fashion-MNIST
+    rows:
+      - "no": 1
+        attack_model: "FGSM (ε=0.2)/M3"
+        status: implemented
+        attack:
+          name: fgsm
+          epsilon: 0.2
+          clip_min: 0.0
+          clip_max: 1.0
+    output:
+      manifest: true
+
+  fashion_mnist_cw_l2_m2:
+    kind: table_10_group
+    description: Fashion-MNIST new dataset evaluation with CW L2 kappa 0.0 against M2
+    output_dir: results/experiments/fashion_mnist/cw_l2_m2
+    dataset:
+      name: fashion_mnist
+      domain: mnist_compatible
+      split: test
+      csv_path: data/fashion_mnist/fashion-mnist_test.csv
+      split_strategy:
+        name: balanced_by_class
+        train_samples: 9000
+        evaluation_samples: 1000
+        train_class_quota: 900
+        evaluation_class_quota: 100
+      image_shape: [28, 28, 1]
+      value_range:
+        min: 0.0
+        max: 1.0
+      require_clean_correct: true
+      class_order:
+        - t_shirt_top
+        - trouser
+        - pullover
+        - dress
+        - coat
+        - sandal
+        - shirt
+        - sneaker
+        - bag
+        - ankle_boot
+      class_indices:
+        t_shirt_top: 0
+        trouser: 1
+        pullover: 2
+        dress: 3
+        coat: 4
+        sandal: 5
+        shirt: 6
+        sneaker: 7
+        bag: 8
+        ankle_boot: 9
+      class_quotas:
+        t_shirt_top: 100
+        trouser: 100
+        pullover: 100
+        dress: 100
+        coat: 100
+        sandal: 100
+        shirt: 100
+        sneaker: 100
+        bag: 100
+        ankle_boot: 100
+    model:
+      name: m2
+      family: mnist
+      checkpoint_dir: artifacts/models/fashion_mnist/m2/checkpoints
+      dataset_name: fashion_mnist
+      input_shape: [28, 28, 1]
+      num_classes: 10
+    checkpoint_training:
+      source_csv: data/fashion_mnist/fashion-mnist_test.csv
+      split_name: train
+      selection:
+        method: first_n_per_class
+        per_class_start: 0
+        per_class_end: 900
+        class_quota: 900
+        total_samples: 9000
+      validation_sample:
+        split_name: evaluation
+        method: next_n_per_class
+        per_class_start: 900
+        per_class_end: 1000
+        class_quota: 100
+        total_samples: 1000
+        excludes_training: true
+    attack: {}
+    evaluation:
+      batch_size: 256
+      nn_robust_attacks_root: nn_robust_attacks
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
+    model_group: m2
+    dataset_group: fashion_mnist
+    dataset_label: Fashion-MNIST
+    rows:
+      - "no": 9
+        attack_model: "CW L2 (κ=0.0)/M2"
+        status: implemented
+        attack:
+          name: cw_l2_nn_robust
+          kappa: 0.0
+    output:
+      manifest: true
+
+  imagenet_new_classes_fgsm_googlenet:
+    kind: table_10_group
+    output_dir: results/experiments/imagenet_new_classes/fgsm_googlenet
+    dataset:
+      name: imagenet
+      split: new_test
+      images_dir: data/imagenet/new_test
   
   topk_detection:
     kind: topk_detection
@@ -713,6 +964,16 @@ experiments:
       image_shape: [224, 224, 3]
       value_range: [0.0, 1.0]
       shuffle: false
+      require_clean_correct: true
+      class_order: [ambulance, scholar_bus, soccer_ball]
+      class_indices:
+        ambulance: 407
+        scholar_bus: 779
+        soccer_ball: 805
+      class_quotas:
+        ambulance: 40
+        scholar_bus: 40
+        soccer_ball: 20
       n_samples: all
       class_indices:
         cab: 468
@@ -727,6 +988,139 @@ experiments:
       attack_deploy_proto: artifacts/models/imagenet/googlenet/deploy_removeSoftmax.prototxt
       caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
       mean_file: null
+      use_gpu: true
+      batch_size: 32
+    attack: {}
+    evaluation:
+      seed: 20170830
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
+    output:
+      manifest: true
+    model_group: googlenet
+    dataset_group: imagenet_new_classes
+    dataset_label: ImageNet-NewClasses
+    rows:
+      - "no": 5
+        attack_model: "FGSM (ε=1/255)/GoogLeNet"
+        status: implemented
+        attack:
+          name: fgsm
+          epsilon: 0.00392156862745098
+          clip_min: 0.0
+          clip_max: 255.0
+
+  imagenet_new_classes_deepfool_caffenet:
+    kind: table_10_group
+    output_dir: results/experiments/imagenet_new_classes/deepfool_caffenet
+    dataset:
+      name: imagenet
+      split: new_test
+      images_dir: data/imagenet/new_test
+      image_size: 227
+      image_shape: [227, 227, 3]
+      value_range: [0.0, 1.0]
+      shuffle: false
+      require_clean_correct: true
+      class_order: [ambulance, scholar_bus, soccer_ball]
+      class_indices:
+        ambulance: 407
+        scholar_bus: 779
+        soccer_ball: 805
+      class_quotas:
+        ambulance: 40
+        scholar_bus: 40
+        soccer_ball: 20
+    model:
+      name: caffenet
+      family: caffe
+      reference: BVLC CaffeNet
+      model_dir: artifacts/models/imagenet/caffenet/
+      deploy_proto: artifacts/models/imagenet/caffenet/deploy_original.prototxt
+      attack_deploy_proto: artifacts/models/imagenet/caffenet/deploy_removeSoftmax.prototxt
+      caffemodel: artifacts/models/imagenet/caffenet/bvlc_reference_caffenet.caffemodel
+      mean_file: null
+      use_gpu: true
+      batch_size: 32
+    attack: {}
+    evaluation:
+      seed: 20170830
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
+    output:
+      manifest: true
+    model_group: caffenet
+    dataset_group: imagenet_new_classes
+    dataset_label: ImageNet-NewClasses
+    rows:
+      - "no": 8
+        attack_model: "DeepFool/CaffeNet"
+        status: implemented
+        attack:
+          name: deepfool
+          max_iter: 50
+          overshoot: 0.02
+          clip_min: 0.0
+          clip_max: 1.0
+          num_classes: 10
+
+  imagenet_new_classes_cw_l2_inception_v3:
+    kind: table_10_group
+    output_dir: results/experiments/imagenet_new_classes/cw_l2_inception_v3
+    dataset:
+      name: imagenet
+      split: new_test
+      images_dir: data/imagenet/new_test
+      image_size: 299
+      image_shape: [299, 299, 3]
+      value_range: [-0.5, 0.5]
+      shuffle: false
+      require_clean_correct: true
+      class_order: [ambulance, scholar_bus, soccer_ball]
+      class_indices:
+        ambulance: 265
+        scholar_bus: 962
+        soccer_ball: 222
+      class_quotas:
+        ambulance: 40
+        scholar_bus: 40
+        soccer_ball: 20
+    model:
+      name: inception_v3
+      family: tensorflow
+      graph_path: artifacts/models/imagenet/inceptionv3/classify_image_graph_def.pb
+      input_map_name: "ResizeBilinear:0"
+      output_tensor: "softmax/logits:0"
+      batch_size: 1
+    attack: {}
+    evaluation:
+      seed: 20170830
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
+    output:
+      manifest: true
+    model_group: inception_v3
+    dataset_group: imagenet_new_classes
+    dataset_label: ImageNet-NewClasses
+    rows:
+      - "no": 14
+        attack_model: "CW L2 (κ=0.0)/Inception v3"
+        status: implemented
+        attack:
+          name: cw_l2
+          kappa: 0.0
+          batch_size: 1
+          max_iterations: 1000
+          learning_rate: 0.01
+          binary_search_steps: 9
+          initial_const: 0.001
+          abort_early: true
+          targeted: false
+          clip_min: -0.5
+          clip_max: 0.5
       use_gpu: false
       batch_size: 32
     attack:
