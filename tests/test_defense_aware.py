@@ -14,6 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.attacks.adaptive_cw_l2 import (  # noqa: E402
+    _empty_diagnostic_record,
     _update_best_defense_aware_candidates,
     generate_native_adaptive_cw_l2_attack,
 )
@@ -22,7 +23,10 @@ from deepdetector.attacks.registry import ATTACK_REGISTRY  # noqa: E402
 from deepdetector.evaluation import defense_aware as defense_aware_module  # noqa: E402
 from deepdetector.evaluation.defense_aware import (  # noqa: E402
     DEFENSE_AWARE_SCHEMA,
+    defense_aware_diagnostics_payload,
     evaluate_defense_aware_arrays,
+    run_defense_aware_experiment,
+    save_defense_aware_diagnostics,
     rows_to_metrics_json,
     save_defense_aware_outputs,
 )
@@ -75,6 +79,10 @@ def test_defense_aware_config_matches_spec() -> None:
     assert experiment["detector"]["spatial_filter"] == {
         "type": "cross_mean",
         "radius": 3,
+    }
+    assert experiment["diagnostics"] == {
+        "enabled": True,
+        "json": "diagnostics.json",
     }
 
 
@@ -172,6 +180,13 @@ def test_native_candidate_update_uses_intermediate_defense_aware_criterion() -> 
     best = clean.copy()
     best_l2 = np.asarray([np.inf], dtype=np.float64)
     transform_calls = []
+    diagnostics = [
+        _empty_diagnostic_record(
+            batch_index=0,
+            true_label=0,
+            context={"valid_index": 0, "clean_pred": 0},
+        )
+    ]
 
     def score_for(label: int) -> np.ndarray:
         scores = np.zeros((1, 10), dtype=np.float32)
@@ -199,6 +214,7 @@ def test_native_candidate_update_uses_intermediate_defense_aware_criterion() -> 
         transform_fn=transform_fn,
         predict_fn=predict_fn,
         scores=score_for(2),
+        diagnostics=diagnostics,
     )
     np.testing.assert_array_equal(best, clean)
 
@@ -213,11 +229,19 @@ def test_native_candidate_update_uses_intermediate_defense_aware_criterion() -> 
             transform_fn=transform_fn,
             predict_fn=predict_fn,
             scores=score_for(int(value)),
+            diagnostics=diagnostics,
         )
 
     np.testing.assert_array_equal(best, np.asarray([[[[1.0]]]], dtype=np.float32))
     np.testing.assert_allclose(best_l2, [1.0])
     assert transform_calls == [2.0, 3.0, 1.0]
+    assert diagnostics[0]["total_candidates"] == 3
+    assert diagnostics[0]["adversarial_candidates"] == 3
+    assert diagnostics[0]["detected_adversarial_candidates"] == 1
+    assert diagnostics[0]["evading_adversarial_candidates"] == 2
+    assert diagnostics[0]["best_adversarial_l2"] == 1.0
+    assert diagnostics[0]["best_detected_adversarial_l2"] == 2.0
+    assert diagnostics[0]["best_defense_aware_l2"] == 1.0
 
 
 def test_native_adaptive_cw_l2_requires_shared_transform_and_predict() -> None:
@@ -383,6 +407,45 @@ def test_rows_to_metrics_json_omits_metadata() -> None:
     }
 
 
+def test_defense_aware_diagnostics_payload_summarizes_candidate_counts() -> None:
+    records = [
+        {
+            "valid_index": 0,
+            "true_label": np.int64(1),
+            "total_candidates": 3,
+            "adversarial_candidates": 2,
+            "detected_adversarial_candidates": 1,
+            "evading_adversarial_candidates": 1,
+            "final_success": True,
+        },
+        {
+            "valid_index": 1,
+            "true_label": 2,
+            "total_candidates": 4,
+            "adversarial_candidates": 0,
+            "detected_adversarial_candidates": 0,
+            "evading_adversarial_candidates": 0,
+            "final_success": False,
+        },
+    ]
+
+    payload = defense_aware_diagnostics_payload(records)
+
+    assert payload["summary"] == {
+        "samples": 2,
+        "total_candidates": 7,
+        "adversarial_candidates": 2,
+        "detected_adversarial_candidates": 1,
+        "evading_adversarial_candidates": 1,
+        "samples_with_adversarial_candidates": 1,
+        "samples_with_detected_adversarial_candidates": 1,
+        "samples_with_evading_adversarial_candidates": 1,
+        "final_successes": 1,
+        "final_failures": 1,
+    }
+    assert payload["samples"][0]["true_label"] == 1
+
+
 def test_save_defense_aware_outputs_writes_only_official_artifacts(tmp_path) -> None:
     rows = [
         {
@@ -431,6 +494,28 @@ def test_save_defense_aware_outputs_writes_only_official_artifacts(tmp_path) -> 
     assert not (tmp_path / "adversarial_examples").exists()
 
 
+def test_save_defense_aware_diagnostics_writes_optional_json(tmp_path) -> None:
+    path = save_defense_aware_diagnostics(
+        records=[
+            {
+                "valid_index": 0,
+                "true_label": 0,
+                "total_candidates": 1,
+                "adversarial_candidates": 1,
+                "detected_adversarial_candidates": 1,
+                "evading_adversarial_candidates": 0,
+                "final_success": False,
+            }
+        ],
+        output_dir=tmp_path,
+    )
+
+    assert path == tmp_path / "diagnostics.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["summary"]["total_candidates"] == 1
+    assert payload["samples"][0]["detected_adversarial_candidates"] == 1
+
+
 def test_run_defense_aware_evaluation_uses_shared_transform_in_native_attack(
     monkeypatch,
 ) -> None:
@@ -470,6 +555,16 @@ def test_run_defense_aware_evaluation_uses_shared_transform_in_native_attack(
         captured["adaptive_transform"] = kwargs["transform_fn"]
         captured["adaptive_predict"] = kwargs["predict_fn"]
         captured["adaptive_type_kwargs"] = dict(kwargs)
+        kwargs["diagnostics"].append(
+            {
+                "valid_index": 0,
+                "true_label": 0,
+                "total_candidates": 1,
+                "adversarial_candidates": 1,
+                "detected_adversarial_candidates": 0,
+                "evading_adversarial_candidates": 1,
+            }
+        )
         return np.asarray([[[[1.0]]]], dtype=np.float32)
 
     monkeypatch.setattr(
@@ -488,6 +583,7 @@ def test_run_defense_aware_evaluation_uses_shared_transform_in_native_attack(
         fake_adaptive,
     )
 
+    diagnostic_records = []
     rows = defense_aware_module.run_defense_aware_evaluation(
         {
             "seed": 42,
@@ -505,7 +601,8 @@ def test_run_defense_aware_evaluation_uses_shared_transform_in_native_attack(
                 },
             },
             "detector": {"type": "final_adaptive_detection_filter"},
-        }
+        },
+        diagnostic_records=diagnostic_records,
     )
 
     assert captured["adaptive_transform"] is captured["transform"]
@@ -513,6 +610,8 @@ def test_run_defense_aware_evaluation_uses_shared_transform_in_native_attack(
     assert "nn_robust_attacks_root" not in captured["adaptive_type_kwargs"]
     assert rows[0]["success"] == 1
     assert rows[1]["success"] == 1
+    assert diagnostic_records[0]["final_success"] is True
+    assert diagnostic_records[0]["final_pred"] == 1
 
 
 def test_run_defense_aware_evaluation_rejects_external_adaptive_backend_config(
@@ -597,3 +696,78 @@ def test_defense_aware_evaluator_rejects_removed_adaptive_types(attack_type) -> 
             transform_fn=lambda image: image,
             predict_fn=lambda batch: np.asarray([0]),
         )
+
+
+def test_run_defense_aware_experiment_writes_diagnostics_when_enabled(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    rows = [
+        {
+            "attack": "defense_unaware",
+            "total_valid": 1,
+            "success": 1,
+            "detected": 0,
+            "undetected": 1,
+            "failures": 0,
+            "attack_success_rate_percent": 100.0,
+            "detection_rate_percent": 0.0,
+            "evasion_rate_percent": 100.0,
+            "failure_rate_percent": 0.0,
+            "mean_l2": 1.0,
+        },
+        {
+            "attack": "defense_aware",
+            "total_valid": 1,
+            "success": 0,
+            "detected": 0,
+            "undetected": 0,
+            "failures": 1,
+            "attack_success_rate_percent": 0.0,
+            "detection_rate_percent": 0.0,
+            "evasion_rate_percent": 0.0,
+            "failure_rate_percent": 100.0,
+            "mean_l2": 0.0,
+        },
+    ]
+
+    def fake_evaluation(config, graph=None, diagnostic_records=None):
+        assert graph is None
+        if diagnostic_records is not None:
+            diagnostic_records.append(
+                {
+                    "valid_index": 0,
+                    "true_label": 0,
+                    "total_candidates": 2,
+                    "adversarial_candidates": 1,
+                    "detected_adversarial_candidates": 1,
+                    "evading_adversarial_candidates": 0,
+                    "final_success": False,
+                }
+            )
+        return rows
+
+    monkeypatch.setattr(
+        defense_aware_module,
+        "run_defense_aware_evaluation",
+        fake_evaluation,
+    )
+
+    run_defense_aware_experiment(
+        {
+            "output_dir": str(tmp_path),
+            "diagnostics": {"enabled": True, "json": "diagnostics.json"},
+        }
+    )
+
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "diagnostics.json",
+        "metrics.csv",
+        "metrics.json",
+    ]
+    diagnostics_payload = json.loads(
+        (tmp_path / "diagnostics.json").read_text(encoding="utf-8")
+    )
+    assert diagnostics_payload["summary"]["detected_adversarial_candidates"] == 1
+    metrics_payload = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
+    assert "summary" not in metrics_payload

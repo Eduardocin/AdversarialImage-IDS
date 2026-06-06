@@ -29,6 +29,7 @@ Este experimento deve:
 * aplicar a transformação final adaptativa do DeepDetector durante a avaliação;
 * produzir métricas agregadas de sucesso do ataque, taxa de detecção, taxa de evasão e distância L2;
 * gerar somente os artefatos oficiais definidos pelo projeto.
+* gerar diagnósticos internos somente quando explicitamente habilitados em configuração.
 
 Este experimento não deve:
 
@@ -40,7 +41,6 @@ Este experimento não deve:
 * executar Table 8;
 * executar Table 9;
 * alterar a lógica oficial da transformação adaptativa;
-* gerar diagnósticos públicos;
 * gerar relatórios em Markdown;
 * criar experimentos auxiliares públicos.
 
@@ -182,6 +182,10 @@ defense_aware:
     spatial_filter:
       type: cross_mean
       radius: 3
+
+  diagnostics:
+    enabled: false
+    json: diagnostics.json
 ```
 
 Este experimento usa `attacks` no plural de forma intencional, pois ele compara dois ataques internos no mesmo experimento.
@@ -364,6 +368,7 @@ Essa estratégia de pós-filtragem pode existir apenas como implementação expe
 * Gerar o ataque defense-aware com CW-L2 adaptativo nativo.
 * Avaliar candidatos intermediários do ataque adaptativo dentro do loop de otimização.
 * Escrever somente `metrics.csv` e `metrics.json` no diretório oficial do experimento.
+* Quando `diagnostics.enabled == true`, escrever também `diagnostics.json`.
 
 ---
 
@@ -372,8 +377,9 @@ Essa estratégia de pós-filtragem pode existir apenas como implementação expe
 * Manter a implementação simples, legível e compatível com os padrões existentes em `deepdetector`.
 * Evitar dependências novas quando as APIs atuais de TensorFlow/Keras e NumPy forem suficientes.
 * Preservar a escala pública `[0.0, 1.0]` para imagens avaliadas pelo modelo, filtro e métricas.
-* Não gerar datasets, pesos, adversariais persistidos, diagnósticos ou relatórios adicionais.
+* Não gerar datasets, pesos, adversariais persistidos ou relatórios adicionais.
 * Manter os arquivos em `temp/` fora do projeto e fora dos testes automatizados.
+* Manter diagnósticos desabilitados por padrão, exceto quando a configuração solicitar explicitamente a investigação.
 
 ---
 
@@ -825,7 +831,7 @@ Se não houver ataques bem-sucedidos, registrar:
 
 # Output Artifacts
 
-A execução deve gerar apenas:
+A execução padrão deve gerar apenas:
 
 ```text
 results/
@@ -834,6 +840,17 @@ results/
         ├── metrics.csv
         └── metrics.json
 ```
+
+Quando `diagnostics.enabled == true`, a execução também deve gerar:
+
+```text
+results/
+└── experiments/
+    └── defense_aware/
+        └── diagnostics.json
+```
+
+Esse arquivo não é artefato oficial de métrica e não deve alterar o schema do CSV nem do `metrics.json`.
 
 ---
 
@@ -905,6 +922,35 @@ A seed deve ser aplicada sempre que o projeto já possuir suporte para controle 
 Não adicionar metadados de reprodutibilidade ao `metrics.json`.
 
 Se for necessário documentar limitações de reprodutibilidade, isso deve ser feito no código, em comentários internos, ou em documentação separada fora dos artefatos oficiais deste experimento.
+
+---
+
+# Optional Diagnostics
+
+Diagnósticos são permitidos somente quando explicitamente habilitados:
+
+```yaml
+diagnostics:
+  enabled: true
+  json: diagnostics.json
+```
+
+O objetivo é investigar por que o ataque adaptativo falha, sem persistir imagens adversariais, datasets, pesos ou relatórios.
+
+O diagnóstico deve registrar, por amostra válida:
+
+* `total_candidates`: candidatos intermediários avaliados pelo ataque nativo;
+* `adversarial_candidates`: candidatos que satisfazem o critério CW contra o classificador;
+* `detected_adversarial_candidates`: candidatos adversariais rejeitados porque `C(x_candidate) != C(T(x_candidate))`;
+* `evading_adversarial_candidates`: candidatos adversariais aceitos pelo critério de evasão `C(x_candidate) == C(T(x_candidate))`;
+* `best_adversarial_l2`: menor L2 entre candidatos adversariais, quando existir;
+* `best_detected_adversarial_l2`: menor L2 entre candidatos adversariais detectados, quando existir;
+* `best_defense_aware_l2`: menor L2 entre candidatos adversariais que evadem o detector, quando existir;
+* predição final do candidato retornado e status de sucesso/falha final.
+
+O diagnóstico também deve incluir um resumo agregado com as mesmas contagens somadas e número de amostras que tiveram pelo menos um candidato adversarial, detectado ou defense-aware.
+
+O diagnóstico não deve incluir imagens, arrays de pixels, logits completos, pesos, datasets ou exemplos adversariais persistidos.
 
 ---
 
@@ -1070,6 +1116,12 @@ Não criar:
 results/experiments/defense_aware/diagnostic.json
 ```
 
+Exceto quando `diagnostics.enabled == true`, caso em que o arquivo permitido é:
+
+```text
+results/experiments/defense_aware/diagnostics.json
+```
+
 Não criar:
 
 ```text
@@ -1119,6 +1171,7 @@ attack,total_valid,success,detected,undetected,failures,attack_success_rate_perc
 * O JSON possui os mesmos valores semânticos do CSV.
 * O JSON não contém metadados extras.
 * Nenhum relatório adicional é produzido.
-* Nenhum diagnóstico é produzido.
+* Nenhum diagnóstico é produzido quando `diagnostics.enabled` estiver ausente ou falso.
+* Quando `diagnostics.enabled == true`, `diagnostics.json` contém contagens agregadas e por amostra sobre candidatos intermediários sem persistir imagens.
 * Nenhum artefato morto é criado.
 * Toda a lógica permanece compatível com o runner centralizado do projeto.

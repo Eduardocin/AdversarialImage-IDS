@@ -59,6 +59,9 @@ experiments:
       spatial_filter:
         type: cross_mean
         radius: 3
+    diagnostics:
+      enabled: true
+      json: diagnostics.json
 
   table_3:
     kind: filter_grid

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -63,6 +63,41 @@ def _as_batch(image: np.ndarray) -> np.ndarray:
     return image_array.reshape((1,) + tuple(image_array.shape))
 
 
+def _empty_diagnostic_record(
+    *,
+    batch_index: int,
+    true_label: int,
+    context: Any = None,
+) -> Dict[str, Any]:
+    context_dict = dict(context or {})
+    record: Dict[str, Any] = {
+        "batch_index": int(batch_index),
+        "true_label": int(true_label),
+        "total_candidates": 0,
+        "adversarial_candidates": 0,
+        "detected_adversarial_candidates": 0,
+        "evading_adversarial_candidates": 0,
+        "best_adversarial_l2": None,
+        "best_adversarial_squared_l2": None,
+        "best_detected_adversarial_l2": None,
+        "best_detected_adversarial_squared_l2": None,
+        "best_defense_aware_l2": None,
+        "best_defense_aware_squared_l2": None,
+    }
+    for key in ("sample_index", "valid_index", "clean_pred"):
+        if key in context_dict:
+            record[key] = int(context_dict[key])
+    return record
+
+
+def _record_best_l2(record: Dict[str, Any], prefix: str, squared_l2: float) -> None:
+    squared_key = "best_{0}_squared_l2".format(prefix)
+    current = record.get(squared_key)
+    if current is None or float(squared_l2) < float(current):
+        record[squared_key] = float(squared_l2)
+        record["best_{0}_l2".format(prefix)] = float(np.sqrt(float(squared_l2)))
+
+
 def _update_best_defense_aware_candidates(
     *,
     best_attacks: np.ndarray,
@@ -75,6 +110,7 @@ def _update_best_defense_aware_candidates(
     targeted: bool = False,
     confidence: float = 0.0,
     scores: Optional[np.ndarray] = None,
+    diagnostics: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Update best candidates using the defense-aware criterion.
 
@@ -94,6 +130,10 @@ def _update_best_defense_aware_candidates(
     score_array = None if scores is None else np.asarray(scores)
 
     for index, candidate in enumerate(candidate_array):
+        diagnostic_record = diagnostics[index] if diagnostics is not None else None
+        if diagnostic_record is not None:
+            diagnostic_record["total_candidates"] += 1
+
         if score_array is None:
             candidate_pred = int(_predict_ints(predict_fn, _as_batch(candidate))[0])
             adversarial_success = _cw_compare_label(
@@ -114,13 +154,6 @@ def _update_best_defense_aware_candidates(
         if not adversarial_success:
             continue
 
-        transformed = np.asarray(transform_fn(candidate), dtype=np.float32).reshape(
-            candidate.shape
-        )
-        transformed_pred = int(_predict_ints(predict_fn, _as_batch(transformed))[0])
-        if candidate_pred != transformed_pred:
-            continue
-
         l2_distance = float(
             np.sum(
                 np.square(
@@ -128,6 +161,24 @@ def _update_best_defense_aware_candidates(
                 )
             )
         )
+        if diagnostic_record is not None:
+            diagnostic_record["adversarial_candidates"] += 1
+            _record_best_l2(diagnostic_record, "adversarial", l2_distance)
+
+        transformed = np.asarray(transform_fn(candidate), dtype=np.float32).reshape(
+            candidate.shape
+        )
+        transformed_pred = int(_predict_ints(predict_fn, _as_batch(transformed))[0])
+        if candidate_pred != transformed_pred:
+            if diagnostic_record is not None:
+                diagnostic_record["detected_adversarial_candidates"] += 1
+                _record_best_l2(diagnostic_record, "detected_adversarial", l2_distance)
+            continue
+
+        if diagnostic_record is not None:
+            diagnostic_record["evading_adversarial_candidates"] += 1
+            _record_best_l2(diagnostic_record, "defense_aware", l2_distance)
+
         if l2_distance < float(updated_l2[index]):
             updated_l2[index] = l2_distance
             updated_attacks[index] = candidate
@@ -154,6 +205,8 @@ def generate_native_adaptive_cw_l2_attack(
     input_range: Any = None,
     clip_min: float = 0.0,
     clip_max: float = 1.0,
+    diagnostics: Optional[List[Dict[str, Any]]] = None,
+    diagnostic_context: Any = None,
     **_: Any,
 ) -> np.ndarray:
     """Generate defense-aware CW-L2 examples with native candidate tracking.
@@ -190,6 +243,16 @@ def generate_native_adaptive_cw_l2_attack(
     num_labels = int(getattr(model, "num_labels", 10))
     one_hot_labels = _one_hot(label_array, num_labels)
     label_ints = np.argmax(one_hot_labels, axis=1).astype(np.int64)
+    diagnostic_records = [
+        _empty_diagnostic_record(
+            batch_index=index,
+            true_label=int(label_ints[index]),
+            context=diagnostic_context,
+        )
+        for index in range(len(clipped_images))
+    ]
+    if diagnostics is not None:
+        diagnostics.extend(diagnostic_records)
 
     patch_tensorflow_v1_symbols()
     import tensorflow as tf
@@ -305,6 +368,7 @@ def generate_native_adaptive_cw_l2_attack(
                     targeted=bool(targeted),
                     confidence=float(confidence),
                     scores=scores,
+                    diagnostics=diagnostic_records if diagnostics is not None else None,
                 )
 
             for index in range(len(clipped_images)):

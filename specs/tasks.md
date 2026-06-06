@@ -283,3 +283,10 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Remove the unused `CarliniL2Adaptive` loader from `nn_robust.py`.
   - [x] Keep `native_adaptive_cw_l2` as the only defense-aware adaptive attack registered by the package.
   - [x] Update tests to assert removed attack types are not registered and are rejected by the defense-aware evaluator.
+- [x] Add optional defense-aware adaptive CW-L2 diagnostics
+  - [x] Add explicit `diagnostics.enabled` and `diagnostics.json` behavior to the spec.
+  - [x] Enable diagnostics for the official `defense_aware` experiment while keeping the feature opt-in by config.
+  - [x] Count intermediate candidates generated during native CW-L2 optimization.
+  - [x] Separate adversarial, detected-adversarial, and evading-adversarial candidate counts.
+  - [x] Persist aggregate and per-sample diagnostics without images, logits, weights, or arrays.
+  - [x] Add automated tests for diagnostic counters, payloads, final status enrichment, and optional JSON output.

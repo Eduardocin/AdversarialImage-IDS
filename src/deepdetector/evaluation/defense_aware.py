@@ -160,6 +160,58 @@ def rows_to_metrics_json(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]
     return payload
 
 
+def _json_safe_value(value: Any) -> Any:
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, dict):
+        return {str(key): _json_safe_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe_value(item) for item in value]
+    return value
+
+
+def defense_aware_diagnostics_payload(
+    records: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Build an aggregate diagnostics payload for native adaptive CW-L2."""
+    summary = {
+        "samples": int(len(records)),
+        "total_candidates": 0,
+        "adversarial_candidates": 0,
+        "detected_adversarial_candidates": 0,
+        "evading_adversarial_candidates": 0,
+        "samples_with_adversarial_candidates": 0,
+        "samples_with_detected_adversarial_candidates": 0,
+        "samples_with_evading_adversarial_candidates": 0,
+        "final_successes": 0,
+        "final_failures": 0,
+    }
+    for record in records:
+        total = int(record.get("total_candidates", 0))
+        adversarial = int(record.get("adversarial_candidates", 0))
+        detected = int(record.get("detected_adversarial_candidates", 0))
+        evading = int(record.get("evading_adversarial_candidates", 0))
+        summary["total_candidates"] += total
+        summary["adversarial_candidates"] += adversarial
+        summary["detected_adversarial_candidates"] += detected
+        summary["evading_adversarial_candidates"] += evading
+        if adversarial > 0:
+            summary["samples_with_adversarial_candidates"] += 1
+        if detected > 0:
+            summary["samples_with_detected_adversarial_candidates"] += 1
+        if evading > 0:
+            summary["samples_with_evading_adversarial_candidates"] += 1
+        if bool(record.get("final_success", False)):
+            summary["final_successes"] += 1
+        elif "final_success" in record:
+            summary["final_failures"] += 1
+
+    return {
+        "summary": summary,
+        "samples": [_json_safe_value(record) for record in records],
+    }
+
+
 def evaluate_defense_aware_arrays(
     *,
     images: np.ndarray,
@@ -168,6 +220,7 @@ def evaluate_defense_aware_arrays(
     defense_unaware_attack_fn: AttackFn,
     defense_aware_attack_fn: AttackFn,
     transform_fn: TransformFn,
+    diagnostic_records: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """Evaluate defense-unaware and defense-aware scenarios over arrays."""
     image_array = np.asarray(images, dtype=np.float32)
@@ -207,6 +260,7 @@ def evaluate_defense_aware_arrays(
             else:
                 blind_counts.undetected += 1
 
+        diagnostics_start = len(diagnostic_records) if diagnostic_records is not None else 0
         adaptive_adv = np.asarray(
             defense_aware_attack_fn(clean_image, true_label, clean_pred),
             dtype=np.float32,
@@ -221,9 +275,20 @@ def evaluate_defense_aware_arrays(
         if adaptive_pred != true_label and adaptive_pred == adaptive_transformed_pred:
             adaptive_counts.success += 1
             adaptive_counts.undetected += 1
-            adaptive_counts.l2_distances.append(_l2_distance(adaptive_adv, clean_image))
+            final_l2 = _l2_distance(adaptive_adv, clean_image)
+            adaptive_counts.l2_distances.append(final_l2)
+            final_success = True
         else:
             adaptive_counts.failures += 1
+            final_l2 = 0.0
+            final_success = False
+
+        if diagnostic_records is not None and len(diagnostic_records) > diagnostics_start:
+            record = diagnostic_records[diagnostics_start]
+            record["final_pred"] = int(adaptive_pred)
+            record["final_transformed_pred"] = int(adaptive_transformed_pred)
+            record["final_success"] = bool(final_success)
+            record["final_l2"] = float(final_l2)
 
     return [
         _row_for_counts(
@@ -334,6 +399,7 @@ def _adaptive_attack_fn(
     attack_config: Dict[str, Any],
     transform_fn: TransformFn,
     predict_fn: PredictFn,
+    diagnostic_records: Optional[List[Dict[str, Any]]] = None,
 ) -> AttackFn:
     kwargs = _attack_kwargs(attack_config)
     kwargs.setdefault("clip_min", 0.0)
@@ -350,6 +416,12 @@ def _adaptive_attack_fn(
 
         call_kwargs["transform_fn"] = transform_fn
         call_kwargs["predict_fn"] = predict_fn
+        if diagnostic_records is not None:
+            call_kwargs["diagnostics"] = diagnostic_records
+            call_kwargs["diagnostic_context"] = {
+                "valid_index": len(diagnostic_records),
+                "clean_pred": int(clean_pred),
+            }
 
         adversarial = attack_generator(
             model=graph["model"],
@@ -376,9 +448,24 @@ def save_defense_aware_outputs(
     return {"csv": csv_path, "json": json_path}
 
 
+def save_defense_aware_diagnostics(
+    *,
+    records: List[Dict[str, Any]],
+    output_dir: Path,
+    json_name: str = "diagnostics.json",
+) -> Path:
+    """Write optional native adaptive CW-L2 diagnostics."""
+    output_path = ensure_dir(output_dir)
+    return write_metrics_json(
+        output_path / json_name,
+        defense_aware_diagnostics_payload(records),
+    )
+
+
 def run_defense_aware_evaluation(
     config: Dict[str, Any],
     graph: Optional[Dict[str, Any]] = None,
+    diagnostic_records: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """Run the configured defense-aware MNIST M2 evaluation."""
     seed = config.get("seed")
@@ -405,15 +492,23 @@ def run_defense_aware_evaluation(
             attack_config=dict(attacks_config.get("defense_aware", {})),
             transform_fn=transform_fn,
             predict_fn=predict_fn,
+            diagnostic_records=diagnostic_records,
         ),
         transform_fn=transform_fn,
+        diagnostic_records=diagnostic_records,
     )
     return rows
 
 
 def run_defense_aware_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Run defense-aware evaluation and write official outputs."""
-    rows = run_defense_aware_evaluation(config)
+    diagnostics_config = dict(config.get("diagnostics", {}))
+    diagnostics_enabled = bool(diagnostics_config.get("enabled", False))
+    diagnostic_records: Optional[List[Dict[str, Any]]] = [] if diagnostics_enabled else None
+    rows = run_defense_aware_evaluation(
+        config,
+        diagnostic_records=diagnostic_records,
+    )
     output_config = config.get("output", {})
     configured_dir = output_config.get("dir") or config.get("output_dir")
     output_dir = resolve_project_path(configured_dir)
@@ -427,4 +522,10 @@ def run_defense_aware_experiment(config: Dict[str, Any]) -> List[Dict[str, Any]]
         csv_name=str(output_config.get("csv", "metrics.csv")),
         json_name=str(output_config.get("json", "metrics.json")),
     )
+    if diagnostics_enabled and diagnostic_records is not None:
+        save_defense_aware_diagnostics(
+            records=diagnostic_records,
+            output_dir=output_dir,
+            json_name=str(diagnostics_config.get("json", "diagnostics.json")),
+        )
     return rows
