@@ -91,10 +91,6 @@ def _load_nn_robust_carlini_l2(root: str) -> Any:
     return _load_nn_robust_class(root, "l2_attack.py", "CarliniL2")
 
 
-def _load_nn_robust_carlini_l2_adaptive(root: str) -> Any:
-    return _load_nn_robust_class(root, "l2_adaptive_attack.py", "CarliniL2Adaptive")
-
-
 def _load_nn_robust_carlini_li(root: str) -> Any:
     return _load_nn_robust_class(root, "li_attack.py", "CarliniLi")
 

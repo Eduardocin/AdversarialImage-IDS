@@ -12,10 +12,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-from deepdetector.attacks.adaptive_cw_l2 import (
-    generate_adaptive_cw_l2_attack,
-    generate_original_adaptive_cw_l2_attack,
-)
+from deepdetector.attacks.adaptive_cw_l2 import generate_native_adaptive_cw_l2_attack
 from deepdetector.attacks.nn_robust import generate_nn_robust_cw_l2_attack
 from deepdetector.evaluation.article_reproduction import (
     label_to_int,
@@ -342,23 +339,17 @@ def _adaptive_attack_fn(
     kwargs.setdefault("clip_min", 0.0)
     kwargs.setdefault("clip_max", 1.0)
 
-    attack_type = str(attack_config.get("type", "adaptive_cw_l2")).strip().lower()
-    if attack_type == "adaptive_cw_l2":
-        attack_generator = generate_adaptive_cw_l2_attack
-    elif attack_type == "original_adaptive_cw_l2":
-        attack_generator = generate_original_adaptive_cw_l2_attack
+    attack_type = str(attack_config.get("type", "native_adaptive_cw_l2")).strip().lower()
+    if attack_type == "native_adaptive_cw_l2":
+        attack_generator = generate_native_adaptive_cw_l2_attack
     else:
         raise ValueError("Unsupported defense-aware attack type: {0}".format(attack_type))
 
     def attack(image: np.ndarray, true_label: int, clean_pred: int) -> np.ndarray:
         call_kwargs = dict(kwargs)
 
-        # The current approximation needs the shared detector transform and
-        # predict function. The original CarliniL2Adaptive wrapper should keep
-        # its own internal defense-aware predicate, matching the reference code.
-        if attack_type == "adaptive_cw_l2":
-            call_kwargs["transform_fn"] = transform_fn
-            call_kwargs["predict_fn"] = predict_fn
+        call_kwargs["transform_fn"] = transform_fn
+        call_kwargs["predict_fn"] = predict_fn
 
         adversarial = attack_generator(
             model=graph["model"],

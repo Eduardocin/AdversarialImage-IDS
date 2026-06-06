@@ -14,8 +14,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.attacks.adaptive_cw_l2 import (  # noqa: E402
-    generate_adaptive_cw_l2_attack,
-    generate_original_adaptive_cw_l2_attack,
+    _update_best_defense_aware_candidates,
+    generate_native_adaptive_cw_l2_attack,
 )
 from deepdetector.attacks.nn_robust import NnRobustModelAdapter  # noqa: E402
 from deepdetector.attacks.registry import ATTACK_REGISTRY  # noqa: E402
@@ -63,20 +63,14 @@ def test_defense_aware_config_matches_spec() -> None:
         experiment["attacks"]["defense_unaware"]["nn_robust_attacks_root"]
         == "nn_robust_attacks"
     )
-    assert experiment["attacks"]["defense_aware"]["type"] == "original_adaptive_cw_l2"
-    assert (
-        experiment["attacks"]["defense_aware"]["nn_robust_attacks_root"]
-        == "nn_robust_attacks"
-    )
+    assert experiment["attacks"]["defense_aware"]["type"] == "native_adaptive_cw_l2"
+    assert "nn_robust_attacks_root" not in experiment["attacks"]["defense_aware"]
     assert experiment["attacks"]["defense_aware"]["input_range"] == {
         "min": 0.0,
         "max": 1.0,
     }
-    assert experiment["attacks"]["defense_aware"]["attack_box"] == {
-        "min": -0.5,
-        "max": 0.5,
-    }
-    assert experiment["attacks"]["defense_aware"]["model_input_shift"] == 0.5
+    assert "attack_box" not in experiment["attacks"]["defense_aware"]
+    assert "model_input_shift" not in experiment["attacks"]["defense_aware"]
     assert experiment["detector"]["type"] == "final_adaptive_detection_filter"
     assert experiment["detector"]["spatial_filter"] == {
         "type": "cross_mean",
@@ -166,100 +160,85 @@ def test_detector_builder_uses_cross_mean_radius(monkeypatch) -> None:
     np.testing.assert_array_equal(filtered, np.full((3, 3, 1), 1.0, dtype=np.float32))
 
 
-def test_adaptive_cw_l2_is_registered() -> None:
-    assert "adaptive_cw_l2" in ATTACK_REGISTRY
+def test_native_adaptive_cw_l2_is_registered() -> None:
+    assert "native_adaptive_cw_l2" in ATTACK_REGISTRY
+    assert "adaptive_cw_l2" not in ATTACK_REGISTRY
+    assert "original_adaptive_cw_l2" not in ATTACK_REGISTRY
 
 
-def test_original_adaptive_cw_l2_is_registered() -> None:
-    assert "original_adaptive_cw_l2" in ATTACK_REGISTRY
+def test_native_candidate_update_uses_intermediate_defense_aware_criterion() -> None:
+    clean = np.asarray([[[[0.0]]]], dtype=np.float32)
+    labels = np.asarray([0], dtype=np.int32)
+    best = clean.copy()
+    best_l2 = np.asarray([np.inf], dtype=np.float64)
+    transform_calls = []
 
-
-def test_adaptive_cw_l2_accepts_only_undetected_misclassifications() -> None:
-    images = np.asarray([[[[0.0]]], [[[1.0]]], [[[2.0]]]], dtype=np.float32)
-    labels = np.asarray([0, 0, 0], dtype=np.int32)
-    candidates = np.asarray([[[[1.0]]], [[[2.0]]], [[[-1.0]]]], dtype=np.float32)
-
-    def base_attack_fn(**kwargs):
-        return candidates
+    def score_for(label: int) -> np.ndarray:
+        scores = np.zeros((1, 10), dtype=np.float32)
+        scores[0, int(label)] = 10.0
+        return scores
 
     def predict_fn(batch):
         values = batch.reshape((len(batch), -1))[:, 0]
-        return np.asarray([0 if value in (0.0, -1.0) else int(value) for value in values])
+        return np.asarray([int(round(float(value))) for value in values])
 
     def transform_fn(image):
-        if float(image.reshape(-1)[0]) == 2.0:
+        value = float(np.asarray(image).reshape(-1)[0])
+        transform_calls.append(value)
+        if value == 2.0:
             return np.asarray([[[1.0]]], dtype=np.float32)
         return image
 
-    result = generate_adaptive_cw_l2_attack(
-        model=object(),
-        images=images,
+    # First candidate fools the classifier but is detected after transform.
+    best, best_l2 = _update_best_defense_aware_candidates(
+        best_attacks=best,
+        best_l2=best_l2,
+        clean_images=clean,
         labels=labels,
+        candidates=np.asarray([[[[2.0]]]], dtype=np.float32),
         transform_fn=transform_fn,
         predict_fn=predict_fn,
-        base_attack_fn=base_attack_fn,
+        scores=score_for(2),
     )
+    np.testing.assert_array_equal(best, clean)
 
-    np.testing.assert_array_equal(result[0], candidates[0])
-    np.testing.assert_array_equal(result[1], images[1])
-    np.testing.assert_array_equal(result[2], images[2])
+    # Second candidate is valid, then a later lower-L2 candidate replaces it.
+    for value in (3.0, 1.0):
+        best, best_l2 = _update_best_defense_aware_candidates(
+            best_attacks=best,
+            best_l2=best_l2,
+            clean_images=clean,
+            labels=labels,
+            candidates=np.asarray([[[[value]]]], dtype=np.float32),
+            transform_fn=transform_fn,
+            predict_fn=predict_fn,
+            scores=score_for(int(value)),
+        )
 
-
-def test_original_adaptive_cw_l2_converts_ranges_and_uses_local_backend(tmp_path) -> None:
-    centered_path = tmp_path / "centered.npy"
-    labels_path = tmp_path / "labels.npy"
-    backend = tmp_path / "l2_adaptive_attack.py"
-    backend.write_text(
-        "\n".join(
-            [
-                "import numpy as np",
-                "class CarliniL2Adaptive:",
-                "    def __init__(self, sess, model, **kwargs):",
-                "        assert kwargs['boxmin'] == -0.5",
-                "        assert kwargs['boxmax'] == 0.5",
-                "        self.model = model",
-                "    def attack(self, images, labels):",
-                "        np.save({0!r}, images)".format(str(centered_path)),
-                "        np.save({0!r}, labels)".format(str(labels_path)),
-                "        return images + 0.25",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    class FakeModel:
-        sess = object()
-        num_labels = 10
-
-    images = np.asarray([[[[0.0], [1.0]], [[0.5], [0.25]]]], dtype=np.float32)
-
-    result = generate_original_adaptive_cw_l2_attack(
-        model=FakeModel(),
-        images=images,
-        labels=np.asarray([3], dtype=np.int32),
-        nn_robust_attacks_root=str(tmp_path),
-        input_range={"min": 0.0, "max": 1.0},
-        attack_box={"min": -0.5, "max": 0.5},
-        model_input_shift=0.5,
-    )
-
-    np.testing.assert_allclose(np.load(centered_path), [[[[-0.5], [0.5]], [[0.0], [-0.25]]]])
-    np.testing.assert_array_equal(np.load(labels_path), np.eye(10, dtype=np.float32)[[3]])
-    np.testing.assert_allclose(result, [[[[0.25], [1.0]], [[0.75], [0.5]]]])
-    assert result.dtype == np.float32
+    np.testing.assert_array_equal(best, np.asarray([[[[1.0]]]], dtype=np.float32))
+    np.testing.assert_allclose(best_l2, [1.0])
+    assert transform_calls == [2.0, 3.0, 1.0]
 
 
-def test_original_adaptive_cw_l2_missing_backend_fails_clearly(tmp_path) -> None:
-    class FakeModel:
-        sess = object()
-        num_labels = 10
-
-    with pytest.raises(ImportError, match="Missing nn_robust_attacks l2_adaptive_attack.py"):
-        generate_original_adaptive_cw_l2_attack(
-            model=FakeModel(),
+def test_native_adaptive_cw_l2_requires_shared_transform_and_predict() -> None:
+    with pytest.raises(ValueError, match="transform_fn"):
+        generate_native_adaptive_cw_l2_attack(
+            model=object(),
             images=np.zeros((1, 1, 1, 1), dtype=np.float32),
             labels=np.asarray([0], dtype=np.int32),
-            nn_robust_attacks_root=str(tmp_path),
+            predict_fn=lambda batch: np.asarray([0]),
+            max_iterations=1,
+            binary_search_steps=1,
+        )
+
+    with pytest.raises(ValueError, match="predict_fn"):
+        generate_native_adaptive_cw_l2_attack(
+            model=object(),
+            images=np.zeros((1, 1, 1, 1), dtype=np.float32),
+            labels=np.asarray([0], dtype=np.int32),
+            transform_fn=lambda image: image,
+            max_iterations=1,
+            binary_search_steps=1,
         )
 
 
@@ -452,7 +431,7 @@ def test_save_defense_aware_outputs_writes_only_official_artifacts(tmp_path) -> 
     assert not (tmp_path / "adversarial_examples").exists()
 
 
-def test_run_defense_aware_evaluation_uses_shared_transform_in_adaptive_attack(
+def test_run_defense_aware_evaluation_uses_shared_transform_in_native_attack(
     monkeypatch,
 ) -> None:
     images = np.asarray([[[[0.0]]]], dtype=np.float32)
@@ -489,6 +468,8 @@ def test_run_defense_aware_evaluation_uses_shared_transform_in_adaptive_attack(
 
     def fake_adaptive(**kwargs):
         captured["adaptive_transform"] = kwargs["transform_fn"]
+        captured["adaptive_predict"] = kwargs["predict_fn"]
+        captured["adaptive_type_kwargs"] = dict(kwargs)
         return np.asarray([[[[1.0]]]], dtype=np.float32)
 
     monkeypatch.setattr(
@@ -503,7 +484,7 @@ def test_run_defense_aware_evaluation_uses_shared_transform_in_adaptive_attack(
     )
     monkeypatch.setattr(
         defense_aware_module,
-        "generate_adaptive_cw_l2_attack",
+        "generate_native_adaptive_cw_l2_attack",
         fake_adaptive,
     )
 
@@ -519,8 +500,8 @@ def test_run_defense_aware_evaluation_uses_shared_transform_in_adaptive_attack(
                     "nn_robust_attacks_root": "nn_robust_attacks",
                 },
                 "defense_aware": {
-                    "type": "adaptive_cw_l2",
-                    "nn_robust_attacks_root": "nn_robust_attacks",
+                    "type": "native_adaptive_cw_l2",
+                    "input_range": {"min": 0.0, "max": 1.0},
                 },
             },
             "detector": {"type": "final_adaptive_detection_filter"},
@@ -528,11 +509,13 @@ def test_run_defense_aware_evaluation_uses_shared_transform_in_adaptive_attack(
     )
 
     assert captured["adaptive_transform"] is captured["transform"]
+    assert callable(captured["adaptive_predict"])
+    assert "nn_robust_attacks_root" not in captured["adaptive_type_kwargs"]
     assert rows[0]["success"] == 1
     assert rows[1]["success"] == 1
 
 
-def test_run_defense_aware_evaluation_dispatches_original_adaptive_attack(
+def test_run_defense_aware_evaluation_rejects_external_adaptive_backend_config(
     monkeypatch,
 ) -> None:
     images = np.asarray([[[[0.0]]]], dtype=np.float32)
@@ -567,14 +550,14 @@ def test_run_defense_aware_evaluation_dispatches_original_adaptive_attack(
         lambda **kwargs: np.asarray([[[[1.0]]]], dtype=np.float32),
     )
 
-    def fake_original(**kwargs):
+    def fake_native(**kwargs):
         captured.update(kwargs)
         return np.asarray([[[[1.0]]]], dtype=np.float32)
 
     monkeypatch.setattr(
         defense_aware_module,
-        "generate_original_adaptive_cw_l2_attack",
-        fake_original,
+        "generate_native_adaptive_cw_l2_attack",
+        fake_native,
     )
 
     defense_aware_module.run_defense_aware_evaluation(
@@ -589,19 +572,28 @@ def test_run_defense_aware_evaluation_dispatches_original_adaptive_attack(
                     "nn_robust_attacks_root": "nn_robust_attacks",
                 },
                 "defense_aware": {
-                    "type": "original_adaptive_cw_l2",
-                    "nn_robust_attacks_root": "nn_robust_attacks",
+                    "type": "native_adaptive_cw_l2",
                     "input_range": {"min": 0.0, "max": 1.0},
-                    "attack_box": {"min": -0.5, "max": 0.5},
-                    "model_input_shift": 0.5,
                 },
             },
             "detector": {"type": "final_adaptive_detection_filter"},
         }
     )
 
-    assert captured["nn_robust_attacks_root"] == "nn_robust_attacks"
     assert captured["input_range"] == {"min": 0.0, "max": 1.0}
-    assert captured["attack_box"] == {"min": -0.5, "max": 0.5}
-    assert captured["model_input_shift"] == 0.5
-    assert "transform_fn" not in captured
+    assert "nn_robust_attacks_root" not in captured
+    assert "attack_box" not in captured
+    assert "model_input_shift" not in captured
+    assert "transform_fn" in captured
+    assert "predict_fn" in captured
+
+
+@pytest.mark.parametrize("attack_type", ["adaptive_cw_l2", "original_adaptive_cw_l2"])
+def test_defense_aware_evaluator_rejects_removed_adaptive_types(attack_type) -> None:
+    with pytest.raises(ValueError, match="Unsupported defense-aware attack type"):
+        defense_aware_module._adaptive_attack_fn(
+            graph={"model": object()},
+            attack_config={"type": attack_type},
+            transform_fn=lambda image: image,
+            predict_fn=lambda batch: np.asarray([0]),
+        )

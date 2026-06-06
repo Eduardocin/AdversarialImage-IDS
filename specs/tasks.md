@@ -265,6 +265,21 @@ Use this file to track implementation tasks derived from specifications in `spec
   - [x] Add a loader for `CarliniL2Adaptive` from `l2_adaptive_attack.py`.
   - [x] Add `original_adaptive_cw_l2` range conversion and M2 input-shift handling.
   - [x] Dispatch `defense_aware` to the original adaptive wrapper by config type.
-  - [x] Preserve the existing `adaptive_cw_l2` wrapper for comparison.
+  - [x] Preserve the existing `adaptive_cw_l2` wrapper for comparison during this superseded iteration.
   - [x] Match the final filter tie-break rule from the base code.
   - [x] Add focused tests for config, registry, range conversion, adapter shift, dispatch, and filter tie-breaks.
+- [x] Replace the defense-aware attack with native adaptive CW-L2 from `specs/features/defense_aware.md`
+  - [x] Update the official `defense_aware` config to use `native_adaptive_cw_l2`.
+  - [x] Implement native CW-L2 optimization in `src/deepdetector` with candidate evaluation during each optimization iteration.
+  - [x] Track the best defense-aware candidate across all iterations and binary-search steps.
+  - [x] Reject the previous official strategy of CW-L2 final-result post-filtering.
+  - [x] Ensure the native attack does not depend on `temp/` files or `nn_robust_attacks/l2_adaptive_attack.py`.
+  - [x] Keep `nn_robust_attacks.CarliniL2` for the defense-unaware scenario.
+  - [x] Add automated tests for native config, intermediate-candidate acceptance, no external adaptive backend dependency, failure behavior, metrics, and output artifacts.
+  - [x] Run focused defense-aware tests, then broader validation if the implementation risk warrants it.
+- [x] Remove superseded adaptive CW-L2 attack wrappers from runtime code
+  - [x] Remove the post-filtering `adaptive_cw_l2` registry entry and export.
+  - [x] Remove the external-backend `original_adaptive_cw_l2` registry entry and export.
+  - [x] Remove the unused `CarliniL2Adaptive` loader from `nn_robust.py`.
+  - [x] Keep `native_adaptive_cw_l2` as the only defense-aware adaptive attack registered by the package.
+  - [x] Update tests to assert removed attack types are not registered and are rejected by the defense-aware evaluator.

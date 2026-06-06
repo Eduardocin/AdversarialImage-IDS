@@ -13,7 +13,7 @@ A implementação deve seguir a arquitetura atual do projeto, utilizando exclusi
 
 ```bash
 python scripts/run_experiment.py --experiment defense_aware
-````
+```
 
 ---
 
@@ -46,7 +46,19 @@ Este experimento não deve:
 
 ---
 
-## Background
+## Out Of Scope
+
+Além dos itens excluídos no escopo, esta especificação não inclui:
+
+* vendorização dos arquivos originais em `src/deepdetector`;
+* uso dos arquivos em `temp/` como dependência de runtime;
+* uso de `nn_robust_attacks/l2_adaptive_attack.py` como backend oficial do ataque adaptativo;
+* criação de uma interface pública separada para o ataque adaptativo;
+* alteração da lógica oficial do filtro final adaptativo fora do necessário para manter consistência com esta especificação.
+
+---
+
+## Context
 
 No artigo, os autores avaliam dois cenários de ameaça.
 
@@ -80,11 +92,9 @@ Test/CW/adaptive_CWL2_MNIST.py
 Test/CW/l2_adaptive_attack.py
 ```
 
-A implementação deste projeto deve reproduzir esse comportamento de forma compatível com a arquitetura atual, carregando o backend adaptativo a partir do checkout local configurável:
+A implementação deste projeto deve reproduzir o comportamento metodológico desses arquivos de forma compatível com a arquitetura atual, mas **sem usar os arquivos de `temp/` ou `Test/CW/` como parte do projeto**.
 
-```text
-nn_robust_attacks/l2_adaptive_attack.py
-```
+O ataque adaptativo oficial deve ser uma implementação nativa em `src/deepdetector`. A referência original serve apenas para entender a regra de busca: durante o loop de otimização do CW-L2, o melhor candidato defense-aware só é atualizado quando o candidato também evade a transformação do detector.
 
 ---
 
@@ -149,8 +159,7 @@ defense_aware:
       learning_rate: 0.1
 
     defense_aware:
-      type: original_adaptive_cw_l2
-      nn_robust_attacks_root: nn_robust_attacks
+      type: native_adaptive_cw_l2
       targeted: false
       confidence: 0
       max_iterations: 2000
@@ -160,10 +169,6 @@ defense_aware:
       input_range:
         min: 0.0
         max: 1.0
-      attack_box:
-        min: -0.5
-        max: 0.5
-      model_input_shift: 0.5
 
   detector:
     type: final_adaptive_detection_filter
@@ -255,7 +260,7 @@ Esse ataque não deve receber o detector como entrada durante a otimização.
 
 ## Defense-Aware Adaptive CW-L2
 
-O ataque defense-aware deve utilizar uma versão adaptativa do CW-L2.
+O ataque defense-aware deve utilizar uma implementação nativa adaptativa do CW-L2 em `src/deepdetector`.
 
 O ataque conhece:
 
@@ -271,6 +276,116 @@ C(x_adv) == C(T(x_adv))
 ```
 
 A implementação deve rejeitar candidatos adversariais que enganem o classificador, mas sejam detectados pela transformação adaptativa.
+
+Essa rejeição deve acontecer durante a busca do CW-L2, não apenas depois que um CW-L2 padrão termina.
+
+---
+
+## Native Adaptive CW-L2 Search
+
+A implementação oficial do ataque defense-aware deve ser nativa no pacote `deepdetector`.
+
+Ela não deve importar, copiar em runtime, executar ou depender de:
+
+```text
+temp/adaptive_CWL2_MNIST.py
+temp/l2_adaptive_attack.py
+nn_robust_attacks/l2_adaptive_attack.py
+```
+
+Os arquivos em `temp/` podem ser usados apenas como referência de comportamento durante análise humana. Eles não devem ser tratados como código do projeto, fixture de teste, backend configurável ou dependência de execução.
+
+O ataque nativo deve seguir a estrutura conceitual do CW-L2:
+
+1. otimizar uma variável modificadora em espaço limitado por caixa;
+2. usar a perda CW-L2 padrão para gerar candidatos adversariais;
+3. executar `binary_search_steps` sobre a constante de trade-off;
+4. executar até `max_iterations` passos de otimização por etapa de busca;
+5. acompanhar o menor L2 para candidatos que enganam o classificador;
+6. acompanhar separadamente o menor L2 para candidatos que também evadem a defesa.
+
+Durante cada iteração de otimização, para cada candidato `x_candidate` produzido pelo estado atual do otimizador, a implementação deve avaliar:
+
+```python
+candidate_pred = C(x_candidate)
+transformed_pred = C(T(x_candidate))
+```
+
+Um candidato só pode atualizar o melhor ataque defense-aware global quando todas as condições forem verdadeiras:
+
+```python
+candidate_pred != y_original
+candidate_pred == transformed_pred
+l2_distance(x_candidate, x_original) < best_defense_aware_l2
+```
+
+Para ataques untargeted, `candidate_pred != y_original` é o critério de adversarialidade. Se ataques targeted forem configurados futuramente, o critério de adversarialidade deve seguir a semântica CW-L2 targeted, mas a evasão continua exigindo:
+
+```python
+candidate_pred == transformed_pred
+```
+
+A atualização da constante de busca binária deve continuar baseada no sucesso adversarial do CW-L2 contra o classificador, como no ataque original. A atualização do melhor exemplo retornado pelo cenário defense-aware deve ser mais restrita e exigir a condição completa:
+
+```python
+C(x_candidate) != y_original and C(x_candidate) == C(T(x_candidate))
+```
+
+Se nenhum candidato defense-aware válido for encontrado em todas as iterações e etapas de busca, o ataque deve sinalizar falha de forma compatível com o avaliador atual. A forma permitida é retornar a imagem limpa original naquela posição, desde que a avaliação final conte a amostra como `adaptive_failure`.
+
+É proibido implementar o ataque oficial como:
+
+1. executar CW-L2 padrão até o final;
+2. avaliar somente o adversarial final retornado pelo CW-L2;
+3. aceitar ou rejeitar esse único resultado por pós-filtragem.
+
+Essa estratégia de pós-filtragem pode existir apenas como implementação experimental interna, mas não pode ser usada pelo experimento oficial `defense_aware`.
+
+---
+
+## Business Rules
+
+* Amostras limpas classificadas incorretamente pelo MNIST M2 são excluídas da avaliação.
+* O ataque defense-unaware tem sucesso quando `C(x_adv) != y_original`.
+* O ataque defense-unaware é detectado quando `C(x_adv) != C(T(x_adv))`.
+* O ataque defense-aware tem sucesso somente quando `C(x_adv) != y_original` e `C(x_adv) == C(T(x_adv))`.
+* Candidatos defense-aware detectados por `T` não podem ser contabilizados como sucesso.
+* A distância L2 entra nas médias somente para ataques bem-sucedidos.
+* A mesma transformação `T` deve ser usada durante a geração adaptativa, a avaliação defense-unaware e a avaliação final defense-aware.
+
+---
+
+## Functional Requirements
+
+* Executar o experimento somente pelo runner central `scripts/run_experiment.py`.
+* Carregar MNIST test no intervalo configurado por `start` e `end`.
+* Carregar e avaliar o modelo MNIST M2.
+* Gerar o ataque defense-unaware com CW-L2 padrão.
+* Gerar o ataque defense-aware com CW-L2 adaptativo nativo.
+* Avaliar candidatos intermediários do ataque adaptativo dentro do loop de otimização.
+* Escrever somente `metrics.csv` e `metrics.json` no diretório oficial do experimento.
+
+---
+
+## Non-Functional Requirements
+
+* Manter a implementação simples, legível e compatível com os padrões existentes em `deepdetector`.
+* Evitar dependências novas quando as APIs atuais de TensorFlow/Keras e NumPy forem suficientes.
+* Preservar a escala pública `[0.0, 1.0]` para imagens avaliadas pelo modelo, filtro e métricas.
+* Não gerar datasets, pesos, adversariais persistidos, diagnósticos ou relatórios adicionais.
+* Manter os arquivos em `temp/` fora do projeto e fora dos testes automatizados.
+
+---
+
+## Error Cases
+
+* Se `dataset.name` não for `mnist`, a execução deve falhar com erro claro.
+* Se o modelo MNIST M2 ou seu checkpoint não estiver disponível, a execução deve falhar com erro claro.
+* Se o ataque adaptativo não receber `transform_fn` ou detector equivalente, a execução deve falhar com erro claro.
+* Se o ataque adaptativo não receber uma função de predição compatível, a execução deve falhar com erro claro.
+* Se `input_range` for inválido, a execução deve falhar com erro claro.
+* Se nenhum candidato defense-aware válido for encontrado para uma amostra, a amostra deve ser contada como `adaptive_failure`.
+* Se a avaliação final detectar uma amostra retornada como sucesso defense-aware, a amostra deve ser tratada como falha de implementação ou falha do critério de aceitação.
 
 ---
 
@@ -452,7 +567,7 @@ blind_undetected += 1
 
 ## Step 5 — Generate Defense-Aware Adversarial Example
 
-Gerar `x_adv_adaptive` utilizando Adaptive CW-L2.
+Gerar `x_adv_adaptive` utilizando o CW-L2 adaptativo nativo.
 
 Durante a busca pelo melhor adversarial, um candidato só pode ser aceito se satisfizer:
 
@@ -851,6 +966,10 @@ O ataque adaptativo não deve duplicar manualmente toda a lógica do filtro dent
 src/deepdetector/filters/
 ```
 
+O ataque adaptativo deve avaliar candidatos intermediários dentro do loop de otimização do CW-L2. A função `transform_fn` deve participar do critério de aceitação desses candidatos intermediários.
+
+O ataque adaptativo oficial não deve depender do backend externo `CarliniL2Adaptive`. O uso de `nn_robust_attacks.CarliniL2` continua permitido para o cenário defense-unaware e para comparação, mas não satisfaz por si só o requisito do cenário defense-aware se o detector for aplicado apenas ao resultado final.
+
 ---
 
 ## Detector Consistency Requirement
@@ -873,7 +992,9 @@ O experimento deve preservar a escala esperada pelo MNIST M2:
 [0.0, 1.0]
 ```
 
-Não converter para `[-0.5, 0.5]` sem uma justificativa explícita e sem converter de volta antes da inferência.
+O ataque nativo pode usar parametrização interna em tanh-space ou outro espaço de otimização limitado por caixa. Porém, todo candidato avaliado por `C`, por `T`, pelas métricas e pelo avaliador deve estar na escala `[0.0, 1.0]`.
+
+Não converter para `[-0.5, 0.5]` antes da inferência do MNIST M2 ou da transformação `T`.
 
 ---
 
@@ -967,9 +1088,12 @@ python scripts/run_experiment.py --experiment defense_aware
 
 * O experimento executa internamente os cenários defense-unaware e defense-aware.
 * O defense-unaware usa CW-L2 padrão via `nn_robust_attacks.CarliniL2`.
-* O defense-aware usa CW-L2 adaptativo com `nn_robust_attacks.CarliniL2` como
-  ataque base.
+* O defense-aware usa uma implementação nativa de CW-L2 adaptativo em `src/deepdetector`.
+* O defense-aware não depende de `temp/l2_adaptive_attack.py` nem de `nn_robust_attacks/l2_adaptive_attack.py`.
 * O ataque adaptativo conhece a transformação `T`.
+* O ataque adaptativo avalia candidatos intermediários durante o loop de otimização.
+* O ataque adaptativo mantém o melhor candidato defense-aware encontrado ao longo de todas as iterações e etapas de busca binária.
+* O ataque adaptativo oficial não é implementado como CW-L2 padrão seguido de pós-filtragem do resultado final.
 * A transformação `T` corresponde ao filtro final adaptativo de detecção do projeto.
 * A transformação `T` não é descrita nem implementada genericamente como união das Tables 7, 8 e 9.
 * MNIST M2 usa escala `[0.0, 1.0]`.

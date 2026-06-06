@@ -7,13 +7,12 @@ from typing import Any, Callable, Optional, Tuple
 import numpy as np
 
 from deepdetector.attacks.nn_robust import (
-    _load_nn_robust_carlini_l2_adaptive,
     _model_session,
     _one_hot,
-    _require_root,
+    _predict_with_model,
     _session_graph_context,
-    generate_nn_robust_cw_l2_attack,
 )
+from deepdetector.attacks.tf_compat import patch_tensorflow_v1_symbols
 
 
 PredictFn = Callable[[np.ndarray], np.ndarray]
@@ -33,94 +32,110 @@ def _predict_ints(predict_fn: PredictFn, images: np.ndarray) -> np.ndarray:
     return predictions.astype(np.int64).reshape(-1)
 
 
-class _OriginalCarliniKerasPredictProxy(object):
-    """Expose .predict(np_array) returning NumPy logits for CarliniL2Adaptive.
+def _cw_compare_scores(
+    scores: np.ndarray,
+    label: int,
+    *,
+    targeted: bool,
+    confidence: float,
+) -> bool:
+    adjusted = np.array(scores, dtype=np.float32, copy=True)
+    if targeted:
+        adjusted[int(label)] -= float(confidence)
+        return int(np.argmax(adjusted)) == int(label)
+    adjusted[int(label)] += float(confidence)
+    return int(np.argmax(adjusted)) != int(label)
 
-    The original `l2_adaptive_attack.py` calls:
 
-        self.tempmodel.model.predict(imgTobePre)
+def _cw_compare_label(
+    candidate_label: int,
+    true_label: int,
+    *,
+    targeted: bool,
+) -> bool:
+    if targeted:
+        return int(candidate_label) == int(true_label)
+    return int(candidate_label) != int(true_label)
 
-    inside `mnistPredicate`. That call happens during the Python-side search and
-    must return a NumPy array, not a symbolic Tensor.
+
+def _as_batch(image: np.ndarray) -> np.ndarray:
+    image_array = np.asarray(image, dtype=np.float32)
+    return image_array.reshape((1,) + tuple(image_array.shape))
+
+
+def _update_best_defense_aware_candidates(
+    *,
+    best_attacks: np.ndarray,
+    best_l2: np.ndarray,
+    clean_images: np.ndarray,
+    labels: np.ndarray,
+    candidates: np.ndarray,
+    transform_fn: TransformFn,
+    predict_fn: PredictFn,
+    targeted: bool = False,
+    confidence: float = 0.0,
+    scores: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Update best candidates using the defense-aware criterion.
+
+    This helper is intentionally separate from the TensorFlow optimizer so tests
+    can assert that intermediate candidates, not only final CW outputs, are
+    accepted according to ``C(x) != y`` and ``C(x) == C(T(x))``.
     """
+    clean_array = np.asarray(clean_images, dtype=np.float32)
+    candidate_array = np.asarray(candidates, dtype=np.float32)
+    label_ints = (
+        np.asarray(labels).astype(np.int64)
+        if np.asarray(labels).ndim == 1
+        else np.argmax(np.asarray(labels), axis=1).astype(np.int64)
+    ).reshape(-1)
+    updated_attacks = np.asarray(best_attacks, dtype=np.float32).copy()
+    updated_l2 = np.asarray(best_l2, dtype=np.float64).copy()
+    score_array = None if scores is None else np.asarray(scores)
 
-    def __init__(
-        self,
-        *,
-        sess: Any,
-        input_tensor: Any,
-        logits_tensor: Any,
-        input_shift: float = 0.5,
-    ) -> None:
-        self.sess = sess
-        self.input_tensor = input_tensor
-        self.logits_tensor = logits_tensor
-        self.input_shift = float(input_shift)
+    for index, candidate in enumerate(candidate_array):
+        if score_array is None:
+            candidate_pred = int(_predict_ints(predict_fn, _as_batch(candidate))[0])
+            adversarial_success = _cw_compare_label(
+                candidate_pred,
+                int(label_ints[index]),
+                targeted=bool(targeted),
+            )
+        else:
+            score = score_array[index]
+            candidate_pred = int(np.argmax(score))
+            adversarial_success = _cw_compare_scores(
+                score,
+                int(label_ints[index]),
+                targeted=bool(targeted),
+                confidence=float(confidence),
+            )
 
-    def predict(self, data: Any) -> np.ndarray:
-        data_array = np.asarray(data, dtype=np.float32)
-        return self.sess.run(
-            self.logits_tensor,
-            feed_dict={self.input_tensor: data_array + self.input_shift},
+        if not adversarial_success:
+            continue
+
+        transformed = np.asarray(transform_fn(candidate), dtype=np.float32).reshape(
+            candidate.shape
         )
+        transformed_pred = int(_predict_ints(predict_fn, _as_batch(transformed))[0])
+        if candidate_pred != transformed_pred:
+            continue
 
-
-class OriginalCarliniAdaptiveModelAdapter(object):
-    """Adapter required by the original CarliniL2Adaptive implementation.
-
-    The original attack expects two different prediction interfaces:
-
-    1. `adapter.predict(symbolic_tensor)` during graph construction. This must
-       return symbolic logits.
-    2. `adapter.model.predict(np_array)` during `mnistPredicate`. This must
-       return NumPy logits.
-
-    The attack operates on centered images in [-0.5, 0.5], while the MNIST M2
-    model in this project receives images in [0, 1]. Therefore both prediction
-    paths add `input_shift=0.5` before calling M2.
-    """
-
-    image_size = 28
-    num_channels = 1
-    num_labels = 10
-
-    def __init__(
-        self,
-        *,
-        keras_model: Any,
-        sess: Any,
-        input_tensor: Any,
-        logits_tensor: Any,
-        input_shift: float = 0.5,
-        image_size: int = 28,
-        num_channels: int = 1,
-        num_labels: int = 10,
-    ) -> None:
-        self.keras_model = keras_model
-        self.sess = sess
-        self.input_tensor = input_tensor
-        self.logits_tensor = logits_tensor
-        self.input_shift = float(input_shift)
-        self.image_size = int(image_size)
-        self.num_channels = int(num_channels)
-        self.num_labels = int(num_labels)
-
-        # Required by original l2_adaptive_attack.py:
-        # self.tempmodel.model.predict(...) -> NumPy logits.
-        self.model = _OriginalCarliniKerasPredictProxy(
-            sess=sess,
-            input_tensor=input_tensor,
-            logits_tensor=logits_tensor,
-            input_shift=input_shift,
+        l2_distance = float(
+            np.sum(
+                np.square(
+                    candidate.astype(np.float32) - clean_array[index].astype(np.float32)
+                )
+            )
         )
+        if l2_distance < float(updated_l2[index]):
+            updated_l2[index] = l2_distance
+            updated_attacks[index] = candidate
 
-    def predict(self, centered_data: Any) -> Any:
-        # Required by original l2_adaptive_attack.py:
-        # model.predict(self.newimg) -> symbolic logits.
-        return self.keras_model(centered_data + self.input_shift)
+    return updated_attacks.astype(np.float32), updated_l2
 
 
-def generate_adaptive_cw_l2_attack(
+def generate_native_adaptive_cw_l2_attack(
     model: Any,
     images: np.ndarray,
     labels: np.ndarray,
@@ -128,70 +143,6 @@ def generate_adaptive_cw_l2_attack(
     transform_fn: Optional[TransformFn] = None,
     detector: Any = None,
     predict_fn: Optional[PredictFn] = None,
-    base_attack_fn: Callable[..., np.ndarray] = generate_nn_robust_cw_l2_attack,
-    **kwargs: Any,
-) -> np.ndarray:
-    """Generate CW-L2 candidates and keep only defense-aware successes.
-
-    A returned candidate must satisfy both required conditions:
-    ``C(x_adv) != y`` and ``C(x_adv) == C(T(x_adv))``. Candidates that fail
-    either condition are rejected by returning the original clean image at that
-    position, allowing the evaluator to count them as attack failures.
-    """
-    if transform_fn is None:
-        transform_fn = getattr(detector, "transform", None)
-    if transform_fn is None:
-        raise ValueError("adaptive CW-L2 requires transform_fn or detector.transform.")
-    if predict_fn is None:
-        predict_fn = getattr(model, "predict_label", None)
-    if predict_fn is None:
-        raise ValueError("adaptive CW-L2 requires predict_fn or model.predict_label.")
-
-    image_array = np.asarray(images, dtype=np.float32)
-    label_array = np.asarray(labels)
-    label_ints = (
-        label_array.astype(np.int64)
-        if label_array.ndim == 1
-        else np.argmax(label_array, axis=1)
-    )
-
-    adversarial = np.asarray(
-        base_attack_fn(
-            model=model,
-            images=image_array,
-            labels=label_array,
-            **kwargs,
-        ),
-        dtype=np.float32,
-    )
-    if adversarial.shape != image_array.shape:
-        raise ValueError("adaptive CW-L2 base attack returned an unexpected shape.")
-
-    accepted = image_array.copy()
-    for index, candidate in enumerate(adversarial):
-        candidate_batch = candidate.reshape((1,) + tuple(candidate.shape))
-        candidate_pred = int(_predict_ints(predict_fn, candidate_batch)[0])
-        transformed = np.asarray(transform_fn(candidate), dtype=np.float32).reshape(
-            candidate.shape
-        )
-        transformed_pred = int(
-            _predict_ints(
-                predict_fn,
-                transformed.reshape((1,) + tuple(transformed.shape)),
-            )[0]
-        )
-        if candidate_pred != int(label_ints[index]) and candidate_pred == transformed_pred:
-            accepted[index] = candidate
-
-    return accepted.astype(np.float32)
-
-
-def generate_original_adaptive_cw_l2_attack(
-    model: Any,
-    images: np.ndarray,
-    labels: np.ndarray,
-    *,
-    nn_robust_attacks_root: Optional[str] = None,
     confidence: float = 0.0,
     batch_size: int = 1,
     max_iterations: int = 2000,
@@ -201,84 +152,175 @@ def generate_original_adaptive_cw_l2_attack(
     abort_early: bool = True,
     targeted: bool = False,
     input_range: Any = None,
-    attack_box: Any = None,
-    model_input_shift: float = 0.5,
     clip_min: float = 0.0,
     clip_max: float = 1.0,
     **_: Any,
 ) -> np.ndarray:
-    """Generate adaptive CW-L2 examples using the original CarliniL2Adaptive.
+    """Generate defense-aware CW-L2 examples with native candidate tracking.
 
-    Project tensors use [0, 1]. The original attack uses centered tensors in
-    [-0.5, 0.5]. This function converts both ways and uses an adapter whose
-    `.model.predict(...)` returns NumPy logits for the original attack's
-    internal `mnistPredicate`.
+    This function does not run CW-L2 once and post-filter the final result. It
+    evaluates every optimizer candidate and keeps the lowest-L2 image satisfying
+    both adversarial success and detector evasion.
     """
+    if transform_fn is None:
+        transform_fn = getattr(detector, "transform", None)
+    if transform_fn is None:
+        raise ValueError("native adaptive CW-L2 requires transform_fn or detector.transform.")
+    if predict_fn is None:
+        predict_fn = getattr(model, "predict_label", None)
+    if predict_fn is None:
+        raise ValueError("native adaptive CW-L2 requires predict_fn or model.predict_label.")
+
     image_array = np.asarray(images, dtype=np.float32)
     if image_array.ndim != 4:
-        raise ValueError("original adaptive CW-L2 requires image batches.")
+        raise ValueError("native adaptive CW-L2 requires image batches.")
+    if int(batch_size) != len(image_array):
+        # The experiment invokes this attack one sample at a time. Keeping the
+        # native implementation batch-exact avoids padding candidates that would
+        # never be evaluated.
+        batch_size = len(image_array)
 
     input_min, input_max = _bounds(input_range, clip_min, clip_max)
-    box_min, box_max = _bounds(attack_box, -0.5, 0.5)
     input_span = input_max - input_min
-    box_span = box_max - box_min
-    if input_span <= 0.0 or box_span <= 0.0:
-        raise ValueError("original adaptive CW-L2 requires valid input_range and attack_box.")
+    if input_span <= 0.0:
+        raise ValueError("native adaptive CW-L2 requires a valid input_range.")
 
-    centered_images = (image_array - input_min) / input_span * box_span + box_min
+    clipped_images = np.clip(image_array, input_min, input_max).astype(np.float32)
+    label_array = np.asarray(labels)
+    num_labels = int(getattr(model, "num_labels", 10))
+    one_hot_labels = _one_hot(label_array, num_labels)
+    label_ints = np.argmax(one_hot_labels, axis=1).astype(np.int64)
 
+    patch_tensorflow_v1_symbols()
+    import tensorflow as tf
+
+    compat_v1 = getattr(getattr(tf, "compat", None), "v1", tf)
     session = _model_session(model)
-    input_tensor = getattr(model, "input_tensor", None)
-    logits_tensor = getattr(model, "logits_tensor", None)
-    if logits_tensor is None:
-        logits_tensor = getattr(model, "predictions", None)
+    shape = tuple(int(value) for value in clipped_images.shape)
+    lower_bound = np.zeros(len(clipped_images), dtype=np.float32)
+    const = np.ones(len(clipped_images), dtype=np.float32) * float(initial_const)
+    upper_bound = np.ones(len(clipped_images), dtype=np.float32) * 1e10
+    repeat = int(binary_search_steps) >= 10
+    best_l2 = np.ones(len(clipped_images), dtype=np.float64) * np.inf
+    best_attacks = clipped_images.copy()
 
-    if input_tensor is None:
-        raise ValueError("M2 model must expose .input_tensor for original_adaptive_cw_l2.")
-    if logits_tensor is None:
-        raise ValueError(
-            "M2 model must expose .logits_tensor or .predictions for original_adaptive_cw_l2."
-        )
-
-    one_hot_labels = _one_hot(np.asarray(labels), 10)
-    CarliniL2Adaptive = _load_nn_robust_carlini_l2_adaptive(
-        _require_root(nn_robust_attacks_root)
-    )
-
-    adapter = OriginalCarliniAdaptiveModelAdapter(
-        keras_model=model,
-        sess=session,
-        input_tensor=input_tensor,
-        logits_tensor=logits_tensor,
-        input_shift=float(model_input_shift),
-        image_size=int(centered_images.shape[1]),
-        num_channels=int(centered_images.shape[3]),
-        num_labels=10,
-    )
+    scaled = (clipped_images - input_min) / input_span
+    tanh_images = np.arctanh((scaled * 2.0 - 1.0) * 0.999999).astype(np.float32)
 
     with _session_graph_context(session):
-        attack = CarliniL2Adaptive(
-            session,
-            adapter,
-            batch_size=int(batch_size),
-            confidence=float(confidence),
-            targeted=bool(targeted),
-            learning_rate=float(learning_rate),
-            binary_search_steps=int(binary_search_steps),
-            max_iterations=int(max_iterations),
-            abort_early=bool(abort_early),
-            initial_const=float(initial_const),
-            boxmin=float(box_min),
-            boxmax=float(box_max),
+        start_vars = set(variable.name for variable in compat_v1.global_variables())
+        modifier = tf.Variable(
+            np.zeros(shape, dtype=np.float32),
+            name="native_adaptive_cw_modifier",
         )
-        centered_adversarial = attack.attack(centered_images, one_hot_labels)
+        timg = tf.Variable(
+            np.zeros(shape, dtype=np.float32),
+            name="native_adaptive_cw_timg",
+        )
+        tlab = tf.Variable(
+            np.zeros((len(clipped_images), num_labels), dtype=np.float32),
+            name="native_adaptive_cw_tlab",
+        )
+        tradeoff_const = tf.Variable(
+            np.zeros(len(clipped_images), dtype=np.float32),
+            name="native_adaptive_cw_const",
+        )
 
-    adversarial = (
-        (np.asarray(centered_adversarial, dtype=np.float32) - box_min)
-        / box_span
-        * input_span
-        + input_min
-    )
-    if adversarial.shape != image_array.shape:
-        raise ValueError("original adaptive CW-L2 returned an unexpected shape.")
-    return np.clip(adversarial, clip_min, clip_max).astype(np.float32)
+        assign_timg = compat_v1.placeholder(tf.float32, shape)
+        assign_tlab = compat_v1.placeholder(
+            tf.float32,
+            (len(clipped_images), num_labels),
+        )
+        assign_const = compat_v1.placeholder(tf.float32, [len(clipped_images)])
+        setup = [
+            timg.assign(assign_timg),
+            tlab.assign(assign_tlab),
+            tradeoff_const.assign(assign_const),
+        ]
+
+        newimg = (tf.tanh(modifier + timg) + 1.0) / 2.0 * input_span + input_min
+        original = (tf.tanh(timg) + 1.0) / 2.0 * input_span + input_min
+        output = _predict_with_model(model, newimg)
+        l2dist = tf.reduce_sum(tf.square(newimg - original), axis=[1, 2, 3])
+        real = tf.reduce_sum(tlab * output, axis=1)
+        other = tf.reduce_max((1.0 - tlab) * output - tlab * 10000.0, axis=1)
+        if bool(targeted):
+            loss1 = tf.maximum(0.0, other - real + float(confidence))
+        else:
+            loss1 = tf.maximum(0.0, real - other + float(confidence))
+        loss = tf.reduce_sum(tradeoff_const * loss1) + tf.reduce_sum(l2dist)
+
+        optimizer = compat_v1.train.AdamOptimizer(float(learning_rate))
+        train = optimizer.minimize(loss, var_list=[modifier])
+        end_vars = compat_v1.global_variables()
+        new_vars = [variable for variable in end_vars if variable.name not in start_vars]
+        init = compat_v1.variables_initializer(var_list=new_vars)
+
+        check_every = max(int(max_iterations) // 10, 1)
+        for outer_step in range(int(binary_search_steps)):
+            session.run(init)
+            if repeat and outer_step == int(binary_search_steps) - 1:
+                const = upper_bound.astype(np.float32)
+            session.run(
+                setup,
+                {
+                    assign_timg: tanh_images,
+                    assign_tlab: one_hot_labels,
+                    assign_const: const,
+                },
+            )
+
+            best_step_l2 = np.ones(len(clipped_images), dtype=np.float64) * np.inf
+            best_step_score = np.ones(len(clipped_images), dtype=np.int64) * -1
+            previous_loss = 1e6
+
+            for iteration in range(int(max_iterations)):
+                _, current_loss, l2s, scores, candidates = session.run(
+                    [train, loss, l2dist, output, newimg]
+                )
+
+                if bool(abort_early) and iteration % check_every == 0:
+                    if float(current_loss) > previous_loss * 0.9999:
+                        break
+                    previous_loss = float(current_loss)
+
+                for index, (l2_value, score) in enumerate(zip(l2s, scores)):
+                    if l2_value < best_step_l2[index] and _cw_compare_scores(
+                        score,
+                        int(label_ints[index]),
+                        targeted=bool(targeted),
+                        confidence=float(confidence),
+                    ):
+                        best_step_l2[index] = float(l2_value)
+                        best_step_score[index] = int(np.argmax(score))
+
+                best_attacks, best_l2 = _update_best_defense_aware_candidates(
+                    best_attacks=best_attacks,
+                    best_l2=best_l2,
+                    clean_images=clipped_images,
+                    labels=label_ints,
+                    candidates=np.clip(candidates, input_min, input_max),
+                    transform_fn=transform_fn,
+                    predict_fn=predict_fn,
+                    targeted=bool(targeted),
+                    confidence=float(confidence),
+                    scores=scores,
+                )
+
+            for index in range(len(clipped_images)):
+                if best_step_score[index] != -1 and _cw_compare_label(
+                    int(best_step_score[index]),
+                    int(label_ints[index]),
+                    targeted=bool(targeted),
+                ):
+                    upper_bound[index] = min(upper_bound[index], const[index])
+                    if upper_bound[index] < 1e9:
+                        const[index] = (lower_bound[index] + upper_bound[index]) / 2.0
+                else:
+                    lower_bound[index] = max(lower_bound[index], const[index])
+                    if upper_bound[index] < 1e9:
+                        const[index] = (lower_bound[index] + upper_bound[index]) / 2.0
+                    else:
+                        const[index] *= 10.0
+
+    return np.clip(best_attacks, input_min, input_max).astype(np.float32)
