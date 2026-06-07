@@ -1,39 +1,82 @@
-# DeepDetector Reimplementation
+# AdversarialImage-IDS / DeepDetector
 
-Reimplementacao organizada do metodo de Liang et al., "Detecting Adversarial
-Image Examples in Deep Networks with Adaptive Noise Reduction", usando o
-repositorio `OwenSec/DeepDetector` como referencia metodologica.
+Reimplementacao orientada por especificacoes do metodo de Liang et al.,
+"Detecting Adversarial Image Examples in Deep Networks with Adaptive Noise
+Reduction". O projeto usa `OwenSec/DeepDetector` como referencia metodologica,
+mas o codigo atual esta organizado como um pacote Python testavel, com
+experimentos declarados em YAML e execucao centralizada.
 
-O objetivo principal e reproduzir primeiro o comportamento experimental do
-artigo e do codigo original antes de propor extensoes. A arquitetura atual
-separa codigo reutilizavel em `src/deepdetector`, configuracoes em `configs/`,
-scripts operacionais em `scripts/`, notas de reproducao em `reproduction_notes/`
-e saidas experimentais em `results/` e `artifacts/`.
+O foco do repositorio e reproduzir e estender, de forma controlada, fluxos de
+deteccao de exemplos adversariais para datasets MNIST-like e ImageNet:
 
-## Estado Atual
+- reproducoes das tabelas 3, 4, 6, 7, 8, 9 e 10 do artigo;
+- avaliacao de ataques FGSM, DeepFool, Carlini-Wagner L2/Linf e variantes
+  defense-aware;
+- filtros de reducao de ruido por quantizacao, suavizacao espacial, entropia e
+  filtro final proposto;
+- experimentos novos com Fashion-MNIST, novas classes ImageNet e regras top-k.
 
-- Pacote Python instalavel em modo editavel: `deepdetector`.
-- Trilhas MNIST:
-  - M1 + FGSM.
-  - M2 + Carlini-Wagner L2/Linf.
-- Trilha ImageNet com wrappers e utilitarios para Caffe/GoogLeNet.
-- Filtros NumPy independentes do modelo: quantizacao, media, entropia e
-  quantizacao adaptativa.
-- Avaliacoes para detectar mudanca de predicao apos reducao de ruido.
-- Scripts de reproducao para tabelas do artigo.
-- Testes unitarios focados em filtros, dados, ataques, wrappers e comparacoes
-  de reproducao.
+## Como o projeto e desenvolvido
 
-## Ambiente
+Este repositorio segue Spec-Driven Development (SDD). Antes de alterar
+comportamento ou implementar uma feature, leia a especificacao correspondente em
+`specs/`. As tarefas derivadas ficam em `specs/tasks.md`.
 
-Este projeto preserva uma pilha legada de proposito:
+Fluxo esperado:
 
-- TensorFlow 1.x
-- Keras 2.2.x
-- CleverHans 2.x
-- Caffe para a trilha ImageNet, quando a reproducao fiel for necessaria
+1. especificacao em `specs/features/` ou `specs/refactor/`;
+2. item de implementacao em `specs/tasks.md`;
+3. codigo em `src/deepdetector`;
+4. testes em `tests`;
+5. validacao por pytest e revisao contra os criterios de aceite.
 
-Crie e valide o ambiente Conda:
+Nao use o README como fonte de verdade para requisitos de experimento. A fonte
+de verdade e `specs/`, seguida de `configs/experiments.yaml`.
+
+## Estrutura
+
+```text
+.
+|-- src/deepdetector/          # pacote Python principal
+|   |-- attacks/               # FGSM, DeepFool, CW e ataques adaptativos
+|   |-- data/                  # loaders MNIST, Fashion-MNIST e ImageNet
+|   |-- detection/             # regras de deteccao por mudanca de predicao
+|   |-- evaluation/            # metricas e logica das tabelas
+|   |-- experiments/           # runners configuraveis
+|   |-- filters/               # filtros de reducao de ruido
+|   |-- io/                    # YAML, caminhos e escrita de resultados
+|   |-- models/                # modelos MNIST-like e wrappers ImageNet
+|   `-- training/              # treino/restauracao de checkpoints
+|-- configs/
+|   |-- experiments.yaml       # inventario oficial de experimentos
+|   `-- article_reproduction/  # configs auxiliares preservadas
+|-- scripts/
+|   |-- run_experiment.py      # ponto de entrada oficial
+|   |-- train_fashion_mnist_checkpoint.py
+|   |-- validate_inception_env.py
+|   |-- article_reproduction/  # auxiliares especificos, principalmente M2/CW
+|   |-- dev/                   # smoke tests locais
+|   `-- imagenet/              # materializacao e ativos ImageNet/Caffe
+|-- specs/                     # especificacoes e tarefas SDD
+|-- tests/                     # suite pytest
+|-- envs/                      # ambientes Conda versionados
+|-- reproduction_notes/        # notas de reproducao e decisoes tecnicas
+|-- data/                      # datasets locais, ignorados pelo Git
+|-- artifacts/                 # modelos/cache/ataques, ignorados pelo Git
+`-- results/                   # resultados regeneraveis
+```
+
+## Ambientes
+
+O ambiente principal preserva a pilha legada usada pela maior parte da
+reproducao:
+
+- TensorFlow 1.x;
+- Keras 2.2.x;
+- CleverHans 2.x;
+- Caffe para os fluxos ImageNet com GoogLeNet/CaffeNet.
+
+Crie ou atualize o ambiente principal:
 
 ```bash
 conda env create -f envs/environment.yml
@@ -51,102 +94,34 @@ pip install -e .
 python scripts/dev/smoke_test.py
 ```
 
-Em automacao sem ativar o shell:
+Para automacao local neste repositorio, prefira executar pelo WSL com o ambiente
+`adversarialimage-ids-legacy`.
 
 ```bash
 conda run -n adversarialimage-ids-legacy python scripts/dev/smoke_test.py
 ```
 
-Detalhes de versao e decisoes ficam em
-`reproduction_notes/environment_setup.md`.
+### Inception v3 / TensorFlow 2
 
-## Arquitetura
-
-```text
-.
-|-- configs/                         # contratos YAML por responsabilidade
-|   |-- article_reproduction/         # reproducoes das tabelas do artigo
-|   `-- experiments.yaml              # inventario de experimentos
-|-- scripts/
-|   |-- article_reproduction/         # scripts para tabelas do artigo
-|   |-- dev/                          # validacoes rapidas de ambiente
-|   |-- imagenet/                     # utilitarios da trilha ImageNet
-|   `-- mnist/
-|       |-- m1_fgsm/                  # fluxo MNIST M1 + FGSM
-|       `-- m2_cw/                    # fluxo MNIST M2 + CW L2/Linf
-|-- src/deepdetector/
-|   |-- attacks/                      # FGSM e CW
-|   |-- data/                         # loaders MNIST e ImageNet
-|   |-- detection/                    # regra por mudanca de predicao
-|   |-- evaluation/                   # metricas, tabelas e comparacoes do artigo
-|   |-- filters/                      # filtros de reducao de ruido
-|   |-- models/                       # modelos MNIST e wrappers ImageNet
-|   |-- training/                     # treino/restauracao de baselines
-|   |-- paths.py                      # convencoes de caminhos do projeto
-|   `-- utils/
-|-- tests/                            # cobertura automatizada
-|-- reproduction_notes/               # notas, planos e decisoes de reproducao
-|-- results/                          # relatorios e metricas versionaveis
-|-- artifacts/                        # modelos, datasets processados e ataques
-|-- envs/                             # ambientes Conda versionados
-|-- requirements.txt
-|-- pyproject.toml
-`-- README.md
-```
-
-### Modulos principais
-
-| Modulo | Responsabilidade |
-| --- | --- |
-| `deepdetector.data` | Carregamento e preparacao de MNIST/ImageNet. |
-| `deepdetector.models` | Definicoes de modelos MNIST e wrappers ImageNet/Caffe. |
-| `deepdetector.training` | Treino e restore dos classificadores baseline. |
-| `deepdetector.attacks` | Geracao de exemplos adversariais FGSM e CW. |
-| `deepdetector.filters` | Reducoes de ruido usadas pelo detector. |
-| `deepdetector.detection` | Detector DeepDetector-style por mudanca de predicao. |
-| `deepdetector.evaluation` | Metricas, agregacoes e avaliacao das tabelas do artigo, incluindo materializadores oficiais. |
-
-## Configuracoes
-
-O fluxo oficial usa `configs/experiments.yaml`. Cada experimento declara
-explicitamente dataset, modelo, ataque, amostras/splits e filtros. As
-configuracoes de reproducoes especificas ficam em
-`configs/article_reproduction/`.
-
-## Fluxos Operacionais
-
-### Validacao rapida
+O fluxo Inception v3 usa um ambiente separado, definido em
+`envs/inceptionv3-tf2.yml`, com TensorFlow 2.11 em modo `compat.v1`.
 
 ```bash
-python scripts/dev/smoke_test.py
-pytest
+conda env create -f envs/inceptionv3-tf2.yml
+conda activate adversarialimage-inceptionv3-tf2
+pip install -e .
+python scripts/validate_inception_env.py
 ```
 
-### ImageNet / Caffe
+## Experimentos
 
-Baixe os ativos Caffe necessarios:
+O ponto de entrada oficial e sempre:
 
 ```bash
-python scripts/imagenet/download_caffe_imagenet_assets.py --model googlenet
+python scripts/run_experiment.py --experiment <experiment_id>
 ```
 
-Liste modelos suportados e prepare outros ativos:
-
-```bash
-python scripts/imagenet/download_caffe_imagenet_assets.py --list-models
-python scripts/imagenet/download_caffe_imagenet_assets.py --model alexnet
-```
-
-Detalhes de fontes, espelhos e limitacoes ficam em
-`reproduction_notes/caffe_model_downloads.md` e
-`reproduction_notes/caffe_setup.md`.
-
-### Reproducao das tabelas do artigo
-
-O caminho recomendado e sempre `scripts/run_experiment.py`, que le
-`configs/experiments.yaml` e grava outputs padronizados. Os scripts em
-`scripts/article_reproduction/` sao legados ou auxiliares de diagnostico para
-casos especificos que ainda nao foram totalmente migrados para o runner unico.
+Os experimentos publicos sao declarados em `configs/experiments.yaml`. Exemplos:
 
 ```bash
 python scripts/run_experiment.py --experiment table_3
@@ -160,86 +135,120 @@ python scripts/run_experiment.py --experiment table_10_googlenet
 python scripts/run_experiment.py --experiment table_10_caffenet
 python scripts/run_experiment.py --experiment table_10_m2
 python scripts/run_experiment.py --experiment table_10_inception_v3
+python scripts/run_experiment.py --experiment defense_aware
+python scripts/run_experiment.py --experiment topk_detection
+python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m3
+python scripts/run_experiment.py --experiment fashion_mnist_cw_l2_m2
+python scripts/run_experiment.py --experiment imagenet_new_classes_fgsm_googlenet
+python scripts/run_experiment.py --experiment imagenet_new_classes_deepfool_caffenet
+python scripts/run_experiment.py --experiment imagenet_new_classes_cw_l2_inception_v3
 ```
 
-As Tabelas 3-9 usam `configs/experiments.yaml`. A Table 4 e composta: por
-padrao `table_4` executa `table_4_mnist` e `table_4_imagenet` em sequencia.
-Tables 7 e 8 usam o fluxo ImageNet/Caffe e gravam pivots CSV.
-As Tables 6 e 9 tambem combinam MNIST e ImageNet internamente e gravam metricas
-agregadas por split. Tambem e possivel executar apenas um lado da Table 4:
+`table_4` e composta e executa `table_4_mnist` e `table_4_imagenet`. Tambem e
+possivel rodar apenas um componente:
 
 ```bash
 python scripts/run_experiment.py --experiment table_4_mnist
 python scripts/run_experiment.py --experiment table_4_imagenet
 ```
 
-Os resultados da Table 4 ficam sob `results/experiments/table_4/`, separados em
-`mnist/` e `imagenet/` porque os CSVs tem schemas diferentes. Table 5 nao
-aparece nesse arquivo porque nao ha fluxo correspondente no inventario atual.
+Table 5 nao tem fluxo oficial no inventario atual.
 
-Table 10 e executada por grupo de modelo. O runner oficial e:
+## Dados e artefatos
+
+Datasets, checkpoints, modelos Caffe, grafos TensorFlow e exemplos
+adversariais gerados nao devem ser versionados.
+
+Principais caminhos locais:
+
+| Caminho | Papel |
+| --- | --- |
+| `data/` | datasets locais, como MNIST/Fashion-MNIST CSV e pastas ImageNet |
+| `artifacts/models/` | checkpoints e modelos externos |
+| `artifacts/adversarial_examples/` | cache de exemplos adversariais |
+| `results/` | metricas e relatorios regeneraveis |
+
+Para ativos Caffe:
 
 ```bash
-python scripts/run_experiment.py --experiment table_10_m1
-python scripts/run_experiment.py --experiment table_10_googlenet
-python scripts/run_experiment.py --experiment table_10_caffenet
-python scripts/run_experiment.py --experiment table_10_m2
-python scripts/run_experiment.py --experiment table_10_inception_v3
+python scripts/imagenet/download_caffe_imagenet_assets.py --list-models
+python scripts/imagenet/download_caffe_imagenet_assets.py --model googlenet
+python scripts/imagenet/download_caffe_imagenet_assets.py --model alexnet
 ```
 
-Os grupos MNIST escrevem em
-`results/mnist/article_reproduction/table_10_m1/` e
-`results/mnist/article_reproduction/table_10_m2/`. Os grupos ImageNet escrevem
-em `results/experiments/table_10/<grupo>/`.
+Ativos que nao estao no downloader, como alguns artefatos CaffeNet usados nos
+experimentos, devem seguir as notas em `reproduction_notes/caffe_setup.md`.
 
-Para regenerar adversariais CW do M2 com os backends originais
-`nn_robust_attacks.CarliniL2` e `nn_robust_attacks.CarliniLi`, use o script
-especifico:
+Para materializar o subset local usado por Inception v3:
+
+```bash
+python scripts/imagenet/materialize_inceptionv3_subset.py
+```
+
+As notas de ambiente e ativos ficam em:
+
+- `reproduction_notes/environment_setup.md`
+- `reproduction_notes/caffe_setup.md`
+- `reproduction_notes/caffe_model_downloads.md`
+- `reproduction_notes/table10_inceptionv3_cw_l2_investigation.md`
+
+## Fashion-MNIST
+
+Antes dos experimentos Fashion-MNIST, prepare os checkpoints configurados:
+
+```bash
+python scripts/train_fashion_mnist_checkpoint.py --model m3
+python scripts/train_fashion_mnist_checkpoint.py --model m2
+```
+
+Depois rode:
+
+```bash
+python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m3
+python scripts/run_experiment.py --experiment fashion_mnist_cw_l2_m2
+```
+
+## Table 10 M2 / CW
+
+O grupo M2/CW depende dos backends originais de `nn_robust_attacks`. Para
+regenerar adversariais:
 
 ```bash
 python scripts/article_reproduction/mnist_table_10_m2_cw.py \
   --generate-attacks \
   --overwrite-attacks \
-  --nn-robust-attacks-root nn_robust_attacks \
-  --only-kappa 0.0
+  --nn-robust-attacks-root nn_robust_attacks
 ```
 
-Sem `--generate-attacks`, esse script apenas avalia `.npy` ja salvos. Para M2,
-os geradores CW locais/CleverHans nao sao usados.
+Sem `--generate-attacks`, o script avalia exemplos `.npy` ja existentes.
 
-## Dados, Artefatos e Resultados
+## Saidas
 
-- `data/` e ignorado pelo Git e deve conter datasets locais.
-- `artifacts/` armazena modelos, checkpoints, assets Caffe e adversariais
-  gerados. Modelos grandes e binarios nao devem ser versionados.
-- `results/` nao e fonte de verdade. Outputs oficiais sao regenerados em
-  `results/experiments/<experiment_id>/`; a maioria usa `metrics.csv` e
-  `metrics.json`, enquanto Tables 7 e 8 usam pivots CSV.
+A maioria dos experimentos grava `metrics.csv` e `metrics.json` no diretorio
+configurado. Alguns fluxos tem contratos especificos:
 
-## Notas de Reproducao
-
-Use `reproduction_notes/` para decisoes tecnicas que precisam ser versionadas:
-
-- `environment_setup.md`
-- `caffe_setup.md`
-- `caffe_model_downloads.md`
-
-Documentos locais de trabalho que nao devem entrar no Git, como o guia de
-Spec-Driven Development, ficam ignorados pelo `.gitignore`.
+| Experimento | Saida principal |
+| --- | --- |
+| `table_4` | `results/table_4/mnist/`, `results/table_4/imagenet/` e manifesto |
+| `table_7` | pivot `table_7_imagnet.csv` e `table_7_status.json` |
+| `table_8` | pivot `table_8_imagenet.csv` e `table_8_status.json` |
+| `table_10_*` | `metrics.csv`, `metrics.json` e, quando aplicavel, `manifest.json` |
+| `topk_detection` | selecao, metricas e imagens ambiguas selecionadas |
 
 ## Testes
 
-Execute toda a suite:
+Execute primeiro a validacao mais estreita relacionada a mudanca. Para a suite
+completa:
 
 ```bash
 pytest
 ```
 
-Execute um teste especifico:
+Para um arquivo especifico:
 
 ```bash
 pytest tests/test_quantization_numpy.py
 ```
 
-Os testes atuais cobrem filtros NumPy, registro de filtros, dados ImageNet,
-wrappers ImageNet, FGSM ImageNet e comparacoes de reproducao do artigo.
+Os testes cobrem filtros NumPy, loaders, wrappers ImageNet, ataques, runners,
+contratos de output e comparacoes de reproducao.
