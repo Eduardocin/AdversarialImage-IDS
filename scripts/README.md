@@ -78,7 +78,6 @@ split between `results/table_10/M2_cw_l2/` and
 | Script | Role | Environment |
 | --- | --- | --- |
 | `dev/smoke_test.py` | Fast import/dependency validation. | `adversarialimage-ids-legacy` or `adversarialimage-ids-gpu` |
-| `dev/validate_inception_env.py` | Local TF2/InceptionV3 validation. | `adversarialimage-inceptionv3-tf2` |
 | `imagenet/download_caffe_imagenet_assets.py` | Download Caffe assets for the ImageNet path. | `adversarialimage-ids-gpu` |
 | `imagenet/materialize_inceptionv3_subset.py` | Materialize the local InceptionV3 subset. | `adversarialimage-inceptionv3-tf2` |
 | `train_fashion_mnist_checkpoint.py` | Prepare Fashion-MNIST M2/M3 checkpoints. | `adversarialimage-ids-legacy` |

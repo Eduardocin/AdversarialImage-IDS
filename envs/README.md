@@ -43,14 +43,7 @@ conda activate adversarialimage-inceptionv3-tf2
 pip install -e .
 ```
 
-If the development validation script is available, validate the TF2/InceptionV3
-environment with:
-
-```bash
-python scripts/dev/validate_inception_env.py
-```
-
-If that script is not available in a local checkout, use this minimal check:
+Validate the TF2/InceptionV3 environment with this minimal check:
 
 ```bash
 python - <<'PY'

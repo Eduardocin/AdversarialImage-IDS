@@ -106,5 +106,11 @@ conda run -n adversarialimage-ids-legacy pytest tests/test_experiment_runner.py
 When the TF2/InceptionV3 environment is available:
 
 ```bash
-conda run -n adversarialimage-inceptionv3-tf2 python scripts/dev/validate_inception_env.py
+conda run -n adversarialimage-inceptionv3-tf2 python - <<'PY'
+import tensorflow as tf
+
+tf.compat.v1.disable_eager_execution()
+print("TF:", tf.__version__)
+print("GPUs:", tf.config.list_physical_devices("GPU"))
+PY
 ```

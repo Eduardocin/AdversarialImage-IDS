@@ -94,7 +94,13 @@ Ambiente InceptionV3 / TensorFlow 2:
 conda env create -f envs/inceptionv3-tf2.yml
 conda activate adversarialimage-inceptionv3-tf2
 pip install -e .
-python scripts/dev/validate_inception_env.py
+python - <<'PY'
+import tensorflow as tf
+
+tf.compat.v1.disable_eager_execution()
+print("TF:", tf.__version__)
+print("GPUs:", tf.config.list_physical_devices("GPU"))
+PY
 ```
 
 Para automacao local neste repositorio, prefira executar pelo WSL com o ambiente
