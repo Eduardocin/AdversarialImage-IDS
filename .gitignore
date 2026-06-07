@@ -218,3 +218,21 @@ nn_robust_attacks/
 /specs/**/*.local.md
 /specs/**/*.draft.md
 /specs/**/scratch/
+
+# Local planning / agent instructions
+/AGENTS.md
+/.local/
+/specs/
+
+# Local notes and scratch files
+*.scratch.md
+*_local.md
+local_*.md
+
+# Generated experiment outputs
+/data/
+/artifacts/
+/results/*
+!/results/
+!/results/imagenet/
+!/results/imagenet/.gitkeep

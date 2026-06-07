@@ -313,7 +313,7 @@ experiments:
       mask_types: [cross, diamond, box]
       sizes: [3, 5, 7, 9]
     output:
-      pivot_csv: table_7_imagnet.csv
+      pivot_csv: table_7_imagenet.csv
       status_json: table_7_status.json
 
   table_8:
@@ -950,16 +950,6 @@ experiments:
       name: imagenet
       split: new_test
       images_dir: data/imagenet/new_test
-  
-  topk_detection:
-    kind: topk_detection
-    description: Top-k prediction based detection for ambiguous ImageNet images
-    output_dir: results/experiments/topk_detection
-    seed: 42
-    dataset:
-      name: imagenet
-      split: test
-      images_dir: data/imagenet/test
       image_size: 224
       image_shape: [224, 224, 3]
       value_range: [0.0, 1.0]
@@ -974,11 +964,6 @@ experiments:
         ambulance: 40
         scholar_bus: 40
         soccer_ball: 20
-      n_samples: all
-      class_indices:
-        cab: 468
-        panda: 388
-        zebra: 340
     model:
       name: googlenet_caffe
       family: caffe
@@ -1003,7 +988,7 @@ experiments:
     dataset_label: ImageNet-NewClasses
     rows:
       - "no": 5
-        attack_model: "FGSM (ε=1/255)/GoogLeNet"
+        attack_model: "FGSM (epsilon=1/255)/GoogLeNet"
         status: implemented
         attack:
           name: fgsm
@@ -1107,7 +1092,7 @@ experiments:
     dataset_label: ImageNet-NewClasses
     rows:
       - "no": 14
-        attack_model: "CW L2 (κ=0.0)/Inception v3"
+        attack_model: "CW L2 (kappa=0.0)/Inception v3"
         status: implemented
         attack:
           name: cw_l2
@@ -1121,6 +1106,35 @@ experiments:
           targeted: false
           clip_min: -0.5
           clip_max: 0.5
+
+  topk_detection:
+    kind: topk_detection
+    description: Top-k prediction based detection for ambiguous ImageNet images
+    output_dir: results/experiments/topk_detection
+    seed: 42
+    dataset:
+      name: imagenet
+      split: test
+      images_dir: data/imagenet/test
+      image_size: 224
+      image_shape: [224, 224, 3]
+      value_range: [0.0, 1.0]
+      shuffle: false
+      require_clean_correct: true
+      n_samples: all
+      class_indices:
+        cab: 468
+        panda: 388
+        zebra: 340
+    model:
+      name: googlenet_caffe
+      family: caffe
+      reference: BVLC GoogLeNet
+      model_dir: artifacts/models/imagenet/googlenet/
+      deploy_proto: artifacts/models/imagenet/googlenet/deploy_original.prototxt
+      attack_deploy_proto: artifacts/models/imagenet/googlenet/deploy_removeSoftmax.prototxt
+      caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+      mean_file: null
       use_gpu: false
       batch_size: 32
     attack:

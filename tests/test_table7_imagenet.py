@@ -12,6 +12,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.evaluation import table7 as table7_module
+from deepdetector.evaluation.imagenet_common import (
+    image_to_chw_255,
+    label_to_int,
+    restore_from_chw_255,
+)
+from deepdetector.evaluation.metrics import safe_precision_recall_f1
 from deepdetector.evaluation.table7 import Table7FilterResult
 from deepdetector.experiments import table7_imagenet_runner
 from deepdetector.attacks.adversarial_loader import (
@@ -66,6 +72,40 @@ def _marker_image(marker: int) -> np.ndarray:
     image = np.zeros((3, 3, 3), dtype=np.float32)
     image[0, 0, 0] = float(marker)
     return image
+
+
+def test_imagenet_common_label_to_int_preserves_scalar_and_one_hot() -> None:
+    """Shared label conversion should preserve Table 7/8 behavior."""
+    assert label_to_int(np.asarray(3)) == 3
+    assert label_to_int(np.asarray([0, 0, 1, 0])) == 2
+
+
+def test_imagenet_common_image_layout_roundtrip_preserves_scale() -> None:
+    """Shared HWC/CHW conversion should preserve shape and normalized range."""
+    image = np.asarray(
+        [
+            [[0.0, 0.5, 1.0], [0.25, 0.5, 0.75]],
+            [[1.0, 0.5, 0.0], [0.75, 0.5, 0.25]],
+        ],
+        dtype=np.float32,
+    )
+
+    chw_255, layout, scale = image_to_chw_255(image)
+    restored = restore_from_chw_255(chw_255, layout=layout, scale=scale)
+
+    assert layout == "hwc"
+    assert scale == 255.0
+    assert chw_255.shape == (3, 2, 2)
+    np.testing.assert_allclose(restored, image)
+
+
+def test_safe_precision_recall_f1_matches_legacy_metrics() -> None:
+    """Shared metric helper should match the old Table 7/8 formulas."""
+    assert safe_precision_recall_f1(tp=8, fn=2, fp=4) == table7_module._metrics(
+        tp=8,
+        fn=2,
+        fp=4,
+    )
 
 
 def test_table7_filters_wrong_clean_predictions_before_attack_inputs() -> None:
@@ -307,12 +347,12 @@ def test_run_table7_experiment_writes_pivot_and_status(monkeypatch, tmp_path) ->
 
     monkeypatch.setattr(
         table7_imagenet_runner,
-        "build_imagenet_table7_model",
+        "build_imagenet_caffe_model",
         lambda config: MarkerModel(),
     )
     monkeypatch.setattr(
         table7_imagenet_runner,
-        "load_imagenet_table7_subset",
+        "load_imagenet_subset",
         lambda config: (
             np.asarray([_marker_image(10)], dtype=np.float32),
             np.asarray([1], dtype=np.int32),
@@ -320,7 +360,7 @@ def test_run_table7_experiment_writes_pivot_and_status(monkeypatch, tmp_path) ->
     )
     monkeypatch.setattr(
         table7_imagenet_runner,
-        "filter_clean_baseline_images",
+        "prepare_clean_imagenet_baseline",
         lambda model, images, labels: (
             images,
             labels,
@@ -330,13 +370,8 @@ def test_run_table7_experiment_writes_pivot_and_status(monkeypatch, tmp_path) ->
     )
     monkeypatch.setattr(
         table7_imagenet_runner,
-        "_article_model_inputs",
-        lambda model, images: images,
-    )
-    monkeypatch.setattr(
-        table7_imagenet_runner,
-        "adversarial_images_for_run",
-        lambda config, model, images, selected_indices=None: images + 1.0,
+        "prepare_imagenet_adversarial_images",
+        lambda config, model, images, selected_indices=None: (images, images + 1.0),
     )
 
     def fake_evaluate(**kwargs):
@@ -372,7 +407,7 @@ def test_run_table7_experiment_writes_pivot_and_status(monkeypatch, tmp_path) ->
             "filter": {"mask_types": ["cross"], "sizes": [3], "entropy_threshold": 5.0},
             "output": {
                 "dir": str(tmp_path),
-                "pivot_csv": "table_7_imagnet.csv",
+                "pivot_csv": "table_7_imagenet.csv",
                 "status_json": "table_7_status.json",
             },
         }
@@ -381,10 +416,10 @@ def test_run_table7_experiment_writes_pivot_and_status(monkeypatch, tmp_path) ->
     assert result["status"] == "completo"
     assert calls == [("cross", 3)]
     assert sorted(path.name for path in tmp_path.iterdir()) == [
-        "table_7_imagnet.csv",
+        "table_7_imagenet.csv",
         "table_7_status.json",
     ]
-    assert (tmp_path / "table_7_imagnet.csv").read_text(encoding="utf-8").splitlines() == [
+    assert (tmp_path / "table_7_imagenet.csv").read_text(encoding="utf-8").splitlines() == [
         "metric,cross_3x3,cross_5x5,cross_7x7,cross_9x9,diamond_3x3,diamond_5x5,diamond_7x7,diamond_9x9,box_3x3,box_5x5,box_7x7,box_9x9",
         "Recall,0.500000,,,,,,,,,,,",
         "Precision,1.000000,,,,,,,,,,,",

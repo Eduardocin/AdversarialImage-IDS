@@ -7,22 +7,23 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
-from deepdetector.attacks.adversarial_loader import adversarial_images_for_run
-from deepdetector.evaluation.imagenet_utils import article_model_inputs
 from deepdetector.evaluation.table8 import evaluate_table8_filter
-from deepdetector.experiments.table7_imagenet_runner import (
-    _output_dir,
-    _remove_stale_standard_outputs,
-    _write_status,
-    build_imagenet_table7_model,
-    filter_clean_baseline_images,
-    load_imagenet_table7_subset,
-    write_pivot_csv,
+from deepdetector.experiments.imagenet_common_runner import (
+    build_imagenet_caffe_model,
+    load_imagenet_subset,
+    output_dir_from_config,
+    prepare_clean_imagenet_baseline,
+    prepare_imagenet_adversarial_images,
+    remove_stale_standard_outputs,
+    write_imagenet_pivot_csv,
+    write_imagenet_status,
 )
 from deepdetector.io.paths import ensure_dir
 
 
 logger = logging.getLogger(__name__)
+
+TABLE8_STATUS_JSON = "table_8_status.json"
 
 TABLE8_FILTERS: Tuple[Tuple[str, int], ...] = (
     ("cross", 5),
@@ -38,11 +39,6 @@ TABLE8_COLUMNS: Tuple[str, ...] = (
     "diamond_7x7",
     "box_5x5",
 )
-
-
-def _article_model_inputs(model: object, images: object) -> object:
-    """Return images in the Caffe input space used by the source article."""
-    return article_model_inputs(model, images)
 
 
 def configured_filters(config: Dict[str, Any]) -> Iterable[Tuple[str, int]]:
@@ -82,15 +78,21 @@ def _write_table8_status(
     **fields: Any,
 ) -> Path:
     """Write the configured Table 8 status JSON."""
-    return _write_status(config=config, output_dir=output_dir, status=status, **fields)
+    return write_imagenet_status(
+        config=config,
+        output_dir=output_dir,
+        status=status,
+        default_name=TABLE8_STATUS_JSON,
+        **fields,
+    )
 
 
 def run_table8_imagenet_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
     """Run the official ImageNet Table 8 experiment and write pivot outputs."""
-    output_dir = ensure_dir(_output_dir(config))
-    _remove_stale_standard_outputs(output_dir)
+    output_dir = ensure_dir(output_dir_from_config(config))
+    remove_stale_standard_outputs(output_dir)
     try:
-        model = build_imagenet_table7_model(config)
+        model = build_imagenet_caffe_model(config)
     except ImportError as exc:
         logger.warning("%s", exc)
         path = _write_table8_status(
@@ -123,7 +125,7 @@ def run_table8_imagenet_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
         return {"status": "parcial", "status_json": str(path)}
 
     try:
-        images, labels = load_imagenet_table7_subset(config)
+        images, labels = load_imagenet_subset(config)
     except IOError as exc:
         logger.warning("%s", exc)
         path = _write_table8_status(
@@ -154,7 +156,7 @@ def run_table8_imagenet_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
         )
         return {"status": "parcial", "status_json": str(path)}
 
-    images, labels, selected_indices, clean_summary = filter_clean_baseline_images(
+    images, labels, selected_indices, clean_summary = prepare_clean_imagenet_baseline(
         model=model,
         images=images,
         labels=labels,
@@ -171,8 +173,7 @@ def run_table8_imagenet_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
         )
         return {"status": "parcial", "status_json": str(path)}
 
-    images = _article_model_inputs(model, images)
-    adv_images = adversarial_images_for_run(
+    images, adv_images = prepare_imagenet_adversarial_images(
         config=config,
         model=model,
         images=images,
@@ -222,7 +223,7 @@ def run_table8_imagenet_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
         return {"status": "parcial", "status_json": str(path)}
 
     output_config = config.get("output", config.get("outputs", {}))
-    pivot_path = write_pivot_csv(
+    pivot_path = write_imagenet_pivot_csv(
         output_dir / str(output_config.get("pivot_csv", "table_8_imagenet.csv")),
         rows,
         columns=TABLE8_COLUMNS,

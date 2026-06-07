@@ -218,15 +218,15 @@ Tambem nao ha um teste especifico que simule `filtered_clean_pred != clean_pred`
    - Opcao segura: converter `[-0.5, 0.5]` para `[0, 1]` antes do filtro e converter de volta para `[-0.5, 0.5]` depois.
    - Evitar passar tensor Inception diretamente para `article_final_detection_filter` sem wrapper de escala.
 
-2. Atualizar a especificacao antes da correcao, porque isso muda comportamento esperado.
-   - A spec atual ainda descreve `dataset.n_samples: 100`, `dataset.shuffle: true` e seed de amostragem, enquanto a config/testes atuais usam quotas fixas e `shuffle: false`.
+2. Atualizar a documentacao operacional antes da correcao, porque isso muda comportamento esperado.
+   - A documentacao anterior descrevia `dataset.n_samples: 100`, `dataset.shuffle: true` e seed de amostragem, enquanto a config/testes atuais usam quotas fixas e `shuffle: false`.
    - Definir explicitamente se a Table 10 Inception deve avaliar 100 candidatas preselecionadas por quota ou 100 amostras limpas corretamente classificadas.
    - Para aproximar a linha 15 do artigo, o esperado deve ser 100 amostras validas/clean-correct.
 
 3. Adicionar testes unitarios focados.
    - Teste do filtro/wrapper: entrada `[-0.5, 0.5]` deve sair em `[-0.5, 0.5]`.
    - Teste do runner: quando ha clean errors, o loader/avaliador deve reabastecer ate obter 100 validas ou registrar explicitamente que o denominador efetivo e menor.
-   - Teste de config/spec: alinhar `specs/features/table10_inception_v3.md` com a decisao final sobre quotas fixas versus amostragem.
+   - Teste de config/documentacao: alinhar `configs/experiments.yaml` e notas de reproducao com a decisao final sobre quotas fixas versus amostragem.
    - Teste de metrica: `FP` deve depender apenas de `filtered_clean_pred != clean_pred`.
 
 4. Registrar diagnosticos por amostra em execucoes longas.

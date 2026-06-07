@@ -1,10 +1,10 @@
 # AdversarialImage-IDS / DeepDetector
 
-Reimplementacao orientada por especificacoes do metodo de Liang et al.,
-"Detecting Adversarial Image Examples in Deep Networks with Adaptive Noise
-Reduction". O projeto usa `OwenSec/DeepDetector` como referencia metodologica,
-mas o codigo atual esta organizado como um pacote Python testavel, com
-experimentos declarados em YAML e execucao centralizada.
+Reimplementacao do metodo de Liang et al., "Detecting Adversarial Image
+Examples in Deep Networks with Adaptive Noise Reduction". O projeto usa
+`OwenSec/DeepDetector` como referencia metodologica, mas o codigo atual esta
+organizado como um pacote Python testavel, com experimentos declarados em YAML
+e execucao centralizada.
 
 O foco do repositorio e reproduzir e estender, de forma controlada, fluxos de
 deteccao de exemplos adversariais para datasets MNIST-like e ImageNet:
@@ -16,22 +16,19 @@ deteccao de exemplos adversariais para datasets MNIST-like e ImageNet:
   filtro final proposto;
 - experimentos novos com Fashion-MNIST, novas classes ImageNet e regras top-k.
 
-## Como o projeto e desenvolvido
+## Fontes Operacionais
 
-Este repositorio segue Spec-Driven Development (SDD). Antes de alterar
-comportamento ou implementar uma feature, leia a especificacao correspondente em
-`specs/`. As tarefas derivadas ficam em `specs/tasks.md`.
+A fonte operacional publica do projeto e:
 
-Fluxo esperado:
+1. `README.md`
+2. `envs/README.md`
+3. `configs/experiments.yaml`
+4. `scripts/README.md`
+5. `reproduction_notes/` quando aplicavel
 
-1. especificacao em `specs/features/` ou `specs/refactor/`;
-2. item de implementacao em `specs/tasks.md`;
-3. codigo em `src/deepdetector`;
-4. testes em `tests`;
-5. validacao por pytest e revisao contra os criterios de aceite.
-
-Nao use o README como fonte de verdade para requisitos de experimento. A fonte
-de verdade e `specs/`, seguida de `configs/experiments.yaml`.
+Os experimentos oficiais sao declarados em `configs/experiments.yaml` e
+executados por `scripts/run_experiment.py`. A matriz experimento -> ambiente
+fica em `envs/README.md`.
 
 ## Estrutura
 
@@ -53,30 +50,27 @@ de verdade e `specs/`, seguida de `configs/experiments.yaml`.
 |-- scripts/
 |   |-- run_experiment.py      # ponto de entrada oficial
 |   |-- train_fashion_mnist_checkpoint.py
-|   |-- validate_inception_env.py
 |   |-- article_reproduction/  # auxiliares especificos, principalmente M2/CW
-|   |-- dev/                   # smoke tests locais
+|   |-- dev/                   # smoke tests e validacoes locais
 |   `-- imagenet/              # materializacao e ativos ImageNet/Caffe
-|-- specs/                     # especificacoes e tarefas SDD
 |-- tests/                     # suite pytest
 |-- envs/                      # ambientes Conda versionados
 |-- reproduction_notes/        # notas de reproducao e decisoes tecnicas
-|-- data/                      # datasets locais, ignorados pelo Git
+|-- data/                      # datasets locais
 |-- artifacts/                 # modelos/cache/ataques, ignorados pelo Git
 `-- results/                   # resultados regeneraveis
 ```
 
 ## Ambientes
 
-O ambiente principal preserva a pilha legada usada pela maior parte da
-reproducao:
+Nao ha um unico ambiente oficial para todos os fluxos nesta etapa. Use
+`envs/README.md` como fonte para:
 
-- TensorFlow 1.x;
-- Keras 2.2.x;
-- CleverHans 2.x;
-- Caffe para os fluxos ImageNet com GoogLeNet/CaffeNet.
+- visao geral dos ambientes Conda;
+- matriz experimento -> ambiente recomendado;
+- comandos de criacao, ativacao e validacao.
 
-Crie ou atualize o ambiente principal:
+Ambiente legado local:
 
 ```bash
 conda env create -f envs/environment.yml
@@ -85,32 +79,29 @@ pip install -e .
 python scripts/dev/smoke_test.py
 ```
 
-Se o ambiente ja existir:
+Ambiente GPU legado:
 
 ```bash
-conda env update -n adversarialimage-ids-legacy -f envs/environment.yml
-conda activate adversarialimage-ids-legacy
+conda env create -f envs/environment-gpu.yml
+conda activate adversarialimage-ids-gpu
 pip install -e .
 python scripts/dev/smoke_test.py
 ```
 
-Para automacao local neste repositorio, prefira executar pelo WSL com o ambiente
-`adversarialimage-ids-legacy`.
-
-```bash
-conda run -n adversarialimage-ids-legacy python scripts/dev/smoke_test.py
-```
-
-### Inception v3 / TensorFlow 2
-
-O fluxo Inception v3 usa um ambiente separado, definido em
-`envs/inceptionv3-tf2.yml`, com TensorFlow 2.11 em modo `compat.v1`.
+Ambiente InceptionV3 / TensorFlow 2:
 
 ```bash
 conda env create -f envs/inceptionv3-tf2.yml
 conda activate adversarialimage-inceptionv3-tf2
 pip install -e .
-python scripts/validate_inception_env.py
+python scripts/dev/validate_inception_env.py
+```
+
+Para automacao local neste repositorio, prefira executar pelo WSL com o ambiente
+`adversarialimage-ids-legacy`:
+
+```bash
+conda run -n adversarialimage-ids-legacy python scripts/dev/smoke_test.py
 ```
 
 ## Experimentos
@@ -152,9 +143,8 @@ python scripts/run_experiment.py --experiment table_4_mnist
 python scripts/run_experiment.py --experiment table_4_imagenet
 ```
 
-Table 5 nao tem fluxo oficial no inventario atual.
 
-## Dados e artefatos
+## Dados e Artefatos
 
 Datasets, checkpoints, modelos Caffe, grafos TensorFlow e exemplos
 adversariais gerados nao devem ser versionados.
@@ -179,18 +169,11 @@ python scripts/imagenet/download_caffe_imagenet_assets.py --model alexnet
 Ativos que nao estao no downloader, como alguns artefatos CaffeNet usados nos
 experimentos, devem seguir as notas em `reproduction_notes/caffe_setup.md`.
 
-Para materializar o subset local usado por Inception v3:
+Para materializar o subset local usado por InceptionV3:
 
 ```bash
 python scripts/imagenet/materialize_inceptionv3_subset.py
 ```
-
-As notas de ambiente e ativos ficam em:
-
-- `reproduction_notes/environment_setup.md`
-- `reproduction_notes/caffe_setup.md`
-- `reproduction_notes/caffe_model_downloads.md`
-- `reproduction_notes/table10_inceptionv3_cw_l2_investigation.md`
 
 ## Fashion-MNIST
 
@@ -230,7 +213,7 @@ configurado. Alguns fluxos tem contratos especificos:
 | Experimento | Saida principal |
 | --- | --- |
 | `table_4` | `results/table_4/mnist/`, `results/table_4/imagenet/` e manifesto |
-| `table_7` | pivot `table_7_imagnet.csv` e `table_7_status.json` |
+| `table_7` | pivot `table_7_imagenet.csv` e `table_7_status.json` |
 | `table_8` | pivot `table_8_imagenet.csv` e `table_8_status.json` |
 | `table_10_*` | `metrics.csv`, `metrics.json` e, quando aplicavel, `manifest.json` |
 | `topk_detection` | selecao, metricas e imagens ambiguas selecionadas |
