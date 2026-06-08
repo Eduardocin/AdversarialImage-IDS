@@ -24,8 +24,12 @@ from deepdetector.data.fashion_mnist import load_fashion_mnist_evaluation_split
 from deepdetector.data.imagenet import resize_normalized_image
 from deepdetector.evaluation.article_reproduction import (
     apply_filter_batch,
+    close_graph,
     create_restored_mnist_graph,
+    evaluate_filter_on_existing_adversarial,
+    load_mnist_test_slice,
     predict_labels,
+    proposed_detection_filter,
 )
 from deepdetector.evaluation.defense_aware import create_restored_mnist_m2_graph
 from deepdetector.evaluation.detector_metrics import (
@@ -43,6 +47,7 @@ from deepdetector.models.imagenet_wrappers import (
 )
 from deepdetector.models.mnist_cnn import create_tf_session
 from deepdetector.models.mnist_m3 import build_mnist_m3_model, load_mnist_m3_model
+from deepdetector.paths import MNIST_M1_CHECKPOINT_DIR
 
 
 logger = logging.getLogger(__name__)
@@ -114,6 +119,21 @@ def normalize_table_10_result(
         if field in source:
             row[field] = source[field]
     return row
+
+
+def table_10_metrics_from_legacy_mnist(metrics: dict[str, Any]) -> dict[str, Any]:
+    """Adapt legacy MNIST detector metric names to the official Table 10 schema."""
+    return {
+        "num_failures": metrics.get("F"),
+        "tp": metrics.get("TP"),
+        "fn": metrics.get("FN"),
+        "fp": metrics.get("FP"),
+        "rtp": metrics.get("RTP"),
+        "rtp_percent": metrics.get("RTP_percent"),
+        "recall": metrics.get("recall_percent"),
+        "precision": metrics.get("precision_percent"),
+        "f1": metrics.get("f1_percent"),
+    }
 
 
 def _output_dir(config: dict[str, Any]) -> Path:
@@ -1275,6 +1295,101 @@ def _is_table_10_fashion_mnist_attack(
     )
 
 
+def _is_table_10_mnist_m1_group(config: dict[str, Any]) -> bool:
+    return (
+        str(config.get("dataset", {}).get("name", "")).lower() == "mnist"
+        and str(config.get("model_group", "")).lower() == "m1"
+    )
+
+
+def _table_10_mnist_m1_checkpoint_dir(config: dict[str, Any]) -> str:
+    configured = config.get("model", {}).get("checkpoint_dir")
+    checkpoint_dir = resolve_project_path(configured) if configured else MNIST_M1_CHECKPOINT_DIR
+    if not checkpoint_dir.is_dir():
+        raise IOError("MNIST M1 checkpoint_dir not found: {0}".format(checkpoint_dir))
+    return str(checkpoint_dir)
+
+
+def evaluate_table_10_mnist_m1_group(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Evaluate official MNIST M1/FGSM Table 10 rows."""
+    dataset_label = str(config.get("dataset_label", "MNIST"))
+    dataset_config = config.get("dataset", {})
+    evaluation_config = config.get("evaluation", {})
+    batch_size = int(evaluation_config.get("batch_size", 256))
+    start = int(dataset_config.get("start", 5500))
+    end = int(dataset_config.get("end", 10000))
+
+    images, labels = load_mnist_test_slice(start, end)
+    graph = create_restored_mnist_graph(_table_10_mnist_m1_checkpoint_dir(config))
+    rows: list[dict[str, Any]] = []
+
+    try:
+        for row_config in config.get("rows", []):
+            no = int(row_config["no"])
+            attack_model = str(row_config["attack_model"])
+            if str(row_config.get("status", "planned")) != "implemented":
+                rows.append(
+                    build_pending_table_10_row(
+                        no=no,
+                        attack_model=attack_model,
+                        dataset=dataset_label,
+                    )
+                )
+                continue
+
+            attack_config = dict(row_config.get("attack", {}))
+            attack_name = str(attack_config.get("name", "")).lower()
+            if attack_name != "fgsm":
+                raise ValueError("Unsupported MNIST M1 Table 10 attack: {0}".format(attack_name))
+
+            adversarial_images = generate_attack(
+                "fgsm",
+                sess=graph["sess"],
+                model=graph["model"],
+                x_placeholder=graph["x"],
+                images=images,
+                eps=float(attack_config.get("epsilon", attack_config.get("eps", 0.2))),
+                clip_min=float(attack_config.get("clip_min", 0.0)),
+                clip_max=float(attack_config.get("clip_max", 1.0)),
+            )
+            clean_predictions = predict_labels(
+                graph["sess"],
+                graph["x"],
+                graph["predictions"],
+                images,
+                batch_size=batch_size,
+            )
+            adversarial_predictions = predict_labels(
+                graph["sess"],
+                graph["x"],
+                graph["predictions"],
+                adversarial_images,
+                batch_size=batch_size,
+            )
+            legacy_metrics = evaluate_filter_on_existing_adversarial(
+                graph=graph,
+                images=images,
+                labels=labels,
+                adv_images=adversarial_images,
+                clean_pred=clean_predictions,
+                adv_pred=adversarial_predictions,
+                filter_fn=proposed_detection_filter,
+                batch_size=batch_size,
+            )
+            rows.append(
+                normalize_table_10_result(
+                    no=no,
+                    attack_model=attack_model,
+                    dataset=dataset_label,
+                    result={"metrics": table_10_metrics_from_legacy_mnist(legacy_metrics)},
+                )
+            )
+    finally:
+        close_graph(graph)
+
+    return rows
+
+
 def _row_result(group_config: dict[str, Any], row_config: dict[str, Any]) -> dict[str, Any]:
     metrics = row_config.get("metrics")
     if isinstance(metrics, dict):
@@ -1348,6 +1463,18 @@ def run_table_10_group(config: dict[str, Any]) -> list[dict[str, Any]]:
     ).strip()
     if not dataset_group:
         raise ValueError("Table 10 group must define dataset.name or dataset_group.")
+
+    if _is_table_10_mnist_m1_group(config):
+        rows = evaluate_table_10_mnist_m1_group(config)
+        save_table_10_outputs(
+            rows=rows,
+            output_dir=_output_dir(config),
+            dataset_group=dataset_group,
+            model_group=model_group,
+            experiment_id=str(config.get("experiment_id", "")).strip() or None,
+            dataset_summary=_dataset_summary_for_manifest(config),
+        )
+        return rows
 
     rows: list[dict[str, Any]] = []
     manifest_entries: list[dict[str, Any]] = []
