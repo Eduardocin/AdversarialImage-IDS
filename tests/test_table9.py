@@ -225,6 +225,49 @@ def test_mnist_m2_latest_checkpoint_falls_back_to_local_base(
     assert checkpoint == str(checkpoint_dir / "mnist_m2.ckpt")
 
 
+def test_mnist_m2_restore_map_accepts_keras2_checkpoint_names() -> None:
+    """Fashion-MNIST M2 checkpoints may use Keras2 names in a Keras1 graph."""
+    graph_variables = [
+        "convolution2d_1_W:0",
+        "convolution2d_1_b:0",
+        "convolution2d_2_W:0",
+        "convolution2d_2_b:0",
+        "convolution2d_3_W:0",
+        "convolution2d_3_b:0",
+        "convolution2d_4_W:0",
+        "convolution2d_4_b:0",
+        "dense_1_W:0",
+        "dense_1_b:0",
+        "dense_2_W:0",
+        "dense_2_b:0",
+        "dense_3_W:0",
+        "dense_3_b:0",
+    ]
+    checkpoint_names = [
+        "conv2d/kernel",
+        "conv2d/bias",
+        "conv2d_1/kernel",
+        "conv2d_1/bias",
+        "conv2d_2/kernel",
+        "conv2d_2/bias",
+        "conv2d_3/kernel",
+        "conv2d_3/bias",
+        "dense/kernel",
+        "dense/bias",
+        "dense_1/kernel",
+        "dense_1/bias",
+        "dense_2/kernel",
+        "dense_2/bias",
+    ]
+
+    restore_map = mnist_m2.m2_checkpoint_restore_map(graph_variables, checkpoint_names)
+
+    assert restore_map is not None
+    assert restore_map["conv2d/kernel"] == "convolution2d_1_W:0"
+    assert restore_map["conv2d_3/bias"] == "convolution2d_4_b:0"
+    assert restore_map["dense_2/kernel"] == "dense_3_W:0"
+
+
 def test_mnist_keras_fallback_format_matches_cleverhans_shape() -> None:
     """The Keras fallback should preserve the legacy MNIST array contract."""
     images = np.zeros((2, 28, 28), dtype=np.uint8)

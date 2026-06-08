@@ -132,17 +132,31 @@ def predict_labels(
 ) -> np.ndarray:
     """Predict labels for a batch of MNIST images."""
     def learning_phase_feed() -> Dict[Any, Any]:
-        """Return a feed dict for Keras learning phase when needed."""
+        """Return feed entries for Keras learning-phase placeholders."""
+        feed: Dict[Any, Any] = {}
         try:
             from keras import backend as K
         except Exception:
-            return {}
-        if not hasattr(K, "learning_phase"):
-            return {}
-        phase = K.learning_phase()
-        if hasattr(phase, "op"):
-            return {phase: 0}
-        return {}
+            K = None
+        if K is not None and hasattr(K, "learning_phase"):
+            phase = K.learning_phase()
+            if hasattr(phase, "op"):
+                feed[phase] = 0
+
+        graph = getattr(sess, "graph", None)
+        get_operations = getattr(graph, "get_operations", None)
+        if get_operations is None:
+            return feed
+
+        for op in get_operations():
+            if getattr(op, "type", None) != "Placeholder":
+                continue
+            if "keras_learning_phase" not in str(getattr(op, "name", "")):
+                continue
+            outputs = getattr(op, "outputs", ())
+            if outputs:
+                feed[outputs[0]] = 0
+        return feed
 
     feed = learning_phase_feed()
     labels = []

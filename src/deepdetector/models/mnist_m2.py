@@ -3,7 +3,7 @@
 from __future__ import print_function
 
 import os
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 from deepdetector.models.mnist_cnn import make_convolution2d
 
@@ -87,6 +87,57 @@ def _checkpoint_files_exist(base_path: Optional[str]) -> bool:
     )
 
 
+def _variable_base_name(variable: Any) -> str:
+    return str(getattr(variable, "name", variable)).split(":")[0]
+
+
+def _m2_keras2_checkpoint_name(legacy_name: str) -> Optional[str]:
+    convolution_names = {
+        "convolution2d_1": "conv2d",
+        "convolution2d_2": "conv2d_1",
+        "convolution2d_3": "conv2d_2",
+        "convolution2d_4": "conv2d_3",
+    }
+    dense_names = {
+        "dense_1": "dense",
+        "dense_2": "dense_1",
+        "dense_3": "dense_2",
+    }
+    if legacy_name.endswith("_W"):
+        layer_name = legacy_name[:-2]
+        if layer_name in convolution_names:
+            return convolution_names[layer_name] + "/kernel"
+        if layer_name in dense_names:
+            return dense_names[layer_name] + "/kernel"
+    if legacy_name.endswith("_b"):
+        layer_name = legacy_name[:-2]
+        if layer_name in convolution_names:
+            return convolution_names[layer_name] + "/bias"
+        if layer_name in dense_names:
+            return dense_names[layer_name] + "/bias"
+    return None
+
+
+def m2_checkpoint_restore_map(
+    variables: Iterable[Any],
+    checkpoint_variable_names: Iterable[str],
+) -> Optional[Dict[str, Any]]:
+    """Return a Saver var_list for Keras2-named M2 checkpoints when needed."""
+    checkpoint_names = set(str(name) for name in checkpoint_variable_names)
+    variable_by_name = {_variable_base_name(variable): variable for variable in variables}
+    graph_names = set(variable_by_name)
+    if graph_names.issubset(checkpoint_names):
+        return None
+
+    restore_map: Dict[str, Any] = {}
+    for graph_name, variable in variable_by_name.items():
+        checkpoint_name = _m2_keras2_checkpoint_name(graph_name)
+        if checkpoint_name is None or checkpoint_name not in checkpoint_names:
+            return None
+        restore_map[checkpoint_name] = variable
+    return restore_map
+
+
 def save_mnist_m2_model(sess: Any, train_dir: str, filename: str) -> str:
     """Save M2 graph variables with a TensorFlow 1.x saver."""
     import tensorflow as tf
@@ -106,6 +157,9 @@ def load_mnist_m2_model(sess: Any, train_dir: str) -> Optional[str]:
     if checkpoint is None:
         return None
 
-    saver = tf.compat.v1.train.Saver()
+    variables = tf.compat.v1.global_variables()
+    checkpoint_names = [name for name, _ in tf.train.list_variables(checkpoint)]
+    restore_map = m2_checkpoint_restore_map(variables, checkpoint_names)
+    saver = tf.compat.v1.train.Saver(var_list=restore_map or variables)
     saver.restore(sess, checkpoint)
     return checkpoint
