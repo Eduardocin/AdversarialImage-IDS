@@ -1,4 +1,4 @@
-"""Train or restore Fashion-MNIST checkpoints for the M3/M2 experiments."""
+"""Train or restore Fashion-MNIST checkpoints for the M2 experiment."""
 
 from __future__ import annotations
 
@@ -23,22 +23,17 @@ from deepdetector.io.config import load_yaml_config
 from deepdetector.io.paths import resolve_project_path
 from deepdetector.models.mnist_cnn import create_tf_session
 from deepdetector.models.mnist_m2 import build_mnist_m2_model
-from deepdetector.models.mnist_m3 import build_mnist_m3_model
 from deepdetector.training.train_mnist_m2 import train_or_load_mnist_m2_model
-from deepdetector.training.train_mnist_m3 import train_or_load_mnist_m3_model
 
 
 DEFAULT_CONFIG = resolve_project_path("configs/experiments.yaml")
 DEFAULT_EXPERIMENT_BY_MODEL = {
-    "m3": "fashion_mnist_fgsm_m3",
     "m2": "fashion_mnist_cw_l2_m2",
 }
 DEFAULT_FILENAME_BY_MODEL = {
-    "m3": "mnist_m3.ckpt",
     "m2": "mnist_m2.ckpt",
 }
 DEFAULT_EPOCHS_BY_MODEL = {
-    "m3": 10,
     "m2": 10,
 }
 
@@ -75,9 +70,7 @@ def build_training_graph(model_name: str) -> Dict[str, Any]:
     x = tf.compat.v1.placeholder(tf.float32, shape=(None, 28, 28, 1), name="x")
     y = tf.compat.v1.placeholder(tf.float32, shape=(None, 10), name="y")
 
-    if model_name == "m3":
-        model, predictions = build_mnist_m3_model(x)
-    elif model_name == "m2":
+    if model_name == "m2":
         model, predictions = build_mnist_m2_model(x)
     else:
         raise ValueError("Unsupported Fashion-MNIST model: {0}".format(model_name))
@@ -243,8 +236,6 @@ def _validate_checkpoint_training(
 
 
 def _trainer_for_model(model_name: str) -> Any:
-    if model_name == "m3":
-        return train_or_load_mnist_m3_model
     if model_name == "m2":
         return train_or_load_mnist_m2_model
     raise ValueError("Unsupported Fashion-MNIST model: {0}".format(model_name))

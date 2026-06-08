@@ -134,7 +134,6 @@ python scripts/run_experiment.py --experiment table_10_m2
 python scripts/run_experiment.py --experiment table_10_inception_v3
 python scripts/run_experiment.py --experiment defense_aware
 python scripts/run_experiment.py --experiment topk_detection
-python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m3
 python scripts/run_experiment.py --experiment fashion_mnist_cw_l2_m2
 python scripts/run_experiment.py --experiment imagenet_new_classes_fgsm_googlenet
 python scripts/run_experiment.py --experiment imagenet_new_classes_deepfool_caffenet
@@ -183,17 +182,15 @@ python scripts/imagenet/materialize_inceptionv3_subset.py
 
 ## Fashion-MNIST
 
-Antes dos experimentos Fashion-MNIST, prepare os checkpoints configurados:
+Antes do experimento Fashion-MNIST, prepare o checkpoint configurado:
 
 ```bash
-python scripts/train_fashion_mnist_checkpoint.py --model m3
 python scripts/train_fashion_mnist_checkpoint.py --model m2
 ```
 
 Depois rode:
 
 ```bash
-python scripts/run_experiment.py --experiment fashion_mnist_fgsm_m3
 python scripts/run_experiment.py --experiment fashion_mnist_cw_l2_m2
 ```
 

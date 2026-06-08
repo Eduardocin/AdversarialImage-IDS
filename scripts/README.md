@@ -21,7 +21,7 @@ python scripts/run_experiment.py --experiment <experiment_id>
 | ImageNet/Caffe | `table_4_imagenet`, `table_7`, `table_8`, `table_10_googlenet`, `table_10_caffenet` | `adversarialimage-ids-gpu` |
 | Compostos MNIST + ImageNet | `table_4`, `table_6`, `table_9` | `adversarialimage-ids-legacy` or `adversarialimage-ids-gpu`, depending on the component |
 | InceptionV3 | `table_10_inception_v3`, `imagenet_new_classes_cw_l2_inception_v3` | `adversarialimage-inceptionv3-tf2` |
-| New datasets | `fashion_mnist_fgsm_m3`, `fashion_mnist_cw_l2_m2`, selected ImageNet new-class experiments | See `envs/README.md` |
+| New datasets | `fashion_mnist_cw_l2_m2`, selected ImageNet new-class experiments | See `envs/README.md` |
 | Top-k | `topk_detection` | Depends on the configured dataset |
 
 Common commands:
@@ -80,12 +80,11 @@ split between `results/table_10/M2_cw_l2/` and
 | `dev/smoke_test.py` | Fast import/dependency validation. | `adversarialimage-ids-legacy` or `adversarialimage-ids-gpu` |
 | `imagenet/download_caffe_imagenet_assets.py` | Download Caffe assets for the ImageNet path. | `adversarialimage-ids-gpu` |
 | `imagenet/materialize_inceptionv3_subset.py` | Materialize the local InceptionV3 subset. | `adversarialimage-inceptionv3-tf2` |
-| `train_fashion_mnist_checkpoint.py` | Prepare Fashion-MNIST M2/M3 checkpoints. | `adversarialimage-ids-legacy` |
+| `train_fashion_mnist_checkpoint.py` | Prepare Fashion-MNIST M2 checkpoints. | `adversarialimage-ids-legacy` |
 
 For Fashion-MNIST checkpoints:
 
 ```bash
-python scripts/train_fashion_mnist_checkpoint.py --model m3
 python scripts/train_fashion_mnist_checkpoint.py --model m2
 ```
 

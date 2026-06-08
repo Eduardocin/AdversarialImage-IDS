@@ -45,8 +45,6 @@ from deepdetector.models.imagenet_wrappers import (
     GoogLeNetCaffeWrapper,
     InceptionV3TensorFlowWrapper,
 )
-from deepdetector.models.mnist_cnn import create_tf_session
-from deepdetector.models.mnist_m3 import build_mnist_m3_model, load_mnist_m3_model
 from deepdetector.paths import MNIST_M1_CHECKPOINT_DIR
 
 
@@ -998,29 +996,6 @@ def _table_10_checkpoint_dir(config: dict[str, Any]) -> str:
     return str(checkpoint_dir)
 
 
-def create_restored_mnist_m3_graph(train_dir: str) -> dict[str, Any]:
-    """Create the TF1 graph, restore the Fashion-MNIST M3 checkpoint, and return handles."""
-    import tensorflow as tf
-    from keras import backend as K
-
-    tf.compat.v1.reset_default_graph()
-    if hasattr(K, "set_learning_phase"):
-        K.set_learning_phase(0)
-    sess = create_tf_session()
-    x_placeholder = tf.compat.v1.placeholder(tf.float32, shape=(None, 28, 28, 1))
-    model, predictions = build_mnist_m3_model(x_placeholder)
-    checkpoint = load_mnist_m3_model(sess, train_dir)
-    if checkpoint is None:
-        raise IOError("No M3 TensorFlow checkpoint found in {0}".format(train_dir))
-    return {
-        "sess": sess,
-        "x": x_placeholder,
-        "model": model,
-        "predictions": predictions,
-        "checkpoint": checkpoint,
-    }
-
-
 def _build_table_10_fashion_mnist_graph(config: dict[str, Any]) -> dict[str, Any]:
     model_group = str(config.get("model_group", "")).lower()
     model_config = config.get("model", {})
@@ -1034,11 +1009,9 @@ def _build_table_10_fashion_mnist_graph(config: dict[str, Any]) -> dict[str, Any
         raise ValueError("Fashion-MNIST model.num_classes must be 10.")
 
     checkpoint_dir = _table_10_checkpoint_dir(config)
-    if model_group == "m3":
-        return create_restored_mnist_m3_graph(checkpoint_dir)
     if model_group == "m2":
         return create_restored_mnist_m2_graph(checkpoint_dir)
-    raise ValueError("Fashion-MNIST Table 10 supports only model_group m3 or m2.")
+    raise ValueError("Fashion-MNIST Table 10 supports only model_group m2.")
 
 
 def _mnist_graph_predict(
@@ -1148,15 +1121,6 @@ def _generate_fashion_mnist_adversarial(
             sess=graph["sess"],
             model=graph["model"],
             x_placeholder=graph["x"],
-            model_output=(
-                graph.get("predictions")
-                if str(config.get("model_group", "")).lower() == "m3"
-                else None
-            ),
-            output_is_probabilities=(
-                str(config.get("model_group", "")).lower() == "m3"
-                and graph.get("predictions") is not None
-            ),
             images=images,
             eps=float(attack_config.pop("epsilon", attack_config.pop("eps", 0.2))),
             clip_min=float(attack_config.pop("clip_min", 0.0)),
@@ -1288,10 +1252,8 @@ def _is_table_10_fashion_mnist_attack(
     attack_name = str(row_config.get("attack", {}).get("name", "")).lower()
     return (
         str(group_config.get("dataset", {}).get("name", "")).lower() == "fashion_mnist"
-        and (
-            (model_group == "m3" and attack_name == "fgsm")
-            or (model_group == "m2" and attack_name == "cw_l2_nn_robust")
-        )
+        and model_group == "m2"
+        and attack_name == "cw_l2_nn_robust"
     )
 
 

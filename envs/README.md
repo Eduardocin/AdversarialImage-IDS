@@ -74,7 +74,6 @@ PY
 | `table_10_inception_v3` | `adversarialimage-inceptionv3-tf2` | InceptionV3/TF2 `compat.v1`. |
 | `defense_aware` | `adversarialimage-ids-legacy` | MNIST/CW defense-aware unless a specific config says otherwise. |
 | `topk_detection` | `adversarialimage-ids-legacy` or `adversarialimage-ids-gpu` | Depends on the configured dataset. |
-| `fashion_mnist_fgsm_m3` | `adversarialimage-ids-legacy` | Fashion-MNIST/M3. |
 | `fashion_mnist_cw_l2_m2` | `adversarialimage-ids-legacy` | Fashion-MNIST/M2/CW. |
 | `imagenet_new_classes_fgsm_googlenet` | `adversarialimage-ids-gpu` | ImageNet/GoogLeNet/Caffe. |
 | `imagenet_new_classes_deepfool_caffenet` | `adversarialimage-ids-gpu` | ImageNet/CaffeNet/Caffe. |
