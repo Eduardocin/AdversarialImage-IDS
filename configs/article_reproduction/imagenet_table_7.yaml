@@ -50,4 +50,4 @@ filter:
 
 outputs:
   results_dir: results/table_7_imagenet
-  pivot_csv: table_7_imagnet.csv
+  pivot_csv: table_7_imagenet.csv

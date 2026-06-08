@@ -13,6 +13,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SRC_ROOT))
 
 from deepdetector.evaluation import table8 as table8_module
+from deepdetector.evaluation import imagenet_common as imagenet_common_module
 from deepdetector.evaluation.table8 import Table8FilterResult
 from deepdetector.experiments import table8_imagenet_runner
 
@@ -63,6 +64,19 @@ def test_table8_configured_filters_are_the_five_fixed_article_filters() -> None:
     ]
 
 
+def test_table8_runner_does_not_import_table7_runner_helpers() -> None:
+    """Table 8 runner should depend on the common ImageNet runner module."""
+    source = (
+        PROJECT_ROOT
+        / "src"
+        / "deepdetector"
+        / "experiments"
+        / "table8_imagenet_runner.py"
+    ).read_text(encoding="utf-8")
+
+    assert "table7_imagenet_runner" not in source
+
+
 def test_table8_rejects_non_fixed_filter_sets() -> None:
     """Local config must not re-select Table 8 filters dynamically."""
     config = {"filter": {"filters": [{"mask_type": "box", "size": 3}]}}
@@ -97,7 +111,7 @@ def test_table8_write_pivot_csv_uses_fixed_columns_and_metric_rows(tmp_path) -> 
         for mask_type, size in table8_imagenet_runner.TABLE8_FILTERS
     ]
 
-    path = table8_imagenet_runner.write_pivot_csv(
+    path = table8_imagenet_runner.write_imagenet_pivot_csv(
         tmp_path / "table_8_imagenet.csv",
         rows,
         columns=table8_imagenet_runner.TABLE8_COLUMNS,
@@ -194,7 +208,7 @@ def test_table8_filter_application_reuses_table7_spatial_smoothing(monkeypatch) 
         calls.append((mask_type, size))
         return image + 1.0
 
-    monkeypatch.setattr(table8_module, "table7_filter", fake_table7_filter)
+    monkeypatch.setattr(imagenet_common_module, "table7_filter", fake_table7_filter)
 
     filtered = table8_module._apply_table8_filter_to_model_input(
         image=image,
@@ -241,7 +255,7 @@ def test_table8_rejects_validation_config_pointing_to_test_split() -> None:
     }
 
     with pytest.raises(ValueError, match="validation split cannot use test path"):
-        table8_imagenet_runner.load_imagenet_table7_subset(config)
+        table8_imagenet_runner.load_imagenet_subset(config)
 
 
 def test_table8_runner_writes_partial_status_when_no_validation_images(
@@ -249,10 +263,10 @@ def test_table8_runner_writes_partial_status_when_no_validation_images(
     tmp_path,
 ) -> None:
     """Missing validation data should produce partial status instead of metrics."""
-    monkeypatch.setattr(table8_imagenet_runner, "build_imagenet_table7_model", lambda config: object())
+    monkeypatch.setattr(table8_imagenet_runner, "build_imagenet_caffe_model", lambda config: object())
     monkeypatch.setattr(
         table8_imagenet_runner,
-        "load_imagenet_table7_subset",
+        "load_imagenet_subset",
         lambda config: (
             np.empty((0,), dtype=np.float32),
             np.empty((0,), dtype=np.int32),
@@ -286,17 +300,16 @@ def test_table8_runner_does_not_complete_when_no_attack_succeeds(
     labels = np.asarray([1, 1], dtype=np.int32)
     adversarial_images = np.asarray([_marker_image(10), _marker_image(11)], dtype=np.float32)
 
-    monkeypatch.setattr(table8_imagenet_runner, "build_imagenet_table7_model", lambda config: MarkerModel())
+    monkeypatch.setattr(table8_imagenet_runner, "build_imagenet_caffe_model", lambda config: MarkerModel())
     monkeypatch.setattr(
         table8_imagenet_runner,
-        "load_imagenet_table7_subset",
+        "load_imagenet_subset",
         lambda config: (clean_images, labels),
     )
-    monkeypatch.setattr(table8_imagenet_runner, "_article_model_inputs", lambda model, images: images)
     monkeypatch.setattr(
         table8_imagenet_runner,
-        "adversarial_images_for_run",
-        lambda config, model, images, selected_indices=None: adversarial_images,
+        "prepare_imagenet_adversarial_images",
+        lambda config, model, images, selected_indices=None: (images, adversarial_images),
     )
 
     result = table8_imagenet_runner.run_table8_imagenet_experiment(
@@ -327,17 +340,16 @@ def test_run_table8_experiment_writes_pivot_and_status(monkeypatch, tmp_path) ->
     (tmp_path / "metrics.csv").write_text("stale", encoding="utf-8")
     (tmp_path / "metrics.json").write_text("stale", encoding="utf-8")
 
-    monkeypatch.setattr(table8_imagenet_runner, "build_imagenet_table7_model", lambda config: MarkerModel())
+    monkeypatch.setattr(table8_imagenet_runner, "build_imagenet_caffe_model", lambda config: MarkerModel())
     monkeypatch.setattr(
         table8_imagenet_runner,
-        "load_imagenet_table7_subset",
+        "load_imagenet_subset",
         lambda config: (clean_images, labels),
     )
-    monkeypatch.setattr(table8_imagenet_runner, "_article_model_inputs", lambda model, images: images)
     monkeypatch.setattr(
         table8_imagenet_runner,
-        "adversarial_images_for_run",
-        lambda config, model, images, selected_indices=None: adversarial_images,
+        "prepare_imagenet_adversarial_images",
+        lambda config, model, images, selected_indices=None: (images, adversarial_images),
     )
 
     def fake_evaluate(**kwargs):

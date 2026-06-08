@@ -2,10 +2,15 @@
 
 ## Purpose
 
-The environment is intentionally legacy-oriented to keep the reproduction close
-to `OwenSec/DeepDetector` and the Liang et al. adaptive noise reduction method.
+This note records legacy environment decisions and compatibility constraints.
+It is not the primary operational environment matrix. Use `envs/README.md` for
+the official experiment -> environment mapping and setup commands.
 
-## Local Conda Environment
+The dependency stack is intentionally legacy-oriented to keep the reproduction
+close to `OwenSec/DeepDetector` and the Liang et al. adaptive noise reduction
+method.
+
+## Legacy Local Conda Environment
 
 The expected local environment name is:
 
@@ -13,22 +18,22 @@ The expected local environment name is:
 adversarialimage-ids-legacy
 ```
 
-Activate it with:
-
-```bash
-conda activate adversarialimage-ids-legacy
-```
-
 Create it from scratch with:
 
 ```bash
 conda env create -f envs/environment.yml
+conda activate adversarialimage-ids-legacy
+pip install -e .
+python scripts/dev/smoke_test.py
 ```
 
 Synchronize an existing copy with:
 
 ```bash
 conda env update -n adversarialimage-ids-legacy -f envs/environment.yml
+conda activate adversarialimage-ids-legacy
+pip install -e .
+python scripts/dev/smoke_test.py
 ```
 
 The same pinned Python packages are also listed in `requirements.txt` for
@@ -38,15 +43,19 @@ pip-only inspection or emergency repair:
 pip install -r requirements.txt
 ```
 
-Validate the import surface with:
+## GPU and InceptionV3 Environments
 
-```bash
-python scripts/dev/smoke_test.py
-```
+ImageNet/Caffe experiments that require GPU execution should use
+`envs/environment-gpu.yml` (`adversarialimage-ids-gpu`).
+
+InceptionV3 experiments use `envs/inceptionv3-tf2.yml`
+(`adversarialimage-inceptionv3-tf2`) with TensorFlow 2.11 in `compat.v1` mode.
+This is a targeted compatibility environment, not a broad migration of the
+project to TensorFlow 2.
 
 ## Version Decisions
 
-The baseline dependency pins are:
+The baseline legacy dependency pins are:
 
 ```text
 tensorflow==1.15.5
@@ -64,9 +73,9 @@ protobuf==3.19.6
 caffe==1.0
 ```
 
-These versions were verified in the local `adversarialimage-ids-legacy`
-environment. They preserve compatibility with the TensorFlow 1.x execution
-model and the CleverHans APIs used by the original MNIST attack flow.
+These versions preserve compatibility with the TensorFlow 1.x execution model,
+legacy Keras APIs, CleverHans flows, and the original Caffe-based ImageNet
+paths.
 
 ## Compatibility Notes
 
@@ -76,19 +85,32 @@ model and the CleverHans APIs used by the original MNIST attack flow.
 - Avoid silently changing preprocessing, model architecture, attack parameters,
   or metrics for convenience.
 - If a platform-specific package build forces a version adjustment, document
-  the exact package, build source, and reason in this file before running
-  experiments.
+  the exact package, build source, and reason here and in `envs/README.md`
+  before running experiments.
 
 ## Seeds
 
 ```text
 Seed TensorFlow : tf.set_random_seed(1234)
 Seed NumPy      : np.random.RandomState([2017, 8, 30])
-Fonte           : código original do repositório de referência
+Source          : original reference repository code
 ```
 
-## Current Validation Command
+## Current Validation Commands
 
 ```bash
 conda run -n adversarialimage-ids-legacy python scripts/dev/smoke_test.py
+conda run -n adversarialimage-ids-legacy pytest tests/test_experiment_runner.py
+```
+
+When the TF2/InceptionV3 environment is available:
+
+```bash
+conda run -n adversarialimage-inceptionv3-tf2 python - <<'PY'
+import tensorflow as tf
+
+tf.compat.v1.disable_eager_execution()
+print("TF:", tf.__version__)
+print("GPUs:", tf.config.list_physical_devices("GPU"))
+PY
 ```

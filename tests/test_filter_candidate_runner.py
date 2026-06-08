@@ -259,7 +259,7 @@ def test_filter_candidate_configs_define_expected_candidates() -> None:
     assert table7["dataset"]["name"] == "imagenet"
     assert table7["filter"]["mask_types"] == ["cross", "diamond", "box"]
     assert table7["filter"]["sizes"] == [3, 5, 7, 9]
-    assert table7["output"]["pivot_csv"] == "table_7_imagnet.csv"
+    assert table7["output"]["pivot_csv"] == "table_7_imagenet.csv"
     assert table8["dataset"]["name"] == "imagenet"
     assert table8["dataset"]["split"] == "validation"
     assert table8["filter"]["filters"] == [
