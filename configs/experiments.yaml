@@ -579,7 +579,7 @@ experiments:
           max_iter: 50
           overshoot: 0.02
           clip_min: 0.0
-          clip_max: 1.0
+          clip_max: 255.0
           num_classes: 10
 
   table_10_m2:
@@ -1012,7 +1012,7 @@ experiments:
           max_iter: 50
           overshoot: 0.02
           clip_min: 0.0
-          clip_max: 1.0
+          clip_max: 255.0
           num_classes: 10
 
   imagenet_new_classes_cw_l2_inception_v3:
