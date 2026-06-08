@@ -898,6 +898,68 @@ experiments:
           clip_min: 0.0
           clip_max: 255.0
 
+  topk_detection:
+    kind: topk_detection
+    description: Top-k prediction based detection for ambiguous ImageNet images
+    output_dir: results/experiments/topk_detection
+    seed: 42
+    dataset:
+      name: imagenet
+      split: test
+      images_dir: data/imagenet/test
+      image_size: 224
+      image_shape: [224, 224, 3]
+      value_range: [0.0, 1.0]
+      shuffle: false
+      n_samples: all
+      class_indices:
+        cab: 468
+        panda: 388
+        zebra: 340
+    model:
+      name: googlenet_caffe
+      family: caffe
+      reference: BVLC GoogLeNet
+      model_dir: artifacts/models/imagenet/googlenet/
+      deploy_proto: artifacts/models/imagenet/googlenet/deploy_original.prototxt
+      attack_deploy_proto: artifacts/models/imagenet/googlenet/deploy_removeSoftmax.prototxt
+      caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
+      mean_file: null
+      use_gpu: true
+      batch_size: 32
+    attack:
+      name: fgsm
+      epsilon: 0.00392156862745098
+      clip_min: 0.0
+      clip_max: 255.0
+      attack_model: "FGSM (epsilon=1/255)/GoogLeNet"
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
+      implementation: article_final_detection_filter
+    ambiguity_selection:
+      enabled: true
+      method: top1_top2_margin
+      max_margin: 0.15
+      min_top1_confidence: 0.20
+      max_top1_confidence: 0.60
+      max_samples_per_class: 50
+    topk_detection:
+      baseline_k: 1
+      candidate_k_values: [2, 3, 5]
+      default_k: 3
+      rules:
+        - name: topk_overlap
+        - name: top1_in_topk
+        - name: rank_displacement
+          thresholds: [1, 2, 3, 5]
+        - name: confidence_drop
+          ks: [2, 3]
+          deltas: [0.05, 0.10, 0.20]
+    output:
+      aggregate_by_class: true
+      aggregate_global: true
+      include_selection_summary: true
   imagenet_new_classes_deepfool_caffenet:
     kind: table_10_group
     output_dir: results/experiments/imagenet_new_classes/deepfool_caffenet
@@ -1008,67 +1070,3 @@ experiments:
           targeted: false
           clip_min: -0.5
           clip_max: 0.5
-
-  topk_detection:
-    kind: topk_detection
-    description: Top-k prediction based detection for ambiguous ImageNet images
-    output_dir: results/experiments/topk_detection
-    seed: 42
-    dataset:
-      name: imagenet
-      split: test
-      images_dir: data/imagenet/test
-      image_size: 224
-      image_shape: [224, 224, 3]
-      value_range: [0.0, 1.0]
-      shuffle: false
-      require_clean_correct: true
-      n_samples: all
-      class_indices:
-        cab: 468
-        panda: 388
-        zebra: 340
-    model:
-      name: googlenet_caffe
-      family: caffe
-      reference: BVLC GoogLeNet
-      model_dir: artifacts/models/imagenet/googlenet/
-      deploy_proto: artifacts/models/imagenet/googlenet/deploy_original.prototxt
-      attack_deploy_proto: artifacts/models/imagenet/googlenet/deploy_removeSoftmax.prototxt
-      caffemodel: artifacts/models/imagenet/googlenet/bvlc_googlenet.caffemodel
-      mean_file: null
-      use_gpu: false
-      batch_size: 32
-    attack:
-      name: fgsm
-      epsilon: 0.00392156862745098
-      clip_min: 0.0
-      clip_max: 255.0
-      attack_model: "FGSM (epsilon=1/255)/GoogLeNet"
-    filter:
-      name: proposed_detection_filter
-      type: proposed_detection_filter
-      implementation: article_final_detection_filter
-    ambiguity_selection:
-      enabled: true
-      method: top1_top2_margin
-      max_margin: 0.15
-      min_top1_confidence: 0.20
-      max_top1_confidence: 0.60
-      max_samples_per_class: 50
-    topk_detection:
-      baseline_k: 1
-      candidate_k_values: [2, 3, 5]
-      default_k: 3
-      rules:
-        - name: topk_overlap
-        - name: top1_in_topk
-        - name: rank_displacement
-          thresholds: [1, 2, 3, 5]
-        - name: confidence_drop
-          ks: [2, 3]
-          deltas: [0.05, 0.10, 0.20]
-    output:
-      aggregate_by_class: true
-      aggregate_global: true
-      include_selection_summary: true

@@ -1313,6 +1313,7 @@ def evaluate_table_10_mnist_m1_group(config: dict[str, Any]) -> list[dict[str, A
                 eps=float(attack_config.get("epsilon", attack_config.get("eps", 0.2))),
                 clip_min=float(attack_config.get("clip_min", 0.0)),
                 clip_max=float(attack_config.get("clip_max", 1.0)),
+                batch_size=batch_size,
             )
             clean_predictions = predict_labels(
                 graph["sess"],

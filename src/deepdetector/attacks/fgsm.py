@@ -2,7 +2,7 @@
 
 from __future__ import print_function
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -58,6 +58,7 @@ def generate_fgsm_examples(
     clip_max: float = 1.0,
     model_output: Any = None,
     output_is_probabilities: bool = False,
+    batch_size: Optional[int] = None,
 ) -> np.ndarray:
     """Generate FGSM adversarial examples for a batch of MNIST images."""
     import tensorflow as tf
@@ -83,7 +84,20 @@ def generate_fgsm_examples(
     adv_tensor = x_placeholder + eps * tf.sign(gradient)
     adv_tensor = tf.clip_by_value(adv_tensor, clip_min, clip_max)
 
-    feed_dict = {x_placeholder: images}
-    feed_dict.update(_keras_learning_phase_feed(0))
-    adv_examples = sess.run(adv_tensor, feed_dict=feed_dict)
+    image_array = np.asarray(images, dtype=np.float32)
+    if batch_size is None or int(batch_size) <= 0:
+        batches = [image_array]
+    else:
+        batches = [
+            image_array[start : start + int(batch_size)]
+            for start in range(0, len(image_array), int(batch_size))
+        ]
+
+    adv_batches = []
+    learning_phase_feed = _keras_learning_phase_feed(0)
+    for batch in batches:
+        feed_dict = {x_placeholder: batch}
+        feed_dict.update(learning_phase_feed)
+        adv_batches.append(sess.run(adv_tensor, feed_dict=feed_dict))
+    adv_examples = np.concatenate(adv_batches, axis=0)
     return np.clip(adv_examples, clip_min, clip_max).astype(np.float32)
