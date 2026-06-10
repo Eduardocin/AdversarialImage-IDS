@@ -9,11 +9,17 @@ experiments:
     description: Defense-aware CW-L2 adaptive attack against DeepDetector
     output_dir: results/experiments/defense_aware
     seed: 42
+    reproduction:
+      mode: article_faithful
+      use_internal_filter: true
+      use_project_transform_fn: false
+      return_space: pipeline_01
     dataset:
       name: mnist
       split: test
       start: 9000
       end: 10000
+      samples: 1000
       value_range:
         min: 0.0
         max: 1.0
@@ -21,24 +27,42 @@ experiments:
       name: mnist_m2
       checkpoint_dir: artifacts/models/mnist/m2/clean_baseline/checkpoints
     evaluation:
-      batch_size: 256
+      batch_size: 1
+      log_progress_every: 25
+      log_success_samples: 5
+      log_failure_samples: 5
+      write_sample_diagnostics: true
     attacks:
       defense_unaware:
-        type: cw_l2
+        type: cw_l2_nn_robust
+        nn_robust_attacks_root: nn_robust_attacks
         targeted: false
         confidence: 0
         max_iterations: 2000
         binary_search_steps: 5
         initial_const: 1.0
         learning_rate: 0.1
+        abort_early: true
+        batch_size: 1
+        boxmin: -0.5
+        boxmax: 0.5
       defense_aware:
-        type: adaptive_cw_l2
+        type: original_adaptive_cw_l2
+        nn_robust_attacks_root: nn_robust_attacks
+        reproduction_mode: article_faithful
+        use_internal_filter: true
+        use_project_transform_fn: false
         targeted: false
         confidence: 0
         max_iterations: 2000
         binary_search_steps: 5
         initial_const: 1.0
         learning_rate: 0.1
+        abort_early: true
+        batch_size: 1
+        boxmin: -0.5
+        boxmax: 0.5
+        model_input_shift: 0.5
     detector:
       type: final_adaptive_detection_filter
       entropy_thresholds:

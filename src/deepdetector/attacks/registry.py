@@ -10,6 +10,9 @@ from deepdetector.attacks.cw_l2_nn_robust import generate_cw_l2_nn_robust_attack
 from deepdetector.attacks.cw_linf import generate_cw_linf_attack
 from deepdetector.attacks.deepfool import generate_deepfool
 from deepdetector.attacks.fgsm import generate_fgsm_examples
+from deepdetector.attacks.original_adaptive_cw_l2  import (
+    generate_original_adaptive_cw_l2_attack,
+)
 
 
 AttackGenerator = Callable[..., Any]
@@ -22,6 +25,7 @@ ATTACK_REGISTRY: dict[str, AttackGenerator] = {
     "cw_linf": generate_cw_linf_attack,
     "fgsm": generate_fgsm_examples,
     "deepfool": generate_deepfool,
+    "original_adaptive_cw_l2": generate_original_adaptive_cw_l2_attack,
 }
 
 
