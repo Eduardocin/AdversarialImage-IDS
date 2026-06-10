@@ -25,7 +25,8 @@ dependencies:
   # Audio utilities. The PoC mainly uses torchaudio, but these are useful for
   # debugging, diagnostics, and future waveform/spectrogram experiments.
   - librosa>=0.10
-  - soundfile>=0.12
+  # Conda package name is pysoundfile, but the Python import remains `soundfile`.
+  - pysoundfile>=0.12
   - libsndfile
   - ffmpeg
   - sox
