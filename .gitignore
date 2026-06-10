@@ -39,6 +39,8 @@ pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 tests/
+!tests/
+!tests/**/*.py
 htmlcov/
 .tox/
 .nox/
@@ -215,15 +217,9 @@ run.log
 /results 
 nn_robust_attacks/
 
-# Local planning scratch files
-/specs/**/*.local.md
-/specs/**/*.draft.md
-/specs/**/scratch/
 
 # Local planning / agent instructions
 /AGENTS.md
-/.local/
-/specs/
 
 # Local notes and scratch files
 *.scratch.md

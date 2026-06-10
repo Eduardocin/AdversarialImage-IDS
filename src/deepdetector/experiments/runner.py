@@ -161,6 +161,7 @@ def build_experiment_config(
 
     if kind == "defense_aware":
         base_config["seed"] = experiment.get("seed")
+        base_config["reproduction"] = dict(experiment.get("reproduction", {}))
         base_config["attacks"] = {
             str(key): dict(value)
             for key, value in dict(experiment.get("attacks", {})).items()
