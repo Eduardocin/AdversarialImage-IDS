@@ -46,7 +46,7 @@ def _single_final_adaptive_detection_filter(
     smoothed = cross_mean_filter(quantized, radius=int(spatial_radius)).reshape(
         image_array.shape
     )
-    use_quantized = np.abs(quantized - image_array) <= np.abs(smoothed - image_array)
+    use_quantized = np.abs(quantized - image_array) < np.abs(smoothed - image_array)
     return np.where(use_quantized, quantized, smoothed).astype(np.float32).reshape(
         image_array.shape
     )
