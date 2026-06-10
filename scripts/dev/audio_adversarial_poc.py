@@ -20,32 +20,16 @@ attacks only:
     - RTP: true positives that are also restored to the original class after
       filtering, i.e. C(T(x_adv)) == y.
 
-This means the reported F1 summarizes a detection setting where positives are
-successful adversarial examples and negatives are benign examples. This matches
-how DeepDetector-style detection tables are usually interpreted, but it is not
-the same as a standard multiclass classifier confusion matrix.
-
 Example:
     python scripts/dev/audio_adversarial_poc.py \
-        --data-dir data/raw/speech_commands \
-        --epochs 5 \
-        --max-train 3000 \
-        --max-test 600 \
-        --epsilon 2.0 \
-        --save-debug
-
-If CUDA is visible but cuDNN is broken, try:
-    export LD_LIBRARY_PATH=/usr/lib/wsl/lib:$LD_LIBRARY_PATH
-
-or run with CUDA but without cuDNN:
-    python scripts/dev/audio_adversarial_poc.py \
         --device cuda \
-        --disable-cudnn \
         --data-dir data/raw/speech_commands \
-        --epochs 5 \
-        --max-train 3000 \
-        --max-test 600 \
-        --epsilon 2.0
+        --epochs 20 \
+        --max-train 12000 \
+        --max-test 1200 \
+        --epsilon 2.0 \
+        --force-train \
+        --checkpoint artifacts/audio_poc/speech_rescnn_6cls_12k_e20.pt
 """
 
 from __future__ import annotations
@@ -59,7 +43,6 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
-
 
 # WSL exposes the NVIDIA driver libraries here. Put this in LD_LIBRARY_PATH
 # before importing torch/torchaudio so CUDA dlopen calls can find libcuda.so.
@@ -277,7 +260,7 @@ class SpeechCommandsSpectrogramDataset(Dataset):
             return
 
         if archive_path.exists():
-            archive_size_gb = archive_path.stat().st_size / (1024 ** 3)
+            archive_size_gb = archive_path.stat().st_size / (1024**3)
             LOGGER.info(
                 "Archive already exists: %s (%.2f GB). torchaudio may now extract it silently.",
                 archive_path,
@@ -331,31 +314,95 @@ class SpeechCommandsSpectrogramDataset(Dataset):
         return spec_db, target
 
 
-class SpeechCNN(nn.Module):
-    """Small CNN for log-Mel spectrogram classification."""
+class ConvBNAct(nn.Module):
+    """Conv2d + BatchNorm + SiLU block.
 
-    def __init__(self, num_classes: int) -> None:
+    SiLU is usually a little smoother than ReLU and works well for compact audio
+    CNNs. Bias is disabled because BatchNorm has affine parameters.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 3,
+        stride: int | Tuple[int, int] = 1,
+        padding: Optional[int] = None,
+    ) -> None:
+        super().__init__()
+        if padding is None:
+            padding = kernel_size // 2
+        self.block = nn.Sequential(
+            nn.Conv2d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                bias=False,
+            ),
+            nn.BatchNorm2d(out_channels),
+            nn.SiLU(inplace=True),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.block(x)
+
+
+class ResidualBlock(nn.Module):
+    """Small residual block for log-Mel spectrograms."""
+
+    def __init__(self, in_channels: int, out_channels: int, stride: int | Tuple[int, int] = 1) -> None:
+        super().__init__()
+        self.conv1 = ConvBNAct(in_channels, out_channels, kernel_size=3, stride=stride)
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+        )
+        self.shortcut: nn.Module
+        if in_channels != out_channels or stride != 1:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels),
+            )
+        else:
+            self.shortcut = nn.Identity()
+        self.act = nn.SiLU(inplace=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = self.shortcut(x)
+        x = self.conv1(x)
+        x = self.conv2(x)
+        return self.act(x + residual)
+
+
+class SpeechCNN(nn.Module):
+    """Compact residual CNN for log-Mel spectrogram classification.
+
+    Compared with the first PoC CNN, this version has:
+        - residual blocks, which usually train more stably;
+        - strided convolutions instead of repeated max-pooling;
+        - global adaptive pooling, so the classifier is independent of time size;
+        - SiLU activations and AdamW-friendly regularization.
+    """
+
+    def __init__(self, num_classes: int, dropout: float = 0.25) -> None:
         super().__init__()
         self.features = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2),
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2),
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.AdaptiveAvgPool2d((4, 4)),
+            ConvBNAct(1, 32, kernel_size=5, stride=1, padding=2),
+            ResidualBlock(32, 32),
+            ResidualBlock(32, 64, stride=(2, 2)),
+            ResidualBlock(64, 64),
+            ResidualBlock(64, 128, stride=(2, 2)),
+            ResidualBlock(128, 128),
+            ResidualBlock(128, 192, stride=(2, 2)),
+            ResidualBlock(192, 192),
+            nn.AdaptiveAvgPool2d((1, 1)),
         )
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(128 * 4 * 4, 256),
-            nn.ReLU(inplace=True),
-            nn.Dropout(p=0.3),
-            nn.Linear(256, num_classes),
+            nn.Dropout(p=dropout),
+            nn.Linear(192, num_classes),
         )
 
     def forward(self, x_db: torch.Tensor) -> torch.Tensor:
@@ -405,6 +452,7 @@ def make_loaders(args: argparse.Namespace, device: torch.device) -> Tuple[DataLo
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=pin_memory,
+        persistent_workers=args.num_workers > 0,
     )
     test_loader = DataLoader(
         test_ds,
@@ -412,6 +460,7 @@ def make_loaders(args: argparse.Namespace, device: torch.device) -> Tuple[DataLo
         shuffle=False,
         num_workers=args.num_workers,
         pin_memory=pin_memory,
+        persistent_workers=args.num_workers > 0,
     )
     LOGGER.info("DataLoaders ready: train_batches=%d, test_batches=%d", len(train_loader), len(test_loader))
     return train_loader, test_loader
@@ -423,9 +472,22 @@ def train_model(
     device: torch.device,
     epochs: int,
     lr: float,
+    weight_decay: float,
+    label_smoothing: float,
+    scheduler_name: str,
     log_interval: int,
 ) -> None:
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+
+    if scheduler_name == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=max(epochs, 1),
+            eta_min=lr * 0.05,
+        )
+    else:
+        scheduler = None
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -440,7 +502,7 @@ def train_model(
 
             optimizer.zero_grad(set_to_none=True)
             logits = model(x)
-            loss = F.cross_entropy(logits, y)
+            loss = criterion(logits, y)
             loss.backward()
             optimizer.step()
 
@@ -450,15 +512,20 @@ def train_model(
             total_items += batch_size
 
             if batch_idx == 1 or batch_idx % log_interval == 0 or batch_idx == len(train_loader):
+                current_lr = optimizer.param_groups[0]["lr"]
                 LOGGER.info(
-                    "Epoch %d/%d - batch %d/%d - running_loss=%.4f - running_acc=%.2f%%",
+                    "Epoch %d/%d - batch %d/%d - lr=%.2e - running_loss=%.4f - running_acc=%.2f%%",
                     epoch,
                     epochs,
                     batch_idx,
                     len(train_loader),
+                    current_lr,
                     total_loss / max(total_items, 1),
                     100.0 * total_correct / max(total_items, 1),
                 )
+
+        if scheduler is not None:
+            scheduler.step()
 
         LOGGER.info(
             "Epoch %d/%d done - loss=%.4f - train_acc=%.2f%% - elapsed=%.1fs",
@@ -561,11 +628,7 @@ def cross_mask(size: int = 5) -> np.ndarray:
 
 
 def smooth_uint8(image: np.ndarray, size: int = 5) -> np.ndarray:
-    """Small dependency-free spatial smoothing with a cross mask.
-
-    The loop is over the small filter window, not over every pixel. This keeps
-    the PoC dependency-free while being fast enough for 64 x ~100 spectrograms.
-    """
+    """Small dependency-free spatial smoothing with a cross mask."""
     mask = cross_mask(size)
     pad = size // 2
     padded = np.pad(image.astype(np.float32), pad_width=pad, mode="edge")
@@ -811,6 +874,9 @@ def safe_torch_load(path: Path, device: torch.device):
         return torch.load(path, map_location=device, weights_only=True)
     except TypeError:
         return torch.load(path, map_location=device)
+    except Exception as exc:
+        LOGGER.warning("weights_only=True load failed for %s; falling back. Details: %s", path, exc)
+        return torch.load(path, map_location=device, weights_only=False)
 
 
 def save_metrics(metrics: PaperStyleMetrics, output_path: Path, extra: Dict[str, object]) -> None:
@@ -870,6 +936,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=5, help="Training epochs when checkpoint is absent.")
     parser.add_argument("--batch-size", type=int, default=64, help="Batch size for training/evaluation.")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate.")
+    parser.add_argument("--weight-decay", type=float, default=1e-4, help="AdamW weight decay.")
+    parser.add_argument("--label-smoothing", type=float, default=0.05, help="Cross-entropy label smoothing.")
+    parser.add_argument("--scheduler", choices=["none", "cosine"], default="cosine", help="Learning-rate scheduler.")
+    parser.add_argument("--dropout", type=float, default=0.25, help="Classifier dropout.")
     parser.add_argument("--epsilon", type=float, default=2.0, help="FGSM epsilon in dB units.")
     parser.add_argument("--max-train", type=int, default=3000, help="Limit training samples. Use <=0 for all.")
     parser.add_argument("--max-test", type=int, default=600, help="Limit test samples. Use <=0 for all.")
@@ -883,7 +953,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--checkpoint",
-        default="artifacts/audio_poc/speech_cnn_poc.pt",
+        default="artifacts/audio_poc/speech_rescnn_poc.pt",
         help="Checkpoint path. If it exists, it is loaded unless --force-train is passed.",
     )
     parser.add_argument("--force-train", action="store_true", help="Train even if checkpoint exists.")
@@ -915,7 +985,8 @@ def main() -> None:
     LOGGER.info("Data directory: %s", Path(args.data_dir).resolve())
 
     train_loader, test_loader = make_loaders(args, device=device)
-    model = SpeechCNN(num_classes=len(class_names)).to(device)
+    model = SpeechCNN(num_classes=len(class_names), dropout=args.dropout).to(device)
+    LOGGER.info("Model architecture: SpeechResCNN")
 
     checkpoint_path = Path(args.checkpoint)
     if checkpoint_path.exists() and not args.force_train:
@@ -924,24 +995,36 @@ def main() -> None:
         state_dict = payload["model_state_dict"] if isinstance(payload, dict) and "model_state_dict" in payload else payload
         model.load_state_dict(state_dict)
     else:
-        LOGGER.info("Training SpeechCNN for %d epochs", args.epochs)
+        LOGGER.info(
+            "Training SpeechResCNN for %d epochs with AdamW lr=%.2e weight_decay=%.2e label_smoothing=%.3f scheduler=%s",
+            args.epochs,
+            args.lr,
+            args.weight_decay,
+            args.label_smoothing,
+            args.scheduler,
+        )
         train_model(
             model,
             train_loader,
             device,
             epochs=args.epochs,
             lr=args.lr,
+            weight_decay=args.weight_decay,
+            label_smoothing=args.label_smoothing,
+            scheduler_name=args.scheduler,
             log_interval=max(args.train_log_interval, 1),
         )
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
                 "model_state_dict": model.state_dict(),
+                "architecture": "SpeechResCNN",
                 "classes": class_names,
                 "sample_rate": SAMPLE_RATE,
                 "n_mels": N_MELS,
                 "db_min": DB_MIN,
                 "db_max": DB_MAX,
+                "dropout": args.dropout,
             },
             checkpoint_path,
         )
@@ -963,12 +1046,18 @@ def main() -> None:
         Path(args.metrics_out),
         extra={
             "classes": class_names,
+            "architecture": "SpeechResCNN",
             "epsilon_db": args.epsilon,
             "device": device.type,
             "disable_cudnn": args.disable_cudnn,
             "max_train": args.max_train,
             "max_test": args.max_test,
             "checkpoint": str(checkpoint_path),
+            "lr": args.lr,
+            "weight_decay": args.weight_decay,
+            "label_smoothing": args.label_smoothing,
+            "scheduler": args.scheduler,
+            "dropout": args.dropout,
         },
     )
 
