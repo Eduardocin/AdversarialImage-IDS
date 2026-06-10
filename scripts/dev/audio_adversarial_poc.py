@@ -20,6 +20,16 @@ attacks only:
     - RTP: true positives that are also restored to the original class after
       filtering, i.e. C(T(x_adv)) == y.
 
+Default calibrated audio filter:
+    - normalization: global dB range [-80, 0]
+    - entropy thresholds: 3.0 and 4.0
+    - quantization intervals: 2, 4, 6
+    - smoothing: mean3
+
+These defaults come from scripts/dev/audio_filter_calibration_poc.py and are
+more appropriate for log-Mel spectrograms than the original image-oriented
+DeepDetector thresholds.
+
 Example:
     python scripts/dev/audio_adversarial_poc.py \
         --device cuda \
@@ -116,6 +126,27 @@ class PaperStyleMetrics:
     filtered_adversarial_accuracy_all: float
     attack_success_rate_on_eligible: float
     attack_success_rate_all: float
+
+
+@dataclass(frozen=True)
+class AudioFilterConfig:
+    """DeepDetector-style filter configuration for log-Mel spectrograms."""
+
+    normalization: str = "global"
+    threshold_low: float = 3.0
+    threshold_high: float = 4.0
+    q_low: int = 2
+    q_mid: int = 4
+    q_high: int = 6
+    smoothing: str = "mean3"
+
+    @property
+    def name(self) -> str:
+        return (
+            f"thr_{self.threshold_low:g}_{self.threshold_high:g}__"
+            f"q_{self.q_low}_{self.q_mid}_{self.q_high}__"
+            f"smooth_{self.smoothing}__norm_{self.normalization}"
+        )
 
 
 def set_seed(seed: int) -> None:
@@ -315,11 +346,7 @@ class SpeechCommandsSpectrogramDataset(Dataset):
 
 
 class ConvBNAct(nn.Module):
-    """Conv2d + BatchNorm + SiLU block.
-
-    SiLU is usually a little smoother than ReLU and works well for compact audio
-    CNNs. Bias is disabled because BatchNorm has affine parameters.
-    """
+    """Conv2d + BatchNorm + SiLU block."""
 
     def __init__(
         self,
@@ -377,14 +404,7 @@ class ResidualBlock(nn.Module):
 
 
 class SpeechCNN(nn.Module):
-    """Compact residual CNN for log-Mel spectrogram classification.
-
-    Compared with the first PoC CNN, this version has:
-        - residual blocks, which usually train more stably;
-        - strided convolutions instead of repeated max-pooling;
-        - global adaptive pooling, so the classifier is independent of time size;
-        - SiLU activations and AdamW-friendly regularization.
-    """
+    """Compact residual CNN for log-Mel spectrogram classification."""
 
     def __init__(self, num_classes: int, dropout: float = 0.25) -> None:
         super().__init__()
@@ -550,11 +570,7 @@ def fgsm_attack(
     clip_min: float = DB_MIN,
     clip_max: float = DB_MAX,
 ) -> torch.Tensor:
-    """FGSM attack in spectrogram dB space.
-
-    The function restores the original model.training state after generating
-    adversarial examples, so it is safe to reuse outside evaluation code.
-    """
+    """FGSM attack in spectrogram dB space."""
     was_training = model.training
     model.eval()
 
@@ -573,13 +589,30 @@ def fgsm_attack(
     return x_adv
 
 
-def normalize_spectrogram_for_filters(spec_db: np.ndarray) -> Tuple[np.ndarray, float, float]:
-    """Map a 2D dB spectrogram to uint8 [0, 255], preserving min/max."""
-    spec = spec_db.astype(np.float32)
-    spec_min = float(spec.min())
-    spec_max = float(spec.max())
-    denom = spec_max - spec_min
+def normalize_spectrogram_for_filters(
+    spec_db: np.ndarray,
+    normalization: str = "global",
+) -> Tuple[np.ndarray, float, float]:
+    """Map a 2D dB spectrogram to uint8 [0, 255].
 
+    global:
+        Uses the fixed dB range [-80, 0]. This is the calibrated default for
+        audio and is closer to the fixed pixel scale assumed by DeepDetector.
+    sample:
+        Uses each sample's own min/max. Kept only for ablation compatibility.
+    """
+    spec = np.clip(spec_db.astype(np.float32), DB_MIN, DB_MAX)
+
+    if normalization == "global":
+        spec_min = DB_MIN
+        spec_max = DB_MAX
+    elif normalization == "sample":
+        spec_min = float(spec.min())
+        spec_max = float(spec.max())
+    else:
+        raise ValueError(f"Unknown filter normalization mode: {normalization}")
+
+    denom = spec_max - spec_min
     if denom < 1e-8:
         return np.zeros_like(spec, dtype=np.uint8), spec_min, spec_max
 
@@ -615,28 +648,43 @@ def quantize_uint8(image: np.ndarray, intervals: int) -> np.ndarray:
     return np.clip(quantized, 0, 255).astype(np.uint8)
 
 
-def cross_mask(size: int = 5) -> np.ndarray:
-    if size % 2 == 0 or size < 3:
-        raise ValueError("cross mask size must be odd and >= 3")
+def smoothing_kernel(mode: str) -> np.ndarray:
+    if mode == "cross3":
+        size = 3
+        mask = np.zeros((size, size), dtype=np.float32)
+        center = size // 2
+        mask[center, :] = 1.0
+        mask[:, center] = 1.0
+        mask /= mask.sum()
+        return mask
 
-    mask = np.zeros((size, size), dtype=np.float32)
-    center = size // 2
-    mask[center, :] = 1.0
-    mask[:, center] = 1.0
-    mask /= mask.sum()
-    return mask
+    if mode == "cross5":
+        size = 5
+        mask = np.zeros((size, size), dtype=np.float32)
+        center = size // 2
+        mask[center, :] = 1.0
+        mask[:, center] = 1.0
+        mask /= mask.sum()
+        return mask
+
+    if mode == "mean3":
+        size = 3
+        return np.ones((size, size), dtype=np.float32) / float(size * size)
+
+    raise ValueError(f"Unknown smoothing mode: {mode}")
 
 
-def smooth_uint8(image: np.ndarray, size: int = 5) -> np.ndarray:
-    """Small dependency-free spatial smoothing with a cross mask."""
-    mask = cross_mask(size)
+def smooth_uint8(image: np.ndarray, mode: str) -> np.ndarray:
+    """Small dependency-free smoothing for uint8 spectrograms."""
+    kernel = smoothing_kernel(mode)
+    size = kernel.shape[0]
     pad = size // 2
     padded = np.pad(image.astype(np.float32), pad_width=pad, mode="edge")
     output = np.zeros_like(image, dtype=np.float32)
 
     for i in range(size):
         for j in range(size):
-            weight = mask[i, j]
+            weight = kernel[i, j]
             if weight == 0:
                 continue
             output += weight * padded[i : i + image.shape[0], j : j + image.shape[1]]
@@ -644,25 +692,42 @@ def smooth_uint8(image: np.ndarray, size: int = 5) -> np.ndarray:
     return np.clip(np.round(output), 0, 255).astype(np.uint8)
 
 
-def deepdetector_filter_single(spec_db: torch.Tensor) -> torch.Tensor:
-    """Apply the PoC DeepDetector-style filter to one [1, n_mels, time] tensor."""
+def apply_smoothing_uint8(image: np.ndarray, smoothing: str) -> np.ndarray:
+    if smoothing == "none":
+        return image
+    return smooth_uint8(image, mode=smoothing)
+
+
+def deepdetector_filter_single(
+    spec_db: torch.Tensor,
+    filter_config: AudioFilterConfig,
+) -> torch.Tensor:
+    """Apply the calibrated DeepDetector-style audio filter to one tensor."""
     if spec_db.ndim != 3 or spec_db.size(0) != 1:
         raise ValueError(f"Expected [1, n_mels, time], got {tuple(spec_db.shape)}")
 
     spec_np = spec_db.squeeze(0).detach().cpu().numpy().astype(np.float32)
-    spec_uint8, spec_min, spec_max = normalize_spectrogram_for_filters(spec_np)
+    spec_uint8, spec_min, spec_max = normalize_spectrogram_for_filters(
+        spec_np,
+        normalization=filter_config.normalization,
+    )
 
     entropy = entropy_uint8(spec_uint8)
-    if entropy < 4.0:
-        filtered_uint8 = quantize_uint8(spec_uint8, intervals=2)
-    elif entropy < 5.0:
-        filtered_uint8 = quantize_uint8(spec_uint8, intervals=4)
+    if entropy < filter_config.threshold_low:
+        intervals = filter_config.q_low
+    elif entropy < filter_config.threshold_high:
+        intervals = filter_config.q_mid
     else:
-        quantized = quantize_uint8(spec_uint8, intervals=6)
-        smoothed = smooth_uint8(quantized, size=5)
+        intervals = filter_config.q_high
 
-        # Combination rule inspired by DeepDetector: pick the transform that
-        # changes each value less relative to the original normalized input.
+    quantized = quantize_uint8(spec_uint8, intervals=intervals)
+    smoothed = apply_smoothing_uint8(quantized, filter_config.smoothing)
+
+    if filter_config.smoothing == "none":
+        filtered_uint8 = quantized
+    else:
+        # Conservative DeepDetector-inspired combination rule:
+        # choose the transformed value that changes each cell less.
         diff_quant = np.abs(quantized.astype(np.int16) - spec_uint8.astype(np.int16))
         diff_smooth = np.abs(smoothed.astype(np.int16) - spec_uint8.astype(np.int16))
         filtered_uint8 = np.where(diff_quant <= diff_smooth, quantized, smoothed).astype(np.uint8)
@@ -672,10 +737,13 @@ def deepdetector_filter_single(spec_db: torch.Tensor) -> torch.Tensor:
     return torch.from_numpy(filtered_db).unsqueeze(0)
 
 
-def deepdetector_filter_batch(x_db: torch.Tensor) -> torch.Tensor:
+def deepdetector_filter_batch(
+    x_db: torch.Tensor,
+    filter_config: AudioFilterConfig,
+) -> torch.Tensor:
     """Apply filter sample-by-sample and return tensor on the original device."""
     device = x_db.device
-    filtered = [deepdetector_filter_single(sample) for sample in x_db.detach().cpu()]
+    filtered = [deepdetector_filter_single(sample, filter_config) for sample in x_db.detach().cpu()]
     return torch.stack(filtered, dim=0).to(device=device, dtype=x_db.dtype)
 
 
@@ -684,22 +752,13 @@ def evaluate(
     test_loader: DataLoader,
     device: torch.device,
     epsilon: float,
+    filter_config: AudioFilterConfig,
     save_debug: bool,
     debug_dir: Path,
     class_names: Sequence[str],
     log_interval: int,
 ) -> PaperStyleMetrics:
-    """Evaluate with DeepDetector-style detection metrics.
-
-    Detection rule:
-        detected(x) = C(x) != C(T(x))
-
-    Paper-style counting used here:
-        - FP/TN: detector decision on benign clean samples.
-        - TP/FN: detector decision on successful adversarial samples only.
-        - num_failures: clean-correct samples where FGSM did not fool C.
-        - RTP: TP samples whose filtered prediction returns to the true label.
-    """
+    """Evaluate with DeepDetector-style detection metrics."""
     model.eval()
 
     num_clean_total = 0
@@ -718,19 +777,20 @@ def evaluate(
     debug_saved = False
 
     LOGGER.info("Starting evaluation with FGSM epsilon=%.4f over %d batches", epsilon, len(test_loader))
+    LOGGER.info("Using audio filter config: %s", filter_config.name)
 
     for batch_idx, (x, y) in enumerate(test_loader, start=1):
         x = x.to(device, non_blocking=device.type == "cuda")
         y = y.to(device, non_blocking=device.type == "cuda")
 
         pred_clean = predict(model, x)
-        clean_filtered = deepdetector_filter_batch(x)
+        clean_filtered = deepdetector_filter_batch(x, filter_config)
         pred_clean_filtered = predict(model, clean_filtered)
 
         x_adv = fgsm_attack(model, x, y, epsilon=epsilon)
         pred_adv = predict(model, x_adv)
 
-        adv_filtered = deepdetector_filter_batch(x_adv)
+        adv_filtered = deepdetector_filter_batch(x_adv, filter_config)
         pred_adv_filtered = predict(model, adv_filtered)
 
         batch_size = x.size(0)
@@ -747,14 +807,10 @@ def evaluate(
         filtered_adv_correct_total += (pred_adv_filtered == y).sum().item()
         adv_correct_on_eligible += (clean_correct_mask & (pred_adv == y)).sum().item()
 
-        # Benign side of the detector.
-        # False positive means a clean sample changes class after filtering.
         benign_detected_as_adv = pred_clean != pred_clean_filtered
         fp += benign_detected_as_adv.sum().item()
         tn += (~benign_detected_as_adv).sum().item()
 
-        # Adversarial side of the detector.
-        # Only clean-correct samples can produce meaningful attack successes.
         attack_success = clean_correct_mask & (pred_adv != y)
         attack_failure = clean_correct_mask & (pred_adv == y)
         num_successful_adversarial += attack_success.sum().item()
@@ -963,8 +1019,46 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--metrics-out", default="artifacts/audio_poc/metrics.json", help="JSON metrics output path.")
     parser.add_argument("--train-log-interval", type=int, default=10, help="Training log interval in batches.")
     parser.add_argument("--eval-log-interval", type=int, default=5, help="Evaluation log interval in batches.")
+
+    # Calibrated audio filter defaults. These can still be overridden for ablations.
+    parser.add_argument(
+        "--filter-normalization",
+        choices=["sample", "global"],
+        default="global",
+        help="Spectrogram-to-uint8 normalization before filtering. Default is calibrated for audio.",
+    )
+    parser.add_argument("--filter-threshold-low", type=float, default=3.0)
+    parser.add_argument("--filter-threshold-high", type=float, default=4.0)
+    parser.add_argument("--filter-q-low", type=int, default=2)
+    parser.add_argument("--filter-q-mid", type=int, default=4)
+    parser.add_argument("--filter-q-high", type=int, default=6)
+    parser.add_argument(
+        "--filter-smoothing",
+        choices=["none", "cross3", "cross5", "mean3"],
+        default="mean3",
+        help="Smoothing strategy after quantization. Default is calibrated for audio.",
+    )
+
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     return parser.parse_args()
+
+
+def build_filter_config(args: argparse.Namespace) -> AudioFilterConfig:
+    if args.filter_threshold_low >= args.filter_threshold_high:
+        raise ValueError("--filter-threshold-low must be smaller than --filter-threshold-high")
+    for value_name in ["filter_q_low", "filter_q_mid", "filter_q_high"]:
+        if getattr(args, value_name) < 2:
+            raise ValueError(f"--{value_name.replace('_', '-')} must be >= 2")
+
+    return AudioFilterConfig(
+        normalization=args.filter_normalization,
+        threshold_low=args.filter_threshold_low,
+        threshold_high=args.filter_threshold_high,
+        q_low=args.filter_q_low,
+        q_mid=args.filter_q_mid,
+        q_high=args.filter_q_high,
+        smoothing=args.filter_smoothing,
+    )
 
 
 def main() -> None:
@@ -979,10 +1073,12 @@ def main() -> None:
 
     class_names = [item.strip() for item in args.classes.split(",") if item.strip()]
     device = resolve_device(args.device)
+    filter_config = build_filter_config(args)
     log_environment(device)
 
     LOGGER.info("Classes: %s", class_names)
     LOGGER.info("Data directory: %s", Path(args.data_dir).resolve())
+    LOGGER.info("Audio filter config: %s", filter_config.name)
 
     train_loader, test_loader = make_loaders(args, device=device)
     model = SpeechCNN(num_classes=len(class_names), dropout=args.dropout).to(device)
@@ -1035,6 +1131,7 @@ def main() -> None:
         test_loader=test_loader,
         device=device,
         epsilon=args.epsilon,
+        filter_config=filter_config,
         save_debug=args.save_debug,
         debug_dir=Path(args.debug_dir),
         class_names=class_names,
@@ -1058,6 +1155,8 @@ def main() -> None:
             "label_smoothing": args.label_smoothing,
             "scheduler": args.scheduler,
             "dropout": args.dropout,
+            "filter_config": asdict(filter_config),
+            "filter_config_name": filter_config.name,
         },
     )
 
