@@ -1,30 +1,39 @@
 # Scripts
 
-Indice operacional dos scripts do projeto. A pasta `scripts/` e uma interface
-de execucao; a logica experimental comum fica em `src/deepdetector`.
+Operational index for the project scripts. The `scripts/` directory is an execution interface; shared experiment logic should live under `src/deepdetector`.
 
-Use `envs/README.md` para a matriz completa experimento -> ambiente. O resumo
-abaixo apenas ajuda a escolher rapidamente o ambiente antes de chamar o script.
-
-## Runner Oficial
-
-Os experimentos oficiais usam um unico ponto de entrada e a configuracao
-consolidada em `configs/experiments.yaml`:
+Official public experiments should be executed through the centralized runner and the consolidated configuration file:
 
 ```bash
 python scripts/run_experiment.py --experiment <experiment_id>
 ```
 
-| Grupo | Experimentos | Ambiente recomendado |
-| --- | --- | --- |
-| MNIST/local | `table_3`, `table_4_mnist`, `table_10_m1`, `table_10_m2`, `defense_aware` | `adversarialimage-ids-legacy` |
-| ImageNet/Caffe | `table_4_imagenet`, `table_7`, `table_8`, `table_10_googlenet`, `table_10_caffenet` | `adversarialimage-ids-gpu` |
-| Compostos MNIST + ImageNet | `table_4`, `table_6`, `table_9` | `adversarialimage-ids-legacy` or `adversarialimage-ids-gpu`, depending on the component |
-| InceptionV3 | `table_10_inception_v3`, `imagenet_new_classes_cw_l2_inception_v3` | `adversarialimage-inceptionv3-tf2` |
-| New datasets | `fashion_mnist_cw_l2_m2`, selected ImageNet new-class experiments | See `envs/README.md` |
-| Top-k | `topk_detection` | Depends on the configured dataset |
+The experiment registry is defined in:
 
-Common commands:
+```text
+configs/experiments.yaml
+```
+
+For environment details, use `envs/README.md`. In the current `main` branch, the default environment for most workflows is `adversarialimage-ids-gpu`. InceptionV3 workflows use `adversarialimage-inceptionv3-tf2`.
+
+## Official Runner
+
+```bash
+python scripts/run_experiment.py --experiment <experiment_id>
+```
+
+## Experiment Groups
+
+| Group | Experiments | Recommended environment |
+| --- | --- | --- |
+| MNIST/local | `table_3`, `table_4_mnist`, `table_10_m1`, `table_10_m2`, `defense_aware` | `adversarialimage-ids-gpu` |
+| ImageNet/Caffe | `table_4_imagenet`, `table_7`, `table_8`, `table_10_googlenet`, `table_10_caffenet` | `adversarialimage-ids-gpu` |
+| Composite MNIST + ImageNet | `table_4`, `table_6`, `table_9` | `adversarialimage-ids-gpu` |
+| InceptionV3 | `table_10_inception_v3`, `imagenet_new_classes_cw_l2_inception_v3` | `adversarialimage-inceptionv3-tf2` |
+| New datasets/classes | `fashion_mnist_cw_l2_m2`, selected ImageNet new-class experiments | See `envs/README.md` |
+| Top-k investigation | `topk_detection` | Depends on the configured dataset |
+
+## Common Commands
 
 ```bash
 python scripts/run_experiment.py --experiment table_3
@@ -47,8 +56,7 @@ python scripts/run_experiment.py --experiment table_4_mnist
 python scripts/run_experiment.py --experiment table_4_imagenet
 ```
 
-Table 5 is not part of the operational path because the current code inventory
-has no official script, config, or result contract for it.
+Table 5 is not part of the operational path because the current code inventory has no official script, config, or result contract for it.
 
 ## Outputs
 
@@ -59,28 +67,46 @@ results/<experiment_id>/metrics.csv
 results/<experiment_id>/metrics.json
 ```
 
-Tables 7 and 8 ImageNet are format exceptions: they write pivot CSV files
-`table_7_imagenet.csv` and `table_8_imagenet.csv`, with their respective
-`table_*_status.json` files.
+Tables 7 and 8 ImageNet are format exceptions. They write pivot CSV files, respectively:
 
-Table 4 is composite: its results are written under `results/table_4/mnist/`
-and `results/table_4/imagenet/`, with `manifest.json` at the table root. Table 6
-and Table 9 also run MNIST and ImageNet internally, but write only the official
-aggregates under `results/table_6/` and `results/table_9/`.
+```text
+table_7_imagenet.csv
+table_8_imagenet.csv
+```
 
-Table 10 is separated by model group. ImageNet groups write `metrics.csv`,
-`metrics.json`, and `manifest.json` under `results/table_10/<group>/`. M2 CW is
-split between `results/table_10/M2_cw_l2/` and
-`results/table_10/M2_cw_Linf/`.
+and their corresponding status files:
+
+```text
+table_7_status.json
+table_8_status.json
+```
+
+Table 4 is composite. Its results are written under:
+
+```text
+results/table_4/mnist/
+results/table_4/imagenet/
+```
+
+with `manifest.json` at the table root.
+
+Table 6 and Table 9 also run MNIST and ImageNet internally, but write only the official aggregates under:
+
+```text
+results/table_6/
+results/table_9/
+```
+
+Table 10 is separated by model group. ImageNet groups write `metrics.csv`, `metrics.json`, and `manifest.json` under their configured result directories. The M2 CW flow is split between CW-L2 and CW-Linf outputs when both are materialized.
 
 ## Auxiliary Scripts
 
 | Script | Role | Environment |
 | --- | --- | --- |
-| `dev/smoke_test.py` | Fast import/dependency validation. | `adversarialimage-ids-legacy` or `adversarialimage-ids-gpu` |
+| `dev/smoke_test.py` | Fast import and dependency validation. | `adversarialimage-ids-gpu` |
 | `imagenet/download_caffe_imagenet_assets.py` | Download Caffe assets for the ImageNet path. | `adversarialimage-ids-gpu` |
 | `imagenet/materialize_inceptionv3_subset.py` | Materialize the local InceptionV3 subset. | `adversarialimage-inceptionv3-tf2` |
-| `train_fashion_mnist_checkpoint.py` | Prepare Fashion-MNIST M2 checkpoints. | `adversarialimage-ids-legacy` |
+| `train_fashion_mnist_checkpoint.py` | Prepare Fashion-MNIST M2 checkpoints. | `adversarialimage-ids-gpu` |
 
 For Fashion-MNIST checkpoints:
 
@@ -97,8 +123,21 @@ python scripts/article_reproduction/mnist_table_10_m2_cw.py \
   --nn-robust-attacks-root nn_robust_attacks
 ```
 
-This M2 flow uses `nn_robust_attacks.CarliniL2` for CW-L2 and
-`nn_robust_attacks.CarliniLi` for CW-Linf.
+This M2 flow uses `nn_robust_attacks.CarliniL2` for CW-L2 and `nn_robust_attacks.CarliniLi` for CW-Linf.
 
-Historical article reproduction scripts can remain for compatibility, but the
-official path for public experiments is `scripts/run_experiment.py`.
+## Validation
+
+Use the smoke test for a fast check after creating or updating an environment:
+
+```bash
+python scripts/dev/smoke_test.py
+```
+
+For experiment-specific validation, run the smallest related experiment first and inspect the generated outputs.
+
+## Notes
+
+- Keep public script documentation in English.
+- Keep experiment IDs synchronized with `configs/experiments.yaml`.
+- Keep environment recommendations synchronized with `envs/README.md`.
+- Historical article reproduction scripts can remain for compatibility, but the official path for public experiments is `scripts/run_experiment.py`.
