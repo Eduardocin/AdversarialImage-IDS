@@ -1,32 +1,31 @@
 # Conda Environments
 
-This project intentionally keeps multiple Conda environments. There is no
-single official environment for every experiment at this stage.
+The recommended default environment for the current `main` branch is the GPU environment.
 
-Do not change pinned dependency versions without updating this file and the
-related reproduction notes. Environment changes can affect model loading,
-preprocessing, attack behavior, or Caffe/TensorFlow compatibility.
+Most active workflows, including MNIST-like experiments, ImageNet/Caffe experiments, GoogLeNet, CaffeNet, FGSM, DeepFool, and M2/CW reproduction flows, should run with:
 
-## Environment Overview
+```text
+adversarialimage-ids-gpu
+```
+
+InceptionV3 workflows use a separate TensorFlow 2 environment in `compat.v1` mode:
+
+```text
+adversarialimage-inceptionv3-tf2
+```
+
+Do not change pinned dependency versions without updating this file and the related reproduction notes. Environment changes can affect model loading, preprocessing, attack behavior, Caffe compatibility, TensorFlow compatibility, or adversarial attack behavior.
+
+## Supported Environments
 
 | File | Conda env | Main stack | When to use |
 | --- | --- | --- | --- |
-| `envs/environment.yml` | `adversarialimage-ids-legacy` | Python 3.7, TensorFlow 1.15, legacy Keras, CleverHans, Caffe CPU | Local development, basic tests, MNIST-like experiments |
-| `envs/environment-gpu.yml` | `adversarialimage-ids-gpu` | Python 3.7, TensorFlow GPU 1.15, CUDA 10, cuDNN 7, Caffe GPU | ImageNet with Caffe, GoogLeNet, CaffeNet, DeepFool |
-| `envs/inceptionv3-tf2.yml` | `adversarialimage-inceptionv3-tf2` | Python 3.8, TensorFlow 2.11 in `compat.v1` mode | InceptionV3, CW ImageNet, Ampere GPUs where TF1.15 is not compatible |
+| `envs/environment-gpu.yml` | `adversarialimage-ids-gpu` | Python 3.7, TensorFlow GPU 1.15, CUDA 10, cuDNN 7, Caffe GPU | Default environment for current MNIST-like and ImageNet/Caffe workflows |
+| `envs/inceptionv3-tf2.yml` | `adversarialimage-inceptionv3-tf2` | Python 3.8, TensorFlow 2.11 in `compat.v1` mode | InceptionV3, CW ImageNet, and GPUs where TF1.15 is not compatible |
 
-## Setup Commands
+## Default GPU Environment
 
-Create the legacy local environment:
-
-```bash
-conda env create -f envs/environment.yml
-conda activate adversarialimage-ids-legacy
-pip install -e .
-python scripts/dev/smoke_test.py
-```
-
-Create the legacy GPU environment:
+Create the default GPU environment:
 
 ```bash
 conda env create -f envs/environment-gpu.yml
@@ -34,6 +33,10 @@ conda activate adversarialimage-ids-gpu
 pip install -e .
 python scripts/dev/smoke_test.py
 ```
+
+Use this environment unless the selected experiment explicitly requires the InceptionV3 TensorFlow 2 environment.
+
+## InceptionV3 TensorFlow 2 Environment
 
 Create the InceptionV3 TensorFlow 2 environment:
 
@@ -59,22 +62,22 @@ PY
 
 | Experiment | Recommended environment | Notes |
 | --- | --- | --- |
-| `table_3` | `adversarialimage-ids-legacy` | MNIST/local quantization. |
-| `table_4` | `adversarialimage-ids-legacy` or `adversarialimage-ids-gpu` | Composite MNIST + ImageNet; ImageNet can require Caffe. |
-| `table_4_mnist` | `adversarialimage-ids-legacy` | MNIST. |
+| `table_3` | `adversarialimage-ids-gpu` | MNIST/local quantization. |
+| `table_4` | `adversarialimage-ids-gpu` | Composite MNIST + ImageNet. |
+| `table_4_mnist` | `adversarialimage-ids-gpu` | MNIST. |
 | `table_4_imagenet` | `adversarialimage-ids-gpu` | ImageNet/Caffe. |
-| `table_6` | `adversarialimage-ids-legacy` or `adversarialimage-ids-gpu` | Composite MNIST + ImageNet. |
+| `table_6` | `adversarialimage-ids-gpu` | Composite MNIST + ImageNet. |
 | `table_7` | `adversarialimage-ids-gpu` | ImageNet/GoogLeNet/Caffe. |
 | `table_8` | `adversarialimage-ids-gpu` | ImageNet/GoogLeNet/Caffe. |
-| `table_9` | `adversarialimage-ids-legacy` or `adversarialimage-ids-gpu` | Composite MNIST + ImageNet. |
-| `table_10_m1` | `adversarialimage-ids-legacy` | MNIST/M1/FGSM. |
-| `table_10_m2` | `adversarialimage-ids-legacy` | MNIST/M2/CW. |
+| `table_9` | `adversarialimage-ids-gpu` | Composite MNIST + ImageNet. |
+| `table_10_m1` | `adversarialimage-ids-gpu` | MNIST/M1/FGSM. |
+| `table_10_m2` | `adversarialimage-ids-gpu` | MNIST/M2/CW. |
 | `table_10_googlenet` | `adversarialimage-ids-gpu` | ImageNet/GoogLeNet/Caffe. |
 | `table_10_caffenet` | `adversarialimage-ids-gpu` | ImageNet/CaffeNet/Caffe. |
 | `table_10_inception_v3` | `adversarialimage-inceptionv3-tf2` | InceptionV3/TF2 `compat.v1`. |
-| `defense_aware` | `adversarialimage-ids-legacy` | MNIST/CW defense-aware unless a specific config says otherwise. |
-| `topk_detection` | `adversarialimage-ids-legacy` or `adversarialimage-ids-gpu` | Depends on the configured dataset. |
-| `fashion_mnist_cw_l2_m2` | `adversarialimage-ids-legacy` | Fashion-MNIST/M2/CW. |
+| `defense_aware` | `adversarialimage-ids-gpu` | MNIST/CW defense-aware unless a specific config says otherwise. |
+| `topk_detection` | `adversarialimage-ids-gpu` | ImageNet/GoogLeNet top-k investigation. |
+| `fashion_mnist_cw_l2_m2` | `adversarialimage-ids-gpu` | Fashion-MNIST/M2/CW. |
 | `imagenet_new_classes_fgsm_googlenet` | `adversarialimage-ids-gpu` | ImageNet/GoogLeNet/Caffe. |
 | `imagenet_new_classes_deepfool_caffenet` | `adversarialimage-ids-gpu` | ImageNet/CaffeNet/Caffe. |
 | `imagenet_new_classes_cw_l2_inception_v3` | `adversarialimage-inceptionv3-tf2` | InceptionV3/TF2 `compat.v1`. |
