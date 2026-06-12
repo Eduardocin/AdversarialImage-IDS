@@ -223,18 +223,30 @@ python scripts/run_experiment.py --experiment fashion_mnist_cw_l2_m2
 
 ## Table 10 M2 / CW Workflow
 
-The M2/CW group depends on the original `nn_robust_attacks` backend.
-
-To regenerate adversarial examples:
+The official M2/CW path is the central runner:
 
 ```bash
-python scripts/article_reproduction/mnist_table_10_m2_cw.py \
-  --generate-attacks \
-  --overwrite-attacks \
-  --nn-robust-attacks-root nn_robust_attacks
+python scripts/run_experiment.py --experiment table_10_m2
 ```
 
-Without `--generate-attacks`, the script evaluates existing `.npy` adversarial examples.
+By default this command evaluates the configured `.npy` adversarial examples
+(MNIST slice `start=5500`, `samples=1000`, matching the artifacts' `manifest.json`)
+and writes `metrics.csv`, `metrics.json`, and `manifest.json` under
+`results/table_10/M2_cw/`.
+
+To regenerate the adversarial examples (depends on the original
+`nn_robust_attacks` backend), enable generation through overrides:
+
+```bash
+python scripts/run_experiment.py \
+  --experiment table_10_m2 \
+  --override generation.enabled=true \
+  --override generation.overwrite=true \
+  --override evaluation.nn_robust_attacks_root=nn_robust_attacks
+```
+
+The legacy `scripts/article_reproduction/mnist_table_10_m2_cw.py` is superseded by
+this central path and is kept only for compatibility.
 
 ## Outputs
 

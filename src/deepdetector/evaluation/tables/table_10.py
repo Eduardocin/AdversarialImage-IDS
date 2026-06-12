@@ -27,6 +27,7 @@ from deepdetector.evaluation.article_reproduction import (
     close_graph,
     create_restored_mnist_graph,
     evaluate_filter_on_existing_adversarial,
+    label_to_int,
     load_mnist_test_slice,
     predict_labels,
     proposed_detection_filter,
@@ -45,7 +46,7 @@ from deepdetector.models.imagenet_wrappers import (
     GoogLeNetCaffeWrapper,
     InceptionV3TensorFlowWrapper,
 )
-from deepdetector.paths import MNIST_M1_CHECKPOINT_DIR
+from deepdetector.paths import MNIST_M1_CHECKPOINT_DIR, MNIST_M2_CHECKPOINT_DIR
 
 
 logger = logging.getLogger(__name__)
@@ -1228,6 +1229,204 @@ def evaluate_table_10_fashion_mnist_row(
         graph["sess"].close()
 
 
+def _is_table_10_mnist_m2_group(config: dict[str, Any]) -> bool:
+    """Return True when the group is the MNIST M2 model group."""
+    return (
+        str(config.get("dataset", {}).get("name", "")).lower() == "mnist"
+        and str(config.get("model_group", "")).lower() == "m2"
+    )
+
+
+def _is_table_10_mnist_m2_attack(
+    group_config: dict[str, Any],
+    row_config: dict[str, Any],
+) -> bool:
+    """Return True when a row is a centrally supported MNIST M2 CW attack."""
+    attack_name = str(row_config.get("attack", {}).get("name", "")).lower()
+    return _is_table_10_mnist_m2_group(group_config) and attack_name == "cw_l2_nn_robust"
+
+
+def _mnist_m2_checkpoint_dir(config: dict[str, Any]) -> str:
+    configured = config.get("model", {}).get("checkpoint_dir")
+    checkpoint_dir = resolve_project_path(configured) if configured else MNIST_M2_CHECKPOINT_DIR
+    return str(checkpoint_dir or MNIST_M2_CHECKPOINT_DIR)
+
+
+def _mnist_m2_dataset_slice(config: dict[str, Any]) -> tuple[int, int]:
+    """Resolve the MNIST test slice for the M2 evaluation.
+
+    The slice must match the slice used to generate the saved adversarial
+    examples (see their manifest.json), otherwise clean and adversarial images
+    are mispaired and the metrics become meaningless.
+    """
+    dataset_config = config.get("dataset", {})
+    evaluation_config = config.get("evaluation", {})
+    start = int(dataset_config.get("start", 5500))
+    samples = evaluation_config.get("n_samples", dataset_config.get("samples"))
+    if samples in (None, "", "all"):
+        return start, int(dataset_config.get("end", start + 1000))
+    return start, start + int(samples)
+
+
+def _load_or_generate_m2_cw_adversarial(
+    *,
+    graph: dict[str, Any],
+    group_config: dict[str, Any],
+    row_config: dict[str, Any],
+    images: np.ndarray,
+    labels: np.ndarray,
+) -> np.ndarray:
+    """Load configured M2 CW adversarial examples or regenerate them on request."""
+    attack_config = dict(row_config.get("attack", {}))
+    no = row_config.get("no", "")
+    adversarial_path = resolve_project_path(attack_config.get("adversarial_path"))
+    generation_config = group_config.get("generation", {})
+    generate = bool(generation_config.get("enabled", False))
+    overwrite = bool(generation_config.get("overwrite", False))
+
+    if generate and not (adversarial_path is not None and adversarial_path.exists() and not overwrite):
+        robust_root = (
+            attack_config.get("nn_robust_attacks_root")
+            or group_config.get("evaluation", {}).get("nn_robust_attacks_root")
+            or "nn_robust_attacks"
+        )
+        adversarial_images = generate_attack(
+            "cw_l2_nn_robust",
+            graph=graph,
+            images=images,
+            labels=labels,
+            kappa=float(attack_config.get("kappa", 0.0)),
+            nn_robust_attacks_root=robust_root,
+            batch_size=int(attack_config.get("batch_size", 1)),
+            max_iterations=int(attack_config.get("max_iterations", 2000)),
+            binary_search_steps=int(attack_config.get("binary_search_steps", 5)),
+            initial_const=float(attack_config.get("initial_const", 1.0)),
+            learning_rate=float(attack_config.get("learning_rate", 0.1)),
+            targeted=bool(attack_config.get("targeted", False)),
+            abort_early=bool(attack_config.get("abort_early", True)),
+        )
+        adversarial_images = np.asarray(adversarial_images, dtype=np.float32)
+        if adversarial_path is not None:
+            adversarial_path.parent.mkdir(parents=True, exist_ok=True)
+            np.save(str(adversarial_path), adversarial_images)
+            logger.info("Saved generated Table 10 M2 adversarial examples to %s.", adversarial_path)
+        return adversarial_images
+
+    if adversarial_path is None or not adversarial_path.exists():
+        raise ValueError(
+            "Missing adversarial examples for Table 10 M2 row {0}.\n"
+            "Either provide the configured adversarial_path or rerun with:\n"
+            "--override generation.enabled=true".format(no)
+        )
+    adversarial_images = np.load(str(adversarial_path)).astype(np.float32)
+    if adversarial_images.ndim != 4 or adversarial_images.shape[1:] != (28, 28, 1):
+        raise ValueError("Expected MNIST M2 adversarial array shape (N, 28, 28, 1).")
+    return adversarial_images
+
+
+def evaluate_table_10_mnist_m2_row(
+    group_config: dict[str, Any],
+    row_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Evaluate one implemented MNIST M2 CW Table 10 row."""
+    attack_name = str(row_config.get("attack", {}).get("name", "")).strip().lower()
+    if attack_name != "cw_l2_nn_robust":
+        raise ValueError("Unsupported MNIST M2 Table 10 attack: {0}".format(attack_name))
+
+    start, end = _mnist_m2_dataset_slice(group_config)
+    images, labels = load_mnist_test_slice(start, end)
+    batch_size = int(group_config.get("evaluation", {}).get("batch_size", 256))
+    filter_fn = _table_10_filter(group_config)
+    graph = create_restored_mnist_m2_graph(_mnist_m2_checkpoint_dir(group_config))
+
+    try:
+        adversarial_images = _load_or_generate_m2_cw_adversarial(
+            graph=graph,
+            group_config=group_config,
+            row_config=row_config,
+            images=images,
+            labels=labels,
+        )
+        sample_count = min(len(images), len(adversarial_images), len(labels))
+        images = np.asarray(images[:sample_count], dtype=np.float32)
+        adversarial_images = np.asarray(adversarial_images[:sample_count], dtype=np.float32)
+        true_labels = label_to_int(labels[:sample_count])
+        if adversarial_images.shape != images.shape:
+            raise ValueError("Adversarial image shape does not match clean image shape.")
+
+        clean_predictions = predict_labels(
+            graph["sess"], graph["x"], graph["predictions"], images, batch_size
+        )
+        adversarial_predictions = predict_labels(
+            graph["sess"], graph["x"], graph["predictions"], adversarial_images, batch_size
+        )
+        filtered_clean = apply_filter_batch(filter_fn, images)
+        filtered_adv = apply_filter_batch(filter_fn, adversarial_images)
+        filtered_clean_predictions = predict_labels(
+            graph["sess"], graph["x"], graph["predictions"], filtered_clean, batch_size
+        )
+        filtered_adv_predictions = predict_labels(
+            graph["sess"], graph["x"], graph["predictions"], filtered_adv, batch_size
+        )
+
+        records: list[dict[str, Any]] = []
+        for sample_index in range(sample_count):
+            true_label = int(true_labels[sample_index])
+            clean_pred = int(clean_predictions[sample_index])
+            if clean_pred != true_label:
+                records.append(
+                    {
+                        "sample_index": int(sample_index),
+                        "true_label": true_label,
+                        "clean_pred": clean_pred,
+                        "discarded_clean_error": True,
+                    }
+                )
+                continue
+            adv_pred = int(adversarial_predictions[sample_index])
+            if adv_pred == clean_pred:
+                records.append(
+                    {
+                        "sample_index": int(sample_index),
+                        "true_label": true_label,
+                        "clean_pred": clean_pred,
+                        "adv_pred": adv_pred,
+                        "discarded_attack_failed": True,
+                    }
+                )
+                continue
+            filtered_adv_pred = int(filtered_adv_predictions[sample_index])
+            records.append(
+                {
+                    "sample_index": int(sample_index),
+                    "true_label": true_label,
+                    "clean_pred": clean_pred,
+                    "adv_pred": adv_pred,
+                    "filtered_clean_pred": int(filtered_clean_predictions[sample_index]),
+                    "filtered_adv_pred": filtered_adv_pred,
+                    "detected": bool(filtered_adv_pred != adv_pred),
+                    "corrected": bool(filtered_adv_pred == true_label),
+                    "false_positive": bool(
+                        int(filtered_clean_predictions[sample_index]) != clean_pred
+                    ),
+                }
+            )
+
+        metrics = _table_10_metrics_from_records(records)
+        logger.info(
+            "Table 10 M2 row %s complete: num_failures=%s tp=%s fn=%s fp=%s rtp=%s.",
+            row_config.get("no", ""),
+            metrics["num_failures"],
+            metrics["tp"],
+            metrics["fn"],
+            metrics["fp"],
+            metrics["rtp"],
+        )
+        return {"metrics": metrics}
+    finally:
+        close_graph(graph)
+
+
 def _is_table_10_imagenet_attack(
     group_config: dict[str, Any],
     row_config: dict[str, Any],
@@ -1357,6 +1556,8 @@ def _row_result(group_config: dict[str, Any], row_config: dict[str, Any]) -> dic
     metrics = row_config.get("metrics")
     if isinstance(metrics, dict):
         return {"metrics": metrics}
+    if _is_table_10_mnist_m2_attack(group_config, row_config):
+        return evaluate_table_10_mnist_m2_row(group_config, row_config)
     if _is_table_10_fashion_mnist_attack(group_config, row_config):
         return evaluate_table_10_fashion_mnist_row(group_config, row_config)
     if _is_table_10_imagenet_attack(group_config, row_config):
@@ -1507,7 +1708,10 @@ def run_table_10_group(config: dict[str, Any]) -> list[dict[str, Any]]:
                 "status": "completed",
             }
         )
-        if str(config.get("dataset", {}).get("name", "")).lower() == "fashion_mnist":
+        if (
+            str(config.get("dataset", {}).get("name", "")).lower() == "fashion_mnist"
+            or _is_table_10_mnist_m2_group(config)
+        ):
             manifest_entries[-1]["attack"] = dict(row_config.get("attack", {}))
 
     save_table_10_outputs(

@@ -97,7 +97,7 @@ results/table_6/
 results/table_9/
 ```
 
-Table 10 is separated by model group. ImageNet groups write `metrics.csv`, `metrics.json`, and `manifest.json` under their configured result directories. The M2 CW flow is split between CW-L2 and CW-Linf outputs when both are materialized.
+Table 10 is separated by model group. ImageNet groups write `metrics.csv`, `metrics.json`, and `manifest.json` under their configured result directories. The MNIST M2 CW group (`table_10_m2`) follows the same contract and writes `metrics.csv`, `metrics.json`, and `manifest.json` under `results/table_10/M2_cw/`.
 
 ## Auxiliary Scripts
 
@@ -114,16 +114,26 @@ For Fashion-MNIST checkpoints:
 python scripts/train_fashion_mnist_checkpoint.py --model m2
 ```
 
-For M2 CW adversarial regeneration:
+The official M2 CW path is the central runner, which evaluates the configured
+`.npy` adversarial examples by default:
 
 ```bash
-python scripts/article_reproduction/mnist_table_10_m2_cw.py \
-  --generate-attacks \
-  --overwrite-attacks \
-  --nn-robust-attacks-root nn_robust_attacks
+python scripts/run_experiment.py --experiment table_10_m2
 ```
 
-This M2 flow uses `nn_robust_attacks.CarliniL2` for CW-L2 and `nn_robust_attacks.CarliniLi` for CW-Linf.
+For M2 CW adversarial regeneration, enable generation through overrides:
+
+```bash
+python scripts/run_experiment.py \
+  --experiment table_10_m2 \
+  --override generation.enabled=true \
+  --override generation.overwrite=true \
+  --override evaluation.nn_robust_attacks_root=nn_robust_attacks
+```
+
+This M2 flow uses `nn_robust_attacks.CarliniL2` for CW-L2. The legacy
+`scripts/article_reproduction/mnist_table_10_m2_cw.py` (which also handled CW-Linf
+via `nn_robust_attacks.CarliniLi`) is kept only for compatibility.
 
 ## Validation
 

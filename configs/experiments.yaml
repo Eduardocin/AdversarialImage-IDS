@@ -608,15 +608,33 @@ experiments:
 
   table_10_m2:
     kind: table_10_group
+    description: MNIST M2 Carlini-Wagner Table 10 evaluation
     output_dir: results/table_10/M2_cw
     dataset:
       name: mnist
+      split: test
+      start: 5500
+      samples: 1000
+      value_range:
+        min: 0.0
+        max: 1.0
     model:
       name: m2
-    attack: {}
-    evaluation: {}
+      family: mnist
+      checkpoint_dir: artifacts/models/mnist/m2/clean_baseline/checkpoints
+    evaluation:
+      batch_size: 256
+      nn_robust_attacks_root: nn_robust_attacks
+    generation:
+      enabled: false
+      overwrite: false
+    filter:
+      name: proposed_detection_filter
+      type: proposed_detection_filter
     model_group: m2
     dataset_label: MNIST
+    output:
+      manifest: true
     rows:
       - "no": 9
         attack_model: "CW L2 (κ=0.0)/M2"
@@ -624,6 +642,14 @@ experiments:
         attack:
           name: cw_l2_nn_robust
           kappa: 0.0
+          adversarial_path: artifacts/adversarial_examples/mnist/m2/cw_l2/kappa_0p0/adversarial_examples.npy
+          targeted: false
+          max_iterations: 2000
+          binary_search_steps: 5
+          initial_const: 1.0
+          learning_rate: 0.1
+          abort_early: true
+          batch_size: 1
       - "no": 10
         attack_model: "CW L2 (κ=0.5)/M2"
         status: planned
